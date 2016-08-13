@@ -46,6 +46,10 @@ Try defeating the computer (it is very hard) by taking turns and comparing the s
 
 MIT
 
+## Screen shot:
+
+![Game Board](/game-10101.png?raw=true "Screen Shot")
+
 ## To Do:
 
 * Drag-n-drop of the tiles

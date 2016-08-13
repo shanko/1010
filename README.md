@@ -48,7 +48,7 @@ MIT
 
 ## Screen shot:
 
-![Game Board](/game-10101.png?raw=true "Screen Shot")
+![Game Board](/game-1010.png?raw=true "Screen Shot")
 
 ## To Do:
 

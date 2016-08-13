@@ -1,6 +1,6 @@
 ## Gosu based Board Game known as 1010!
 
-1010! is a single player, tile-based, board game played on a square grid of 10x10 cells. The player is presented with a random selection of tile patterns of various shapes, 3 at a time, which are to be placed on the board, one by one. If the tiles consume an entire row (or column), without any empty cells in between, the row (or column) is cleared up so that more tiles can be placed. Each cell consumed by the tile counts towards the score of the game. The aim is to place as many tiles as possible to increase the score. In its most simplest form, each cell adds 1 point to the score. A variation of the game can be to assign colors to the tile patterns and different points for each color. 
+[1010!] is a single player, tile-based, board game played on a square grid of 10x10 cells. The player is presented with a random selection of tile patterns of various shapes, 3 at a time, which are to be placed on the board, one by one. If the tiles consume an entire row (or column), without any empty cells in between, the row (or column) is cleared up so that more tiles can be placed. Each cell consumed by the tile counts towards the score of the game. The aim is to place as many tiles as possible to increase the score. In its most simplest form, each cell adds 1 point to the score. A variation of the game can be to assign colors to the tile patterns and different points for each color. 
 
 ## Installation:
 
@@ -61,6 +61,7 @@ MIT
 
 [//]: # (These are reference links used in the body of this note and get stripped out when the markdown processor does its job. There is no need to format nicely because it shouldn't be seen. Thanks SO - http://stackoverflow.com/questions/4823468/store-comments-in-markdown-syntax)
 
+  [1010!]: <http://web.eecs.umich.edu/~gameprof/gamewiki/index.php/1010!>
   [Ruby]: <http://ruby-lang.org>
   [here]: <http://libgosu.org>
   [gcc]: <http://gcc.gnu.org>

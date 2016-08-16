@@ -487,14 +487,78 @@ class Board1010
     count
   end
 
-  def best_starting_position(tile)
-    positions = find_starting_pos(tile)
+  def jc_neighbours(i,j)
+    count = 0
+
+    count += 1 if i > 0 && j > 0 && @arr[i-1][j-1] != 0
+    count += 1 if i > 0 && @arr[i-1][j  ] != 0
+    count += 1 if i > 0 && j < 9 && @arr[i-1][j+1] != 0
+
+    count += 1 if i < 9 && j > 0 && @arr[i+1][j-1] != 0
+    count += 1 if i < 9 && @arr[i+1][j  ] != 0
+    count += 1 if i < 9 && j < 9 && @arr[i+1][j+1] != 0
+
+    count += 1 if j > 0 && @arr[i  ][j-1] != 0
+    count += 1 if j < 9 && @arr[i  ][j+1] != 0
+
+    count += 1 if (i == 0) || (i == 9)
+    count += 1 if (j == 0) || (j == 9)
+
+    count
+  end
+
+  def sam_algo(positions)
+  ## Suggested by Sam:
+  ## Find the position which completely fills more rows and columns when the tile is placed
+    return -1
+  end
+
+  def andy_algo(positions)
+  ## Suggested by Andy:
+  ## Find the position which results into minimum empty cells after placing the tile but before
+  ## clearing the filled rows and columns
+    return  -1
+  end
+
+  def jc_algo(positions)
+  # Suggested by JC:
+  # The best position is one which has most neighbors occupied.
+  # But treat the edge cells as if their neighbors are always occupied.
+    neighbour_count = []
+    positions.each_with_index do |pos,k|
+      neighbour_count[k] = jc_neighbours(*pos)
+    end
+    neighbour_count.index(neighbour_count.max)
+  end
+
+  def shanko_algo(positions)
+  # The best position is one which has most neighbors occupied
+  # In other words: least neighboring cells empty
     neighbour_count = []
     positions.each_with_index do |pos,k|
       neighbour_count[k] = neighbours(*pos)
     end
-    n = neighbour_count.index(neighbour_count.max)
-    n = 0
+    neighbour_count.index(neighbour_count.max)
+  end
+
+  def first_fit(positions)
+  # The best position is always the first position found
+    return 0
+  end
+
+  def last_fit(positions)
+  # The best position is always the last position found
+    return -1
+  end
+
+  def best_starting_position(tile)
+    positions = find_starting_pos(tile)
+    # n = first_fit(positions)
+    # n = last_fit(positions)
+    # n = shanko_algo(positions)
+    n = jc_algo(positions)
+    # n = sam_algo(positions)
+    # n = andy_algo(positions)
     positions[n || 0]
   end
 

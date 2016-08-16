@@ -1,4 +1,4 @@
-# gosu_1010.rb
+# game_1010.rb
 require "gosu"
 require "./board"
 

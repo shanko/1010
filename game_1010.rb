@@ -18,7 +18,7 @@ class GameWindow < Gosu::Window
   FONT_COLOR = Gosu::Color::RED
   LINE_COLOR = Gosu::Color::BLUE
 
-  def initialize(random=false)
+  def initialize(auto=false)
     @width  = 480
     @height = 480
     super(@width,@height,{:fullscreen => false})
@@ -38,10 +38,10 @@ class GameWindow < Gosu::Window
     @recording = []
     @placed_positions = []
     @rows_to_clean, @cols_to_clean = [],[]
-    @undo = @show_pos = @record = @playback = @help = false
+    @undo = @show_pos = @record = @playback = @help = @drag = false
 
-    @random = random
-    @count  = 0
+    @auto  = auto
+    @count = 0
   end
 
   def needs_cursor?
@@ -56,11 +56,12 @@ class GameWindow < Gosu::Window
     return unless @help
     x,y = 340,340
     @help_font.draw("ESC: abort",       x, y,    1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("N: new game",      x, y+20, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("S: save",          x, y+40, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("D: random",        x, y+60, 1, 1.0, 1.0, FONT_COLOR)
+    @help_font.draw("A: auto",          x, y+20, 1, 1.0, 1.0, FONT_COLOR)
+    @help_font.draw("N: new game",      x, y+40, 1, 1.0, 1.0, FONT_COLOR)
+    @help_font.draw("O: show position", x, y+60, 1, 1.0, 1.0, FONT_COLOR)
     @help_font.draw("Q: save and quit", x, y+80, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("U: undo",          x,y+100, 1, 1.0, 1.0, FONT_COLOR)
+    @help_font.draw("S: save",          x,y+100, 1, 1.0, 1.0, FONT_COLOR)
+    @help_font.draw("U: undo",          x,y+120, 1, 1.0, 1.0, FONT_COLOR)
   end
 
   def draw_background
@@ -98,6 +99,10 @@ class GameWindow < Gosu::Window
     draw_sqr(x,y,z,@size,cell_color(value))
   end
 
+  def dragged_xy
+    [@drag_x, @drag_y]
+  end
+
   def clicked_xy
     x,y = @clicked_x, @clicked_y  # these are from the latest click
     @clicked_x = @clicked_y = -1  # so immediately reset the co-ordinates
@@ -105,7 +110,8 @@ class GameWindow < Gosu::Window
   end
 
   def get_screen_position
-    x,y = clicked_xy
+    #x,y = clicked_xy
+    x,y = @clicked_x, @clicked_y
     i,j = -1,-1
 
     Board1010::MAX_COLS.times do |jj|
@@ -125,10 +131,11 @@ class GameWindow < Gosu::Window
     [i,j]
   end
 
-  def get_screen_option
-    x,y  = clicked_xy
+  def get_selected_option
+    # x,y  = clicked_xy
+    x,y  = @clicked_x, @clicked_y
     opt  = 0
-    gap  = @gap / 2
+    gap  = @gap  / 2
     size = @size / 2
     (1..Board1010::MAX_OPTIONS).each do |i|
       y1 = (22 * i)     + ((i - 1) * (size + gap) * 5)
@@ -149,27 +156,9 @@ class GameWindow < Gosu::Window
 
     x = 360
     y = (22 * pos) + ((pos - 1) * (size + gap) * 5)
-    color = Gosu::Color::YELLOW
-    tile.each_with_index do |cell,i|
-      if cell.class == Array
-        cell.each_with_index do |ele, j|
-          if ele > 0
-            new_x = x + (size + gap) * j
-            new_y = y + (size + gap) * i
-            color = cell_color(ele) unless selected
-            draw_sqr(new_x,new_y,1,size,color)
-          end
-        end
-      elsif cell > 0
-        new_x = x + (size + gap) * i
-        color = cell_color(cell) unless selected
-        draw_sqr(new_x,y,1,size,color)
-      elsif cell < 0
-        new_y = y + (size + gap) * i
-        color = cell_color(cell) unless selected
-        draw_sqr(x,new_y,1,size,color)
-      end
-    end
+
+    gap, size = _draw_option_tile(tile, x, y, selected && Gosu::Color::YELLOW, gap, size)
+
     draw_line(360, (11 * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR,
               460, (11 * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR, 1)
   end
@@ -187,10 +176,23 @@ class GameWindow < Gosu::Window
     Gosu::draw_quad(x1, y1, c1, x2, y2, c2, x3, y3, c3, x4, y4, c4, z, :default)
   end
 
+  def draw_dragged_tile
+    return unless @drag
+
+    x,y = dragged_xy
+    if @selected_option > 0
+      tile      = @option_tiles[@selected_option-1]
+      _draw_option_tile(tile,x,y)
+    else
+      draw_sqr(x,y,1,22,Gosu::Color::YELLOW)
+    end
+
+  end
+
   def draw_open_pos
     return unless @show_pos
 
-    tile     = @option_tiles[@selected_option-1]
+    tile      = @option_tiles[@selected_option-1]
     bpos      = @board.best_starting_position(tile)
     positions = (bpos ? [bpos] : [])
     positions.each do |pos|
@@ -233,7 +235,7 @@ class GameWindow < Gosu::Window
           Board1010::MAX_COLS.times{|i| @board.cell = [i, j, 0] }
         end
 
-        sleep(0.24) unless @random
+        sleep(0.24) unless @auto
       end
     else
       i,j,val = @placed_positions.shift
@@ -284,11 +286,19 @@ class GameWindow < Gosu::Window
     draw_score
     draw_help
     draw_options
+    draw_dragged_tile
     draw_open_pos
     draw_status
   end
 
   def update
+
+    if @drag
+      @drag_x = self.mouse_x
+      @drag_y = self.mouse_y
+      return
+    end
+
     if @playback && @recording.size > 0
       puts "playing back"
       @selected_row, @selected_col, @selected_option, @option_tiles = @recording.shift
@@ -307,7 +317,7 @@ class GameWindow < Gosu::Window
       @board.ended unless @board.pos_exists?(@option_tiles)
     end
 
-    if @random
+    if @auto
       @selected_option = rand(@option_tiles.size) + 1
       tile = @option_tiles[@selected_option - 1]
       position = @board.best_starting_position(tile)
@@ -315,7 +325,7 @@ class GameWindow < Gosu::Window
         @selected_row, @selected_col = position
       end
     else
-      @selected_option = get_screen_option if @selected_option == 0
+      @selected_option = get_selected_option if @selected_option == 0
       @selected_row, @selected_col = get_screen_position if @selected_row < 0 || @selected_col < 0
 
       if @record
@@ -330,7 +340,7 @@ class GameWindow < Gosu::Window
 
   def start
     @start_time = Time.now
-    @random ? @board.init(0) : @board.init
+    @auto ? @board.init(0) : @board.init
     self.show
   end
 
@@ -344,9 +354,12 @@ class GameWindow < Gosu::Window
   def button_up(id)
     case (id)
     when Gosu::MsLeft
+      @drag = false
       @clicked_x = self.mouse_x
       @clicked_y = self.mouse_y
     when Gosu::MsRight
+      # do nothing
+    when Gosu::KbO
       @show_pos = false
     when Gosu::KbH
       @help = false
@@ -358,16 +371,18 @@ class GameWindow < Gosu::Window
     when Gosu::KbEscape
       stop
     when Gosu::KbA
+      @auto = !@auto
+    when Gosu::KbB
       # about
     when Gosu::KbC
       # cheat
-    when Gosu::KbD
-      @random = !@random
     when Gosu::KbH
       @help = true
     when Gosu::KbN
       # new
       @board.init(0)
+    when Gosu::KbO
+      @show_pos = true
     when Gosu::KbP
       self.caption = "1010! (playback)"
       @playback  = true
@@ -388,12 +403,40 @@ class GameWindow < Gosu::Window
     when Gosu::Kb3
       @selected_option = 3
     when Gosu::MsRight
-      @show_pos = true
-    when Gosu::MsLeft
       # do nothing
+    when Gosu::MsLeft
+      @drag      = true
+      @clicked_x = self.mouse_x
+      @clicked_y = self.mouse_y
     else
       puts "Button down pressed with id = #{id}"
     end
+  end
+
+private
+
+  def _draw_option_tile(tile,x,y,color=nil, gap = nil, size = nil)
+    gap  ||= @gap
+    size ||= @size
+    tile.each_with_index do |cell,i|
+      color ||= cell_color(cell)
+      if cell.class == Array
+        cell.each_with_index do |ele, j|
+          if ele > 0
+            new_x = x + (size + gap) * j
+            new_y = y + (size + gap) * i
+            draw_sqr(new_x,new_y,1,size,color)
+          end
+        end
+      elsif cell > 0
+        new_x = x + (size + gap) * i
+        draw_sqr(new_x,y,1,size,color)
+      elsif cell < 0
+        new_y = y + (size + gap) * i
+        draw_sqr(x,new_y,1,size,color)
+      end
+    end
+    [gap,size]
   end
 
 end
@@ -402,7 +445,7 @@ if __FILE__ == $0
   begin
     win = GameWindow.new(ARGV[0])
     win.start
-  rescue Exception => e
+ # rescue Exception => e
     if RUBY_ENGINE == 'mruby'
       raise e
     else

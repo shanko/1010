@@ -110,8 +110,7 @@ class GameWindow < Gosu::Window
   end
 
   def get_screen_position
-    #x,y = clicked_xy
-    x,y = @clicked_x, @clicked_y
+    x,y = clicked_xy
     i,j = -1,-1
 
     Board1010::MAX_COLS.times do |jj|
@@ -132,8 +131,7 @@ class GameWindow < Gosu::Window
   end
 
   def get_selected_option
-    # x,y  = clicked_xy
-    x,y  = @clicked_x, @clicked_y
+    x,y  = clicked_xy
     opt  = 0
     gap  = @gap  / 2
     size = @size / 2
@@ -145,6 +143,7 @@ class GameWindow < Gosu::Window
         break
       end
     end
+
     opt
   end
 
@@ -183,8 +182,6 @@ class GameWindow < Gosu::Window
     if @selected_option > 0
       tile      = @option_tiles[@selected_option-1]
       _draw_option_tile(tile,x,y)
-    else
-      draw_sqr(x,y,1,22,Gosu::Color::YELLOW)
     end
 
   end
@@ -235,7 +232,7 @@ class GameWindow < Gosu::Window
           Board1010::MAX_COLS.times{|i| @board.cell = [i, j, 0] }
         end
 
-        sleep(0.24) unless @auto
+        sleep(0.25) unless @auto
       end
     else
       i,j,val = @placed_positions.shift
@@ -257,6 +254,7 @@ class GameWindow < Gosu::Window
       @placed_positions = @board.placed_pos
       @option_tiles.delete_at(@selected_option - 1)
     end
+
     @selected_option = 0
     @selected_row = @selected_col = -1
   end
@@ -325,9 +323,6 @@ class GameWindow < Gosu::Window
         @selected_row, @selected_col = position
       end
     else
-      @selected_option = get_selected_option if @selected_option == 0
-      @selected_row, @selected_col = get_screen_position if @selected_row < 0 || @selected_col < 0
-
       if @record
         @recording << [@selected_row, @selected_col, @selected_option, @option_tiles]
       end
@@ -357,6 +352,8 @@ class GameWindow < Gosu::Window
       @drag = false
       @clicked_x = self.mouse_x
       @clicked_y = self.mouse_y
+      @selected_row, @selected_col = get_screen_position if @selected_row < 0 || @selected_col < 0
+
     when Gosu::MsRight
       # do nothing
     when Gosu::KbO
@@ -408,6 +405,7 @@ class GameWindow < Gosu::Window
       @drag      = true
       @clicked_x = self.mouse_x
       @clicked_y = self.mouse_y
+      @selected_option = get_selected_option if @selected_option == 0
     else
       puts "Button down pressed with id = #{id}"
     end
@@ -445,7 +443,7 @@ if __FILE__ == $0
   begin
     win = GameWindow.new(ARGV[0])
     win.start
- # rescue Exception => e
+  rescue Exception => e
     if RUBY_ENGINE == 'mruby'
       raise e
     else

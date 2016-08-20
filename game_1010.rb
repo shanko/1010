@@ -102,7 +102,7 @@ class GameWindow < Gosu::Window
     y = @gap + (i * (@size + @gap))
     z = 1
 
-    draw_sqr(x,y,z,@size,cell_color(value))
+    draw_sqr(x,y,z,@size,cell_color(value),4)
   end
 
   def dragged_xy
@@ -168,8 +168,40 @@ class GameWindow < Gosu::Window
               460, ((@option_cell_size/2) * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR, 1)
   end
 
-  def draw_sqr(x,y,z,length,color=Gosu::Color::WHITE)
+  def draw_sqr(x,y,z,length,color=Gosu::Color::WHITE,corner=0)
     draw_rect(x,y,z,length,length,color)
+    draw_corners(x,y,length,length,Gosu::Color::WHITE,corner)
+  end
+
+  def draw_corners(x, y, width, height, color=nil, size=0)
+    return if size == 0
+    color ||= Gosu::Color::WHITE
+
+    z = 1
+
+    # Top Left
+    x1,y1,c1 = x,y,color
+    x2,y2,c2 = x1 + size, y1, color
+    x3,y3,c3 = x1, y1 + size, color
+    self.draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
+
+    # Top Right
+    x1,y1,c1 = x+width,y,color
+    x2,y2,c2 = x1 - size, y1, color
+    x3,y3,c3 = x1, y1 + size, color
+    self.draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
+
+    # Bot Left
+    x1,y1,c1 = x,y+height,color
+    x2,y2,c2 = x1, y1-size, color
+    x3,y3,c3 = x1+size, y1, color
+    self.draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
+
+    # Bot Right
+    x1,y1,c1 = x+width,y+height,color
+    x2,y2,c2 = x1 - size, y1, color
+    x3,y3,c3 = x1, y1 - size, color
+    self.draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
   end
 
   def draw_rect(x,y,z,width,height,color=Gosu::Color::WHITE)
@@ -450,17 +482,17 @@ private
             new_x = x + (size + gap) * j
             new_y = y + (size + gap) * i
             color ||= cell_color(ele)
-            draw_sqr(new_x,new_y,1,size,color)
+            draw_sqr(new_x,new_y,1,size,color,2)
           end
         end
       elsif cell > 0
         new_x = x + (size + gap) * i
         color ||= cell_color(cell)
-        draw_sqr(new_x,y,1,size,color)
+        draw_sqr(new_x,y,1,size,color,2)
       elsif cell < 0
         new_y = y + (size + gap) * i
         color ||= cell_color(cell)
-        draw_sqr(x,new_y,1,size,color)
+        draw_sqr(x,new_y,1,size,color,2)
       end
     end
     [gap,size]

@@ -6,12 +6,13 @@ class GameWindow < Gosu::Window
   attr :clicked_x, :clicked_y
 
   COLORS = {
-    :purple => Gosu::Color.new(*[245, 119, 47, 192]),
-    :brown  => Gosu::Color.new(*[226, 236, 85, 37]),
-    :grey   => Gosu::Color.new(*[62, 121, 218, 109]),
-    :pink   => Gosu::Color.new(*[193, 254, 9, 124]),
-    :bleau  => Gosu::Color.new(*[250, 5, 145, 245]),
-    :green  => Gosu::Color.new(*[248, 27, 184, 139]),
+    :maroon => Gosu::Color.new(*[222, 217, 17,  152]),
+    :purple => Gosu::Color.new(*[245, 119, 47,  192]),
+    :brown  => Gosu::Color.new(*[226, 236, 85,  37 ]),
+    :grey   => Gosu::Color.new(*[62,  121, 218, 109]),
+    :pink   => Gosu::Color.new(*[193, 254, 9,   124]),
+    :bleau  => Gosu::Color.new(*[250, 5,   145, 245]),
+    :green  => Gosu::Color.new(*[248, 27,  184, 139]),
   }
 
   FONT_COLOR = Gosu::Color::RED
@@ -31,8 +32,10 @@ class GameWindow < Gosu::Window
     @selected_row    = @selected_col = -1
     @clicked_x       = @clicked_y    = -1
 
+    ## These should be even so that div by 2 is proper int
     @gap  = 2
     @size = 32
+    @option_cell_size = 20
 
     @recording = []
     @placed_positions = []
@@ -80,13 +83,14 @@ class GameWindow < Gosu::Window
     when 2
       COLORS[:brown]
     when 3
-      COLORS[:purple]
-    when 4
       Gosu::Color::FUCHSIA
+    when 4
+      COLORS[:purple]
     else
       Gosu::Color::BLUE
     end
 
+    # puts "Cell color of #{value} = #{color}"
     color
   end
 
@@ -135,8 +139,8 @@ class GameWindow < Gosu::Window
     gap  = @gap  / 2
     size = @size / 2
     (1..Board1010::MAX_OPTIONS).each do |i|
-      y1 = (22 * i)     + ((i - 1) * (size + gap) * 5)
-      y2 = (22 * (i+1)) + ( i      * (size + gap) * 5)
+      y1 = (@option_cell_size * i)     + ((i - 1) * (size + gap) * 5)
+      y2 = (@option_cell_size * (i+1)) + ( i      * (size + gap) * 5)
       if (x > 360) && (y1 < y) && (y < y2)
         opt = i
         break
@@ -153,12 +157,12 @@ class GameWindow < Gosu::Window
     size = @size / 2
 
     x = 360
-    y = (22 * pos) + ((pos - 1) * (size + gap) * 5)
+    y = (@option_cell_size * pos) + ((pos - 1) * (size + gap) * 5)
 
     gap, size = _draw_option_tile(tile, x, y, selected && Gosu::Color::YELLOW, gap, size)
 
-    draw_line(360, (11 * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR,
-              460, (11 * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR, 1)
+    draw_line(360, ((@option_cell_size/2) * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR,
+              460, ((@option_cell_size/2) * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR, 1)
   end
 
   def draw_sqr(x,y,z,length,color=Gosu::Color::WHITE)
@@ -416,20 +420,22 @@ private
     gap  ||= @gap
     size ||= @size
     tile.each_with_index do |cell,i|
-      color ||= cell_color(cell)
       if cell.class == Array
         cell.each_with_index do |ele, j|
           if ele > 0
             new_x = x + (size + gap) * j
             new_y = y + (size + gap) * i
+            color ||= cell_color(ele)
             draw_sqr(new_x,new_y,1,size,color)
           end
         end
       elsif cell > 0
         new_x = x + (size + gap) * i
+        color ||= cell_color(cell)
         draw_sqr(new_x,y,1,size,color)
       elsif cell < 0
         new_y = y + (size + gap) * i
+        color ||= cell_color(cell)
         draw_sqr(x,new_y,1,size,color)
       end
     end

@@ -40,7 +40,7 @@ class GameWindow < Gosu::Window
     @recording = []
     @placed_positions = []
     @rows_to_clean, @cols_to_clean = [],[]
-    @undo = @show_pos = @record = @playback = @help = @drag = false
+    @ended = @undo = @show_pos = @record = @playback = @help = @drag = false
 
     @auto  = auto
     @count = 0
@@ -67,7 +67,10 @@ class GameWindow < Gosu::Window
   end
 
   def draw_background
-    draw_rect(0, 0, 0, @width, @height, Gosu::Color::WHITE)
+    draw_rect(0, 0, 0, @width+5, @height+5, Gosu::Color::WHITE)
+    boarder = 10 * (@size + @gap) + 1
+    draw_rect(boarder, 0, 0, 5, boarder+5, Gosu::Color::GRAY)
+    draw_rect(0, boarder, 0, boarder,   5, Gosu::Color::GRAY)
   end
 
   def cell_color(value=0)
@@ -213,6 +216,7 @@ class GameWindow < Gosu::Window
   end
 
   def draw_board
+
     @board.arr.each_with_index do |row,i|
       row.each_with_index do |val,j|
         draw_cell(i,j,val)
@@ -264,6 +268,17 @@ class GameWindow < Gosu::Window
 
   def draw_status
     @count += 1
+    if @ended
+      @score_font.draw("Score: #{@board.score}  Game Over!", 20, 360, 1, 1.0, 1.0, FONT_COLOR)
+      if @auto
+        puts "Score = #{@board.score}"
+        @ended = false
+        @board.init(0)
+      else
+        @score_font.draw("N to start new game, ESC to Quit", 20, 390, 1, 1.0, 1.0, FONT_COLOR)
+      end
+    end
+
     return unless @record
 
     if (@count % 2 == 0)
@@ -315,7 +330,11 @@ class GameWindow < Gosu::Window
     else
       @option_tiles = @board.options
       @option_tiles = @board.generate_tiles if @option_tiles.empty?
-      @board.ended unless @board.pos_exists?(@option_tiles)
+      unless @board.pos_exists?(@option_tiles)
+        place_selected_tile
+        @ended = true
+        return
+      end
     end
 
     if @auto

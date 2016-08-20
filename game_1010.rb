@@ -269,11 +269,10 @@ class GameWindow < Gosu::Window
   def draw_status
     @count += 1
     if @ended
-      @score_font.draw("Score: #{@board.score}  Game Over!", 20, 360, 1, 1.0, 1.0, FONT_COLOR)
+      @score_font.draw("Score: #{@board.score}     Game Over!", 20, 360, 1, 1.0, 1.0, FONT_COLOR)
       if @auto
         puts "Score = #{@board.score}"
-        @ended = false
-        @board.init(0)
+        restart
       else
         @score_font.draw("N to start new game, ESC to Quit", 20, 390, 1, 1.0, 1.0, FONT_COLOR)
       end
@@ -330,11 +329,7 @@ class GameWindow < Gosu::Window
     else
       @option_tiles = @board.options
       @option_tiles = @board.generate_tiles if @option_tiles.empty?
-      unless @board.pos_exists?(@option_tiles)
-        place_selected_tile
-        @ended = true
-        return
-      end
+      @ended = (not @board.pos_exists?(@option_tiles))
     end
 
     if @auto
@@ -358,6 +353,7 @@ class GameWindow < Gosu::Window
   def start
     @start_time = Time.now
     @auto ? @board.init(0) : @board.init
+    @ended = false
     self.show
   end
 
@@ -366,6 +362,11 @@ class GameWindow < Gosu::Window
     puts "Total time played = #{(stop_time - @start_time).to_i} seconds"
     puts "Score = #{@board.score}"
     self.close
+  end
+
+  def restart
+    @board.init(0)
+    @ended = false
   end
 
   def button_up(id)
@@ -395,17 +396,18 @@ class GameWindow < Gosu::Window
       # about
     when Gosu::KbC
       # cheat
+      @board.pos_exists?(@option_tiles,true)
     when Gosu::KbH
       @help = true
     when Gosu::KbN
       # new
-      @board.init(0)
+      restart
     when Gosu::KbO
       @show_pos = true
     when Gosu::KbP
       self.caption = "1010! (playback)"
       @playback  = true
-      @board.init(0)
+      restart
     when Gosu::KbQ
       @board.stop
     when Gosu::KbR

@@ -1,5 +1,5 @@
 # board.rb
-
+STDOUT.sync = true
 class Board1010
 
   attr_accessor :rows, :cols, :arr, :score, :options, :val, :placed_pos
@@ -386,15 +386,21 @@ class Board1010
     n
   end
 
-  def pos_exists?(tiles)
+  def pos_exists?(tiles, debug=false)
     tiles.each do |tile|
+      if debug
+        puts "Checking if tile #{tile} can be placed:"
+        show
+      end
       @arr.each_with_index do |row,i|
         row.each_with_index do |col,j|
           score = (_cell_occupied?(i,j) ? 0 : place(tile,i,j,true))
+          puts "score = #{score} at (#{i},#{j})" if debug
           return [i,j,tile] if score > 0
         end
       end
     end
+    puts "...no can place" if debug
     return false
   end
 
@@ -426,7 +432,6 @@ class Board1010
   end
 
   def start
-    puts "Started"
     @start_time = Time.now
   end
 

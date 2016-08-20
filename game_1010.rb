@@ -6,7 +6,6 @@ class GameWindow < Gosu::Window
   attr :clicked_x, :clicked_y
 
   COLORS = {
-    :maroon => Gosu::Color.new(*[222, 217, 17, 152]),
     :purple => Gosu::Color.new(*[245, 119, 47, 192]),
     :brown  => Gosu::Color.new(*[226, 236, 85, 37]),
     :grey   => Gosu::Color.new(*[62, 121, 218, 109]),

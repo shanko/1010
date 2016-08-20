@@ -43,7 +43,7 @@ class GameWindow < Gosu::Window
     @ended = @undo = @show_pos = @record = @playback = @help = @drag = false
 
     @auto  = auto
-    @count = 0
+    @auto_count = @max_score = @count = 0
   end
 
   def needs_cursor?
@@ -272,6 +272,8 @@ class GameWindow < Gosu::Window
       @score_font.draw("Score: #{@board.score}     Game Over!", 20, 360, 1, 1.0, 1.0, FONT_COLOR)
       if @auto
         puts "Score = #{@board.score}"
+        @auto_count += 1
+        @max_score  = @board.score if @board.score > @max_score
         restart
       else
         @score_font.draw("N to start new game, ESC to Quit", 20, 390, 1, 1.0, 1.0, FONT_COLOR)
@@ -366,6 +368,7 @@ class GameWindow < Gosu::Window
 
   def restart
     @board.init(0)
+    self.caption = "1010!  Runs: #{@auto_count}  Max Score: #{@max_score}" if @auto
     @ended = false
   end
 

@@ -339,7 +339,8 @@ class Board1010
         @placed_pos << [i+r,j,cell]
         score += 1
       else
-         raise "invalid tile #{tile}"
+        # Should never come here
+        raise "invalid tile #{tile}"
       end
     end
 
@@ -556,8 +557,14 @@ class Board1010
     return -1
   end
 
+  def rand_fit(positions)
+  # The best position is always a random position found
+    return rand(positions.size)
+  end
+
   def best_starting_position(tile)
     positions = find_starting_pos(tile)
+    # n = rand_fit(positions)
     # n = first_fit(positions)
     # n = last_fit(positions)
     # n = shanko_algo(positions)

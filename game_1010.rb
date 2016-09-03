@@ -303,9 +303,11 @@ class GameWindow < Gosu::Window
     if @ended
       @score_font.draw("Score: #{@board.score}     Game Over!", 20, 360, 1, 1.0, 1.0, FONT_COLOR)
       if @auto
-        puts "Score = #{@board.score}"
         @auto_count += 1
-        @max_score  = @board.score if @board.score > @max_score
+        if @board.score > @max_score
+          puts "Score = #{@board.score}"
+          @max_score  = @board.score
+        end
         restart
       else
         @score_font.draw("N to start new game, ESC to Quit", 20, 390, 1, 1.0, 1.0, FONT_COLOR)

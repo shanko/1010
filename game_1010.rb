@@ -213,12 +213,24 @@ class GameWindow < Gosu::Window
     Gosu::draw_quad(x1, y1, c1, x2, y2, c2, x3, y3, c3, x4, y4, c4, z, :default)
   end
 
+  def corrected_x(tile,x)
+    new_x = x
+    cell = tile.first
+    if cell.class == Array
+      cell.each do |val|
+        new_x -= (@size + @gap) if val == 0
+      end
+    end
+    new_x
+  end
+
   def draw_dragged_tile
     return unless @drag
 
     x,y = dragged_xy
     if @selected_option > 0
-      tile      = @option_tiles[@selected_option-1]
+      tile = @option_tiles[@selected_option-1]
+      x    = corrected_x(tile,x)
       _draw_option_tile(tile,x,y)
     end
 

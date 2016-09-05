@@ -218,7 +218,11 @@ class GameWindow < Gosu::Window
     cell = tile.first
     if cell.class == Array
       cell.each do |val|
-        new_x -= (@size + @gap) if val == 0
+        if val == 0
+          new_x -= (@size + @gap)
+        else
+          break
+        end
       end
     end
     new_x

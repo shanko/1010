@@ -9,13 +9,13 @@ class Board1010
   MAX_OPTIONS = 3
   GAME_FILE_NAME = (RUBY_ENGINE == 'mruby') ? "./1010game.str" : "./1010game.dat"
 
-  DOT = [1]
+  DOT = [[1]]
 
   # Horizontal Lines
-  HL = [[], [ 1], [2,  2], [3,  3, 3], [4,  4, 4, 4], [5,  5, 5, 5, 5]]
+  HL = [[], [[1],[0]], [[2, 2],[0,0]], [[3,3,3],[0,0,0]], [[4,4,4,4],[0,0,0,0]], [[5,5,5,5,5],[0,0,0,0,0]]]
 
   # Vertical Lines
-  VL = [[], [-1], [-1,-1], [-1,-1,-1], [-1,-1,-1,-1], [-1,-1,-1,-1,-1]]
+  VL = [[], [[1,0]], [[1,0],[1,0]], [[1,0],[1,0],[1,0]], [[1,0],[1,0],[1,0],[1,0]], [[1,0],[1,0],[1,0],[1,0],[1,0]]]
 
   # Squares
   SQ = [
@@ -297,50 +297,25 @@ class Board1010
     score = 0
     @placed_pos = []
     tile.each_with_index do |cell,r|
-      if (cell.class == Array)
-        if r == 0
-          cell.each do |ele|
-            break if ele > 0
-            j -= 1
-          end
-          return 0 if j < 0
+      if r == 0
+        cell.each do |ele|
+          break if ele > 0
+          j -= 1
         end
-        cell.each_with_index do |ele, c|
-          if ele > 0 && _cell_occupied?(i+r, j+c)
-            backtrack unless dry_run
-            return 0
-          end
-          if ele > 0
-            unless dry_run
-              _set_cell(i+r,j+c,ele)
-            end
-            @placed_pos << [i+r,j+c,ele]
-            score += 1
-          end
-        end
-      elsif cell > 0
-        if _cell_occupied?(i, j+r)
+        return 0 if j < 0
+      end
+      cell.each_with_index do |ele, c|
+        if ele > 0 && _cell_occupied?(i+r, j+c)
           backtrack unless dry_run
           return 0
         end
-        unless dry_run
-          _set_cell(i,j+r,cell)
+        if ele > 0
+          unless dry_run
+            _set_cell(i+r,j+c,ele)
+          end
+          @placed_pos << [i+r,j+c,ele]
+          score += 1
         end
-        @placed_pos << [i,j+r,cell]
-        score += 1
-      elsif cell < 0
-        if _cell_occupied?(i+r, j)
-          backtrack unless dry_run
-          return 0
-        end
-        unless dry_run
-          _set_cell(i+r,j, cell)
-        end
-        @placed_pos << [i+r,j,cell]
-        score += 1
-      else
-        # Should never come here
-        raise "invalid tile #{tile}"
       end
     end
 

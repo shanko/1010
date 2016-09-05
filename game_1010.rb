@@ -215,14 +215,12 @@ class GameWindow < Gosu::Window
 
   def corrected_x(tile,x)
     new_x = x
-    cell = tile.first
-    if cell.class == Array
-      cell.each do |val|
-        if val == 0
-          new_x -= (@size + @gap)
-        else
-          break
-        end
+    cell  = tile.first
+    cell.each do |val|
+      if val == 0
+        new_x -= (@size + @gap)
+      else
+        break
       end
     end
     new_x
@@ -494,23 +492,13 @@ private
     gap  ||= @gap
     size ||= @size
     tile.each_with_index do |cell,i|
-      if cell.class == Array
-        cell.each_with_index do |ele, j|
-          if ele > 0
-            new_x = x + (size + gap) * j
-            new_y = y + (size + gap) * i
-            color ||= cell_color(ele)
-            draw_sqr(new_x,new_y,1,size,color,2)
-          end
+      cell.each_with_index do |ele, j|
+        if ele > 0
+          new_x = x + (size + gap) * j
+          new_y = y + (size + gap) * i
+          color ||= cell_color(ele)
+          draw_sqr(new_x,new_y,1,size,color,2)
         end
-      elsif cell > 0
-        new_x = x + (size + gap) * i
-        color ||= cell_color(cell)
-        draw_sqr(new_x,y,1,size,color,2)
-      elsif cell < 0
-        new_y = y + (size + gap) * i
-        color ||= cell_color(cell)
-        draw_sqr(x,new_y,1,size,color,2)
       end
     end
     [gap,size]
@@ -522,7 +510,7 @@ if __FILE__ == $0
   begin
     win = GameWindow.new(ARGV[0])
     win.start
-  rescue Exception => e
+#  rescue Exception => e
     if RUBY_ENGINE == 'mruby'
       raise e
     else

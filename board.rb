@@ -1,100 +1,99 @@
 # board.rb
 STDOUT.sync = true
 class Board1010
-
   attr_accessor :rows, :cols, :arr, :score, :options, :val, :placed_pos
 
   MAX_ROWS    = 10
   MAX_COLS    = 10
   MAX_OPTIONS = 3
-  GAME_FILE_NAME = (RUBY_ENGINE == 'mruby') ? "./1010game.str" : "./1010game.dat"
+  GAME_FILE_NAME = RUBY_ENGINE == "mruby" ? "./1010game.str" : "./1010game.dat"
 
-  DOT = [[1]]
+  DOT = [[1]].freeze
 
   # Horizontal Lines
-  HL = [[], [[1],[0]], [[2, 2],[0,0]], [[3,3,3],[0,0,0]], [[4,4,4,4],[0,0,0,0]], [[5,5,5,5,5],[0,0,0,0,0]]]
+  HL = [[], [[1], [0]], [[2, 2], [0, 0]], [[3, 3, 3], [0, 0, 0]], [[4, 4, 4, 4], [0, 0, 0, 0]], [[5, 5, 5, 5, 5], [0, 0, 0, 0, 0]]].freeze
 
   # Vertical Lines
-  VL = [[], [[1,0]], [[1,0],[1,0]], [[1,0],[1,0],[1,0]], [[1,0],[1,0],[1,0],[1,0]], [[1,0],[1,0],[1,0],[1,0],[1,0]]]
+  VL = [[], [[1, 0]], [[1, 0], [1, 0]], [[1, 0], [1, 0], [1, 0]], [[1, 0], [1, 0], [1, 0], [1, 0]], [[1, 0], [1, 0], [1, 0], [1, 0], [1, 0]]].freeze
 
   # Squares
   SQ = [
-    [],[[1]],
-    [[2,2],
-     [2,2]],
-    [[3,3,3],
-     [3,3,3],
-     [3,3,3]],
-  ]
+    [], [[1]],
+    [[2, 2],
+     [2, 2]],
+    [[3, 3, 3],
+     [3, 3, 3],
+     [3, 3, 3]]
+  ].freeze
 
   # Bottom Left Corners
   BL = [
-    [],[[1]],
-    [[2,0],
-     [2,2]],
-    [[3,0,0],
-     [3,0,0],
-     [3,3,3]],
-  ]
+    [], [[1]],
+    [[2, 0],
+     [2, 2]],
+    [[3, 0, 0],
+     [3, 0, 0],
+     [3, 3, 3]]
+  ].freeze
 
   # Top Left Corners
   TL = [
-    [],[[1]],
-    [[2,2],
-     [0,2]],
-    [[3,3,3],
-     [0,0,3],
-     [0,0,3]],
-  ]
+    [], [[1]],
+    [[2, 2],
+     [0, 2]],
+    [[3, 3, 3],
+     [0, 0, 3],
+     [0, 0, 3]]
+  ].freeze
 
   # Bottom Right Corners
   BR = [
-    [],[[1]],
-    [[0,2],
-     [2,2]],
-    [[0,0,3],
-     [0,0,3],
-     [3,3,3]],
-  ]
+    [], [[1]],
+    [[0, 2],
+     [2, 2]],
+    [[0, 0, 3],
+     [0, 0, 3],
+     [3, 3, 3]]
+  ].freeze
 
   # Top Right Corners
   TR = [
-    [],[[1]],
-    [[2,2],
-     [2,0]],
-    [[3,3,3],
-     [3,0,0],
-     [3,0,0]],
-  ]
+    [], [[1]],
+    [[2, 2],
+     [2, 0]],
+    [[3, 3, 3],
+     [3, 0, 0],
+     [3, 0, 0]]
+  ].freeze
 
   ALL_TILES = [
-      DOT,
+    DOT,
 
-      HL[2],
-      HL[3],
-      HL[4],
-      HL[5],
+    HL[2],
+    HL[3],
+    HL[4],
+    HL[5],
 
-      VL[2],
-      VL[3],
-      VL[4],
-      VL[5],
+    VL[2],
+    VL[3],
+    VL[4],
+    VL[5],
 
-      SQ[2],
-      SQ[3],
+    SQ[2],
+    SQ[3],
 
-      BL[2],
-      BL[3],
+    BL[2],
+    BL[3],
 
-      TL[2],
-      TL[3],
+    TL[2],
+    TL[3],
 
-      BR[2],
-      BR[3],
+    BR[2],
+    BR[3],
 
-      TR[2],
-      TR[3],
-  ]
+    TR[2],
+    TR[3]
+  ].freeze
 
   def initialize(rows=MAX_ROWS, columns=MAX_COLS)
     @rows    = rows
@@ -114,24 +113,22 @@ class Board1010
     @score, @arr, @options = array
   end
 
-  def prev_arr
-    @prev_arr
-  end
+  attr_reader :prev_arr
 
   def to_s
-     opt_str = ""
-     @options.each do |opt|
-       opt_str += opt.inject(''){|sum,c| sum + c.to_s}
-       opt_str += ','
-     end
+    opt_str = ""
+    @options.each do |opt|
+      opt_str += opt.inject("") {|sum, c| sum + c.to_s }
+      opt_str += ","
+    end
     "@rows=#{@rows};@cols=#{@cols};@score=#{@score};@val=#{@val};@options=#{@options};@arr=#{@arr}"
   end
 
   def parse_load(data)
-    bGame = Struct.new("Game",:rows,:cols,:score,:val,:options,:arr)
+    bGame = Struct.new("Game", :rows, :cols, :score, :val, :options, :arr)
     game = bGame.new
-    data.split(';').each do |element|
-      key,val = element.split('=')
+    data.split(";").each do |element|
+      key, val = element.split("=")
       case key
       when "@rows"
         game.rows = val.to_i
@@ -142,9 +139,9 @@ class Board1010
       when "@val"
         game.val = val.to_i
       when "@options"
-        game.options = [[1],[1,1,1],[-1,-1,-1]]
+        game.options = [[1], [1, 1, 1], [-1, -1, -1]]
       when "@arr"
-        game.arr = Array.new(game.rows){Array.new(game.cols){@val}}
+        game.arr = Array.new(game.rows) { Array.new(game.cols) { @val } }
       end
     end
     game
@@ -153,13 +150,13 @@ class Board1010
   def load_game
     game = nil
     if File.exist?(GAME_FILE_NAME)
-      File.open(GAME_FILE_NAME,"rb") do |f|
+      File.open(GAME_FILE_NAME, "rb") do |f|
         data = f.read
-        if RUBY_ENGINE == 'mruby'
-          game = parse_load(data)
-        else
-          game = Marshal::load(data)
-        end
+        game = if RUBY_ENGINE == "mruby"
+                 parse_load(data)
+               else
+                 Marshal.load(data)
+               end
       end
     end
     game
@@ -168,12 +165,12 @@ class Board1010
   def save
     print "Do you want to save the game to play it later? [y/n] "
     opt = gets.chomp.downcase
-    if(opt == "y")
-      File.open(GAME_FILE_NAME,"wb") do |f|
-        if (RUBY_ENGINE == 'mruby')
-          f.write(self.to_s)
+    if opt == "y"
+      File.open(GAME_FILE_NAME, "wb") do |f|
+        if RUBY_ENGINE == "mruby"
+          f.write(to_s)
         else
-          f.write(Marshal::dump(self))
+          f.write(Marshal.dump(self))
         end
       end
     end
@@ -186,10 +183,10 @@ class Board1010
       @score = _filled_cells
     elsif val.class == Fixnum
       @val = val
-      @arr = Array.new(@rows){Array.new(@cols){val}}
+      @arr = Array.new(@rows) { Array.new(@cols) { val } }
       @score = 0
       @options = []
-    elsif (game = load_game)
+    elsif game = load_game
       @rows    = Board1010::MAX_ROWS
       @cols    = Board1010::MAX_COLS
       @val     = 0
@@ -197,7 +194,7 @@ class Board1010
       @score   = game.score
       @options = game.options
     else
-      @arr = Array.new(@rows){Array.new(@cols){@val}}
+      @arr = Array.new(@rows) { Array.new(@cols) { @val } }
     end
 
     start
@@ -216,40 +213,40 @@ class Board1010
   end
 
   def cell=(triplet)
-    i,j,val = triplet
-    _set_cell(i,j,val)
+    i, j, val = triplet
+    _set_cell(i, j, val)
   end
 
-  def get_selected_option(i,j)
+  def get_selected_option(i, j)
     puts "Select one option for position (#{i}, #{j}):"
-    while true do
+    loop do
       print "option> "
       option = gets.chomp
-      stop if option.to_s.downcase == "q"
-      return option.to_i if [1,2,3].include?(option.to_i)
+      stop if option.to_s.casecmp("q").zero?
+      return option.to_i if [1, 2, 3].include?(option.to_i)
       puts "Invalid option #{option}. Should be one of [1,2,3]"
     end
   end
 
-
   def get_position
     print "Select Row, Col: "
     line = gets.chomp
-    x,y  = line.split(',')
+    x, y = line.split(",")
     stop if x.to_i < 0 || y.to_i < 0
-    i,j  = x.to_i % Board1010::MAX_ROWS, y.to_i % Board1010::MAX_COLS
-    [i,j]
+    i = x.to_i % Board1010::MAX_ROWS
+    j = y.to_i % Board1010::MAX_COLS
+    [i, j]
   end
 
   def row_cleanup(i)
     @cols.times do |j|
-      _set_cell(i,j,@val)
+      _set_cell(i, j, @val)
     end
   end
 
   def col_cleanup(j)
     @rows.times do |i|
-      _set_cell(i,j,@val)
+      _set_cell(i, j, @val)
     end
   end
 
@@ -258,7 +255,7 @@ class Board1010
     @rows.times do |i|
       row_full = true
       @cols.times do |j|
-        if _cell_empty?(i,j)
+        if _cell_empty?(i, j)
           row_full = false
           break
         end
@@ -270,7 +267,7 @@ class Board1010
     @cols.times do |j|
       col_full = true
       @rows.times do |i|
-        if _cell_empty?(i,j)
+        if _cell_empty?(i, j)
           col_full = false
           break
         end
@@ -279,25 +276,25 @@ class Board1010
     end
 
     unless dry_run
-      rows_to_clean.each {|i| row_cleanup(i)}
-      cols_to_clean.each {|j| col_cleanup(j)}
+      rows_to_clean.each {|i| row_cleanup(i) }
+      cols_to_clean.each {|j| col_cleanup(j) }
     end
 
     [rows_to_clean, cols_to_clean]
   end
 
   def backtrack
-    @placed_pos.each do |i,j,k|
-      _set_cell(i,j,0)
+    @placed_pos.each do |i, j, _k|
+      _set_cell(i, j, 0)
     end
     @placed_pos = []
   end
 
-  def place(tile,i,j,dry_run=false)
+  def place(tile, i, j, dry_run=false)
     score = 0
     @placed_pos = []
-    tile.each_with_index do |cell,r|
-      if r == 0
+    tile.each_with_index do |cell, r|
+      if r.zero?
         cell.each do |ele|
           break if ele > 0
           j -= 1
@@ -305,17 +302,14 @@ class Board1010
         return 0 if j < 0
       end
       cell.each_with_index do |ele, c|
-        if ele > 0 && _cell_occupied?(i+r, j+c)
+        if ele > 0 && _cell_occupied?(i + r, j + c)
           backtrack unless dry_run
           return 0
         end
-        if ele > 0
-          unless dry_run
-            _set_cell(i+r,j+c,ele)
-          end
-          @placed_pos << [i+r,j+c,ele]
-          score += 1
-        end
+        next unless ele > 0
+        _set_cell(i + r, j + c, ele) unless dry_run
+        @placed_pos << [i + r, j + c, ele]
+        score += 1
       end
     end
 
@@ -331,16 +325,16 @@ class Board1010
   def find_fitting_tile
     # puts "*** Finding a fitting tile ***"
     tiny_tiles = [HL[2], VL[2], SQ[2], BL[2], TL[2], BR[2], TR[2], DOT]
-    i,j,tile   = pos_exists?(tiny_tiles)
+    i, j, tile = pos_exists?(tiny_tiles)
     tile
   end
 
   def generate_tiles(n=Board1010::MAX_OPTIONS)
     opt_tiles = []
 
-    n.times do |i|
+    n.times do |_i|
       r = rand(ALL_TILES.size)
-      tile =  ALL_TILES[r]
+      tile = ALL_TILES[r]
       opt_tiles << tile
     end
 
@@ -349,15 +343,13 @@ class Board1010
     opt_tiles
   end
 
-
   def show_tiles(all)
     n = 1
     all.each do |tile|
-      if tile
-        print " #{n}> "
-        show_tile(tile)
-        n += 1
-      end
+      next unless tile
+      print " #{n}> "
+      show_tile(tile)
+      n += 1
     end
     n
   end
@@ -368,35 +360,35 @@ class Board1010
         puts "Checking if tile #{tile} can be placed:"
         show
       end
-      @arr.each_with_index do |row,i|
-        row.each_with_index do |col,j|
-          score = (_cell_occupied?(i,j) ? 0 : place(tile,i,j,true))
+      @arr.each_with_index do |row, i|
+        row.each_with_index do |_col, j|
+          score = (_cell_occupied?(i, j) ? 0 : place(tile, i, j, true))
           puts "score = #{score} at (#{i},#{j})" if debug
-          return [i,j,tile] if score > 0
+          return [i, j, tile] if score > 0
         end
       end
     end
     puts "...no can place" if debug
-    return false
+    false
   end
 
   def play
-    while (true) do
-      all = (@options.size > 0 ? @options : generate_tiles)
+    loop do
+      all = (!@options.empty? ? @options : generate_tiles)
       @options = all
-      while (all.size > 0) do
+      until all.empty?
         show
         puts "\n#{'=' * 20}\nCurrent score = #{current_score}\n#{'=' * 20}\n"
         show_tiles(all)
         ended unless pos_exists?(all)
-        i,j = get_position
-        if all.size > 1
-          opt = get_selected_option(i,j)
-        else
-          opt = 1
-        end
+        i, j = get_position
+        opt = if all.size > 1
+                get_selected_option(i, j)
+              else
+                1
+              end
         tile = all[opt - 1]
-        new_score = place(tile,i,j)
+        new_score = place(tile, i, j)
         if new_score < 1
           puts " Cannot place the tile #{tile} at (#{i}, #{j})"
         else
@@ -424,12 +416,12 @@ class Board1010
 
   def show
     puts ""
-    print "   ";@cols.times{|j| print " #{j}"}
+    print "   "; @cols.times {|j| print " #{j}" }
     puts
-    @arr.each_with_index do |row,i|
+    @arr.each_with_index do |row, i|
       print " #{i}["
       row.each do |col|
-        if col == 0
+        if col.zero?
           print " ."
         else
           print " X"
@@ -442,99 +434,99 @@ class Board1010
 
   def find_starting_pos(tile)
     positions = []
-    @arr.each_with_index do |row,i|
-      row.each_with_index do |col,j|
-        score = place(tile,i,j,true)
-        positions << [i,j] if score > 0
+    @arr.each_with_index do |row, i|
+      row.each_with_index do |_col, j|
+        score = place(tile, i, j, true)
+        positions << [i, j] if score > 0
       end
     end
     positions
   end
 
-  def neighbours(i,j)
+  def neighbours(i, j)
     count = 0
 
-    count += 1 if i > 0 && j > 0 && @arr[i-1][j-1] != 0
-    count += 1 if i > 0 && @arr[i-1][j  ] != 0
-    count += 1 if i > 0 && j < 9 && @arr[i-1][j+1] != 0
+    count += 1 if i > 0 && j > 0 && (@arr[i - 1][j - 1]).nonzero?
+    count += 1 if i > 0 && (@arr[i - 1][j]).nonzero?
+    count += 1 if i > 0 && j < 9 && (@arr[i - 1][j + 1]).nonzero?
 
-    count += 1 if i < 9 && j > 0 && @arr[i+1][j-1] != 0
-    count += 1 if i < 9 && @arr[i+1][j  ] != 0
-    count += 1 if i < 9 && j < 9 && @arr[i+1][j+1] != 0
+    count += 1 if i < 9 && j > 0 && (@arr[i + 1][j - 1]).nonzero?
+    count += 1 if i < 9 && (@arr[i + 1][j]).nonzero?
+    count += 1 if i < 9 && j < 9 && (@arr[i + 1][j + 1]).nonzero?
 
-    count += 1 if j > 0 && @arr[i  ][j-1] != 0
-    count += 1 if j < 9 && @arr[i  ][j+1] != 0
+    count += 1 if j > 0 && (@arr[i][j - 1]).nonzero?
+    count += 1 if j < 9 && (@arr[i][j + 1]).nonzero?
 
     count
   end
 
-  def jc_neighbours(i,j)
+  def jc_neighbours(i, j)
     count = 0
 
-    count += 1 if i > 0 && j > 0 && @arr[i-1][j-1] != 0
-    count += 1 if i > 0 && @arr[i-1][j  ] != 0
-    count += 1 if i > 0 && j < 9 && @arr[i-1][j+1] != 0
+    count += 1 if i > 0 && j > 0 && (@arr[i - 1][j - 1]).nonzero?
+    count += 1 if i > 0 && (@arr[i - 1][j]).nonzero?
+    count += 1 if i > 0 && j < 9 && (@arr[i - 1][j + 1]).nonzero?
 
-    count += 1 if i < 9 && j > 0 && @arr[i+1][j-1] != 0
-    count += 1 if i < 9 && @arr[i+1][j  ] != 0
-    count += 1 if i < 9 && j < 9 && @arr[i+1][j+1] != 0
+    count += 1 if i < 9 && j > 0 && (@arr[i + 1][j - 1]).nonzero?
+    count += 1 if i < 9 && (@arr[i + 1][j]).nonzero?
+    count += 1 if i < 9 && j < 9 && (@arr[i + 1][j + 1]).nonzero?
 
-    count += 1 if j > 0 && @arr[i  ][j-1] != 0
-    count += 1 if j < 9 && @arr[i  ][j+1] != 0
+    count += 1 if j > 0 && (@arr[i][j - 1]).nonzero?
+    count += 1 if j < 9 && (@arr[i][j + 1]).nonzero?
 
-    count += 1 if (i == 0) || (i == 9)
-    count += 1 if (j == 0) || (j == 9)
+    count += 1 if i.zero? || (i == 9)
+    count += 1 if j.zero? || (j == 9)
 
     count
   end
 
-  def sam_algo(positions)
-  ## Suggested by Sam:
-  ## Find the position which completely fills more rows and columns when the tile is placed
-    return -1
+  def sam_algo(_positions)
+    ## Suggested by Sam:
+    ## Find the position which completely fills more rows and columns when the tile is placed
+    -1
   end
 
-  def andy_algo(positions)
-  ## Suggested by Andy:
-  ## Find the position which results into minimum empty cells after placing the tile but before
-  ## clearing the filled rows and columns
-    return  -1
+  def andy_algo(_positions)
+    ## Suggested by Andy:
+    ## Find the position which results into minimum empty cells after placing the tile but before
+    ## clearing the filled rows and columns
+    -1
   end
 
   def jc_algo(positions)
-  # Suggested by JC:
-  # The best position is one which has most neighbors occupied.
-  # But treat the edge cells as if their neighbors are always occupied.
+    # Suggested by JC:
+    # The best position is one which has most neighbors occupied.
+    # But treat the edge cells as if their neighbors are always occupied.
     neighbour_count = []
-    positions.each_with_index do |pos,k|
+    positions.each_with_index do |pos, k|
       neighbour_count[k] = jc_neighbours(*pos)
     end
     neighbour_count.index(neighbour_count.max)
   end
 
   def shanko_algo(positions)
-  # The best position is one which has most neighbors occupied
-  # In other words: least neighboring cells empty
+    # The best position is one which has most neighbors occupied
+    # In other words: least neighboring cells empty
     neighbour_count = []
-    positions.each_with_index do |pos,k|
+    positions.each_with_index do |pos, k|
       neighbour_count[k] = neighbours(*pos)
     end
     neighbour_count.index(neighbour_count.max)
   end
 
-  def first_fit(positions)
-  # The best position is always the first position found
-    return 0
+  def first_fit(_positions)
+    # The best position is always the first position found
+    0
   end
 
-  def last_fit(positions)
-  # The best position is always the last position found
-    return -1
+  def last_fit(_positions)
+    # The best position is always the last position found
+    -1
   end
 
   def rand_fit(positions)
-  # The best position is always a random position found
-    return rand(positions.size)
+    # The best position is always a random position found
+    rand(positions.size)
   end
 
   def best_starting_position(tile)
@@ -549,24 +541,22 @@ class Board1010
     positions[n || 0]
   end
 
-private
+  private
 
-  def _set_cell(i,j,val)
-    if _cell_valid?(i,j)
-      @arr[i][j] = val
-    end
+  def _set_cell(i, j, val)
+    @arr[i][j] = val if _cell_valid?(i, j)
   end
 
-  def _cell_valid?(i,j)
+  def _cell_valid?(i, j)
     @arr[i] && @arr[i][j]
   end
 
-  def _cell_empty?(i,j)
-    _cell_valid?(i,j) && @arr[i][j] == @val
+  def _cell_empty?(i, j)
+    _cell_valid?(i, j) && @arr[i][j] == @val
   end
 
-  def _cell_occupied?(i,j)
-    not _cell_empty?(i,j)
+  def _cell_occupied?(i, j)
+    !_cell_empty?(i, j)
   end
 
   def _over
@@ -580,23 +570,21 @@ private
   def _filled_cells
     count = 0
     @arr.each do |row|
-       row.each do |col|
-         count += 1 if col > 0
-       end
+      row.each do |col|
+        count += 1 if col > 0
+      end
     end
     count
   end
-
 end
 
-if __FILE__ == $0
+if __FILE__ == $PROGRAM_NAME
   begin
     puts "Total tiles = #{Board1010::ALL_TILES.size}"
     b = Board1010.new
     b.init
     b.play
   rescue
-    puts "> " + $!.to_s
+    puts "> " + $ERROR_INFO.to_s
   end
 end
-

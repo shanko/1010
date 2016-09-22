@@ -41,7 +41,7 @@ class GameWindow < Gosu::Window
     @placed_positions = []
     @rows_to_clean = []
     @cols_to_clean = []
-    @ended = @undo = @show_pos = @record = @playback = @help = @drag = false
+    @ended = @undo = @show_pos = @record = @playback = @help = @drag = @step = false
 
     @auto  = auto
     @auto_count = @max_score = @count = 0
@@ -260,13 +260,12 @@ class GameWindow < Gosu::Window
 
   def draw_dragged_tile
     return unless @drag
+    return unless [1,2,3].include?(@selected_option)
 
     x, y = dragged_xy
-    if @selected_option > 0
-      tile = @option_tiles[@selected_option - 1]
-      x    = corrected_x(tile, x)
-      _draw_option_tile(tile, x, y)
-    end
+    tile = @option_tiles[@selected_option - 1]
+       x = corrected_x(tile, x)
+    _draw_option_tile(tile, x, y)
   end
 
   def draw_open_pos
@@ -417,11 +416,12 @@ class GameWindow < Gosu::Window
       @ended = !@board.pos_exists?(@option_tiles)
     end
 
-    if @auto
+    if @auto || @step
       @selected_option = rand(@option_tiles.size) + 1
       tile = @option_tiles[@selected_option - 1]
       position = @board.best_starting_position(tile)
       @selected_row, @selected_col = position if position
+      @step = false
     else
       if @record
         @recording << [@selected_row, @selected_col, @selected_option, @option_tiles]
@@ -481,6 +481,8 @@ class GameWindow < Gosu::Window
     when Gosu::KbC
       # cheat
       @board.pos_exists?(@option_tiles, true)
+    when Gosu::KbE
+      @step = true
     when Gosu::KbH
       @help = true
     when Gosu::KbN
@@ -541,7 +543,7 @@ if __FILE__ == $PROGRAM_NAME
   begin
     win = GameWindow.new(ARGV[0])
     win.start
-    #  rescue Exception => e
+  rescue Exception => e
     if RUBY_ENGINE == "mruby"
       raise e
     else

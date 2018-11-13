@@ -52,6 +52,7 @@ MIT
 
 ## To Do:
 
+* Rewrite using [graphics] gem
 * Make "auto" mode repeatable by passing a seed to random num generator
 * Save History
 * Use repeatable history to compare "auto" mode algorithms
@@ -69,3 +70,4 @@ MIT
   [gcc]: <http://gcc.gnu.org>
   [Gram]: <http://gram.gs/game-detail-1010.html>
   [mruby]: <http://mruby.org>
+  [graphics]: <https://github.com/seattlerb/graphics>

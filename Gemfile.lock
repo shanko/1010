@@ -1,0 +1,16 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    gosu (0.14.4)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  gosu
+
+RUBY VERSION
+   ruby 2.5.1p57
+
+BUNDLED WITH
+   1.16.2

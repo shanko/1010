@@ -134,6 +134,7 @@ class GameWindow < Gosu::Window
     @last_recording = nil
     @playback    = nil # events still to replay
     @message     = nil
+    @opened_at   = Gosu.milliseconds # for the time played, over every game in this window
 
     load_game unless @auto
     new_game unless @board
@@ -162,7 +163,6 @@ class GameWindow < Gosu::Window
     @selected       = nil   # index of the chosen option
     @dragging       = false
     @animation      = nil
-    @started_at     = Gosu.milliseconds
     @ended_at       = nil
     refresh_game_over
   end
@@ -349,8 +349,10 @@ class GameWindow < Gosu::Window
     super
   end
 
+  # Since the window opened, like the original: in auto mode that covers every
+  # game played, not just the one in progress.
   def play_seconds
-    ((@ended_at || Gosu.milliseconds) - @started_at) / 1000
+    (Gosu.milliseconds - @opened_at) / 1000
   end
 
   # ---------------------------------------------------------------------------

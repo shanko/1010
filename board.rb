@@ -1,590 +1,277 @@
-# board.rb
-STDOUT.sync = true
+# frozen_string_literal: true
+
+# board.rb: the rules of 1010!, with no drawing and no terminal input or output.
+#
+# The board is a grid of cells with row 0 at the top. An empty cell holds EMPTY;
+# a filled cell holds the value of the tile that filled it, which picks its color.
 class Board1010
-  attr_accessor :rows, :cols, :arr, :score, :options, :val, :placed_pos
+  ROWS    = 10
+  COLS    = 10
+  OPTIONS = 3 # tiles offered at a time
+  EMPTY   = 0
 
-  MAX_ROWS    = 10
-  MAX_COLS    = 10
-  MAX_OPTIONS = 3
-  GAME_FILE_NAME = RUBY_ENGINE == "mruby" ? "./1010game.str" : "./1010game.dat"
+  # Where the window and the terminal game keep a saved game.
+  SAVE_FILE = "1010game.txt"
 
-  DOT = [[1]].freeze
+  # The 19 tile shapes. Each inner array is one row of the tile, top row first:
+  # 0 is a gap, any other number is a filled square (and picks its color).
+  # HL = horizontal line, VL = vertical line, SQ = square, and
+  # BL / TL / BR / TR = the corner shapes.
+  TILES = {
+    dot: [[1]],
 
-  # Horizontal Lines
-  HL = [[], [[1], [0]], [[2, 2], [0, 0]], [[3, 3, 3], [0, 0, 0]], [[4, 4, 4, 4], [0, 0, 0, 0]], [[5, 5, 5, 5, 5], [0, 0, 0, 0, 0]]].freeze
+    hl2: [[2, 2]],
+    hl3: [[3, 3, 3]],
+    hl4: [[4, 4, 4, 4]],
+    hl5: [[5, 5, 5, 5, 5]],
 
-  # Vertical Lines
-  VL = [[], [[1, 0]], [[1, 0], [1, 0]], [[1, 0], [1, 0], [1, 0]], [[1, 0], [1, 0], [1, 0], [1, 0]], [[1, 0], [1, 0], [1, 0], [1, 0], [1, 0]]].freeze
+    vl2: [[2], [2]],
+    vl3: [[3], [3], [3]],
+    vl4: [[4], [4], [4], [4]],
+    vl5: [[5], [5], [5], [5], [5]],
 
-  # Squares
-  SQ = [
-    [], [[1]],
-    [[2, 2],
-     [2, 2]],
-    [[3, 3, 3],
-     [3, 3, 3],
-     [3, 3, 3]]
-  ].freeze
+    sq2: [[2, 2],
+          [2, 2]],
+    sq3: [[3, 3, 3],
+          [3, 3, 3],
+          [3, 3, 3]],
 
-  # Bottom Left Corners
-  BL = [
-    [], [[1]],
-    [[2, 0],
-     [2, 2]],
-    [[3, 0, 0],
-     [3, 0, 0],
-     [3, 3, 3]]
-  ].freeze
+    bl2: [[2, 0],
+          [2, 2]],
+    bl3: [[3, 0, 0],
+          [3, 0, 0],
+          [3, 3, 3]],
 
-  # Top Left Corners
-  TL = [
-    [], [[1]],
-    [[2, 2],
-     [0, 2]],
-    [[3, 3, 3],
-     [0, 0, 3],
-     [0, 0, 3]]
-  ].freeze
+    tl2: [[2, 2],
+          [0, 2]],
+    tl3: [[3, 3, 3],
+          [0, 0, 3],
+          [0, 0, 3]],
 
-  # Bottom Right Corners
-  BR = [
-    [], [[1]],
-    [[0, 2],
-     [2, 2]],
-    [[0, 0, 3],
-     [0, 0, 3],
-     [3, 3, 3]]
-  ].freeze
+    br2: [[0, 2],
+          [2, 2]],
+    br3: [[0, 0, 3],
+          [0, 0, 3],
+          [3, 3, 3]],
 
-  # Top Right Corners
-  TR = [
-    [], [[1]],
-    [[2, 2],
-     [2, 0]],
-    [[3, 3, 3],
-     [3, 0, 0],
-     [3, 0, 0]]
-  ].freeze
+    tr2: [[2, 2],
+          [2, 0]],
+    tr3: [[3, 3, 3],
+          [3, 0, 0],
+          [3, 0, 0]]
+  }.freeze
 
-  ALL_TILES = [
-    DOT,
+  ALL_TILES = TILES.values.freeze
 
-    HL[2],
-    HL[3],
-    HL[4],
-    HL[5],
+  # When none of the tiles dealt fit, the first one is swapped for the first
+  # of these that does.
+  SMALL_TILES = TILES.values_at(:hl2, :vl2, :sq2, :bl2, :tl2, :br2, :tr2, :dot).freeze
 
-    VL[2],
-    VL[3],
-    VL[4],
-    VL[5],
+  # [row, col] steps to the 8 squares around a square.
+  NEIGHBOUR_OFFSETS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].freeze
 
-    SQ[2],
-    SQ[3],
+  # What a move did, so the window can animate it.
+  #   placed:                [row, col, value] of each square the tile filled
+  #   cells_before_clearing: the cells after placing the tile, before full lines were emptied
+  #   cleared_rows / cleared_cols: the full lines that were emptied
+  Move = Struct.new(:placed, :cells_before_clearing, :cleared_rows, :cleared_cols, keyword_init: true)
 
-    BL[2],
-    BL[3],
+  attr_reader :cells, :options, :score, :random
 
-    TL[2],
-    TL[3],
-
-    BR[2],
-    BR[3],
-
-    TR[2],
-    TR[3]
-  ].freeze
-
-  def initialize(rows=MAX_ROWS, columns=MAX_COLS)
-    @rows    = rows
-    @cols    = columns
-    @arr     = nil
-    @score   = 0
-    @val     = 0
-    @options = []
-    @prev_options = @prev_score = @prev_arr = nil
+  # `random` deals the tiles. Pass Random.new(seed) to get the same tiles every time.
+  def initialize(cells: nil, options: [], score: 0, random: Random.new)
+    @cells   = cells || Array.new(ROWS) { Array.new(COLS, EMPTY) }
+    @options = options # the tiles waiting to be placed
+    @score   = score
+    @random  = random
   end
 
-  def marshal_dump
-    [@score, @arr, @options]
+  # A deep copy, used for undo. It shares the random number generator, so a
+  # recorded game deals the same tiles when it is played back.
+  def copy
+    Board1010.new(cells: @cells.map(&:dup), options: @options.dup, score: @score, random: @random)
   end
 
-  def marshal_load(array)
-    @score, @arr, @options = array
+  # The column of the first filled square in the tile's top row. The square
+  # you click on is where this square goes.
+  def self.anchor(tile)
+    tile.first.index {|value| value != EMPTY }
   end
 
-  attr_reader :prev_arr
+  # ---------------------------------------------------------------------------
+  # Playing
+  # ---------------------------------------------------------------------------
 
-  def to_s
-    opt_str = ""
-    @options.each do |opt|
-      opt_str += opt.inject("") {|sum, c| sum + c.to_s }
-      opt_str += ","
-    end
-    "@rows=#{@rows};@cols=#{@cols};@score=#{@score};@val=#{@val};@options=#{@options};@arr=#{@arr}"
+  # One whole move: puts option `index` with its anchor on (row, col), scores
+  # 1 point per square, empties full rows and columns, and deals 3 new tiles
+  # once all are used. Returns a Move, or nil if the tile doesn't fit there.
+  def play(index, row, col)
+    tile = @options[index]
+    return nil unless tile && fits?(tile, row, col)
+
+    placed = place(tile, row, col)
+    @options.delete_at(index)
+    cells_before_clearing = @cells.map(&:dup)
+    rows, cols = full_lines
+    clear_lines(rows, cols)
+    deal_if_needed
+
+    Move.new(placed: placed, cells_before_clearing: cells_before_clearing, cleared_rows: rows, cleared_cols: cols)
   end
 
-  def parse_load(data)
-    bGame = Struct.new("Game", :rows, :cols, :score, :val, :options, :arr)
-    game = bGame.new
-    data.split(";").each do |element|
-      key, val = element.split("=")
-      case key
-      when "@rows"
-        game.rows = val.to_i
-      when "@cols"
-        game.cols = val.to_i
-      when "@score"
-        game.score = val.to_i
-      when "@val"
-        game.val = val.to_i
-      when "@options"
-        game.options = [[1], [1, 1, 1], [-1, -1, -1]]
-      when "@arr"
-        game.arr = Array.new(game.rows) { Array.new(game.cols) { @val } }
+  # The game ends when none of the remaining tiles fit anywhere.
+  def game_over?
+    @options.none? {|tile| fits_anywhere?(tile) }
+  end
+
+  def deal_if_needed
+    @options = generate_options if @options.empty?
+  end
+
+  # 3 random tiles. If none of them fit anywhere, the first one is swapped for
+  # a small tile that does fit.
+  def generate_options
+    tiles = Array.new(OPTIONS) { ALL_TILES.sample(random: @random) }
+    return tiles if tiles.any? {|tile| fits_anywhere?(tile) }
+
+    small = SMALL_TILES.find {|tile| fits_anywhere?(tile) }
+    tiles[0] = small if small
+    tiles
+  end
+
+  # ---------------------------------------------------------------------------
+  # Cells and positions
+  # ---------------------------------------------------------------------------
+
+  def inside?(row, col)
+    row.between?(0, ROWS - 1) && col.between?(0, COLS - 1)
+  end
+
+  def empty?(row, col)
+    inside?(row, col) && @cells[row][col] == EMPTY
+  end
+
+  def filled?(row, col)
+    inside?(row, col) && @cells[row][col] != EMPTY
+  end
+
+  # [row, col, value] of each square the tile would cover with its anchor on (row, col).
+  def cells_for(tile, row, col)
+    left = col - Board1010.anchor(tile)
+    squares = []
+    tile.each_with_index do |values, r|
+      values.each_with_index do |value, c|
+        squares << [row + r, left + c, value] unless value == EMPTY
       end
     end
-    game
+    squares
   end
 
-  def load_game
-    game = nil
-    if File.exist?(GAME_FILE_NAME)
-      File.open(GAME_FILE_NAME, "rb") do |f|
-        data = f.read
-        game = if RUBY_ENGINE == "mruby"
-                 parse_load(data)
-               else
-                 Marshal.load(data)
-               end
-      end
-    end
-    game
+  def fits?(tile, row, col)
+    cells_for(tile, row, col).all? {|r, c, _value| empty?(r, c) }
   end
 
-  def save
-    print "Do you want to save the game to play it later? [y/n] "
-    opt = gets.chomp.downcase
-    if opt == "y"
-      File.open(GAME_FILE_NAME, "wb") do |f|
-        if RUBY_ENGINE == "mruby"
-          f.write(to_s)
-        else
-          f.write(Marshal.dump(self))
-        end
-      end
-    end
-    (opt == "y")
+  # The first [row, col] where the tile fits, or nil.
+  def find_position(tile)
+    every_cell.find {|row, col| fits?(tile, row, col) }
   end
 
-  def init(val=nil)
-    if val.class == Array
-      @arr   = val
-      @score = _filled_cells
-    elsif val.class == Fixnum
-      @val = val
-      @arr = Array.new(@rows) { Array.new(@cols) { val } }
-      @score = 0
-      @options = []
-    elsif game = load_game
-      @rows    = Board1010::MAX_ROWS
-      @cols    = Board1010::MAX_COLS
-      @val     = 0
-      @arr     = game.arr
-      @score   = game.score
-      @options = game.options
-    else
-      @arr = Array.new(@rows) { Array.new(@cols) { @val } }
-    end
-
-    start
+  def fits_anywhere?(tile)
+    !find_position(tile).nil?
   end
 
-  def current_score
-    @score
+  # Every [row, col] where the tile fits, top-left first.
+  def positions_for(tile)
+    every_cell.select {|row, col| fits?(tile, row, col) }
   end
 
-  def restore_arr(prev_arr)
-    @arr = Marshal.load(Marshal.dump(prev_arr))
+  # Rows and columns that have no empty squares left.
+  def full_lines
+    rows = (0...ROWS).select {|row| @cells[row].none?(EMPTY) }
+    cols = (0...COLS).select {|col| @cells.none? {|values| values[col] == EMPTY } }
+    [rows, cols]
   end
 
-  def restore_options(prev_options)
-    @options = Marshal.load(Marshal.dump(prev_options))
+  # ---------------------------------------------------------------------------
+  # Measures used by the computer player (see auto_player.rb)
+  # ---------------------------------------------------------------------------
+
+  # How many of the 8 squares around (row, col) are filled.
+  def filled_neighbours(row, col)
+    NEIGHBOUR_OFFSETS.count {|dr, dc| filled?(row + dr, col + dc) }
   end
 
-  def cell=(triplet)
-    i, j, val = triplet
-    _set_cell(i, j, val)
+  # 1 for touching the top or bottom edge, plus 1 for touching the left or right edge.
+  def edges_touched(row, col)
+    [row.zero? || row == ROWS - 1, col.zero? || col == COLS - 1].count(true)
   end
 
-  def get_selected_option(i, j)
-    puts "Select one option for position (#{i}, #{j}):"
-    loop do
-      print "option> "
-      option = gets.chomp
-      stop if option.to_s.casecmp("q").zero?
-      return option.to_i if [1, 2, 3].include?(option.to_i)
-      puts "Invalid option #{option}. Should be one of [1,2,3]"
-    end
+  # How many rows and columns would be full after placing the tile there.
+  def lines_completed_by(tile, row, col)
+    trial = copy
+    trial.place(tile, row, col)
+    trial.full_lines.sum(&:size)
   end
 
-  def get_position
-    print "Select Row, Col: "
-    line = gets.chomp
-    x, y = line.split(",")
-    stop if x.to_i < 0 || y.to_i < 0
-    i = x.to_i % Board1010::MAX_ROWS
-    j = y.to_i % Board1010::MAX_COLS
-    [i, j]
+  # ---------------------------------------------------------------------------
+  # Saving
+  # ---------------------------------------------------------------------------
+
+  # A plain text format that is easy to read in an editor:
+  #   score=133
+  #   options=hl2,sq3,dot
+  #   row=0000123000   (one line per row, top row first)
+  def to_save
+    lines = ["score=#{@score}", "options=#{@options.map {|tile| TILES.key(tile) }.join(',')}"]
+    @cells.each {|values| lines << "row=#{values.join}" }
+    lines.join("\n")
   end
 
-  def row_cleanup(i)
-    @cols.times do |j|
-      _set_cell(i, j, @val)
+  # Builds a board from text made by #to_save, or returns nil if the text
+  # doesn't look like a saved game.
+  def self.from_save(text, random: Random.new)
+    fields = parse_save(text)
+    rows = fields[:rows]
+    return nil if fields[:score].nil? || rows.size != ROWS || rows.any? {|values| values.size != COLS }
+
+    Board1010.new(cells: rows, options: fields[:options], score: fields[:score], random: random)
+  end
+
+  def self.parse_save(text)
+    fields = {score: nil, options: [], rows: []}
+    text.each_line {|line| parse_save_line(fields, *line.strip.split("=", 2)) }
+    fields
+  end
+
+  # A line without "=" (or an empty one) has no key or value, and is ignored.
+  def self.parse_save_line(fields, key=nil, value=nil)
+    case key
+    when "score"   then fields[:score] = Integer(value, exception: false)
+    when "options" then fields[:options] = value.to_s.split(",").filter_map {|name| TILES[name.to_sym] }
+    when "row"     then fields[:rows] << value.to_s.chars.map(&:to_i)
     end
   end
+  private_class_method :parse_save, :parse_save_line
 
-  def col_cleanup(j)
-    @rows.times do |i|
-      _set_cell(i, j, @val)
-    end
-  end
+  protected
 
-  def cleanup(dry_run=false)
-    rows_to_clean = []
-    @rows.times do |i|
-      row_full = true
-      @cols.times do |j|
-        if _cell_empty?(i, j)
-          row_full = false
-          break
-        end
-      end
-      rows_to_clean << i if row_full
-    end
-
-    cols_to_clean = []
-    @cols.times do |j|
-      col_full = true
-      @rows.times do |i|
-        if _cell_empty?(i, j)
-          col_full = false
-          break
-        end
-      end
-      cols_to_clean << j if col_full
-    end
-
-    unless dry_run
-      rows_to_clean.each {|i| row_cleanup(i) }
-      cols_to_clean.each {|j| col_cleanup(j) }
-    end
-
-    [rows_to_clean, cols_to_clean]
-  end
-
-  def backtrack
-    @placed_pos.each do |i, j, _k|
-      _set_cell(i, j, 0)
-    end
-    @placed_pos = []
-  end
-
-  def place(tile, i, j, dry_run=false)
-    score = 0
-    @placed_pos = []
-    tile.each_with_index do |cell, r|
-      if r.zero?
-        cell.each do |ele|
-          break if ele > 0
-          j -= 1
-        end
-        return 0 if j < 0
-      end
-      cell.each_with_index do |ele, c|
-        if ele > 0 && _cell_occupied?(i + r, j + c)
-          backtrack unless dry_run
-          return 0
-        end
-        next unless ele > 0
-        _set_cell(i + r, j + c, ele) unless dry_run
-        @placed_pos << [i + r, j + c, ele]
-        score += 1
-      end
-    end
-
-    @score += score unless dry_run
-    score
-  end
-
-  def show_tile(tile)
-    p tile
-  end
-
-  ## Improve this algorithm to find a better fit
-  def find_fitting_tile
-    # puts "*** Finding a fitting tile ***"
-    tiny_tiles = [HL[2], VL[2], SQ[2], BL[2], TL[2], BR[2], TR[2], DOT]
-    i, j, tile = pos_exists?(tiny_tiles)
-    tile
-  end
-
-  def generate_tiles(n=Board1010::MAX_OPTIONS)
-    opt_tiles = []
-
-    n.times do |_i|
-      r = rand(ALL_TILES.size)
-      tile = ALL_TILES[r]
-      opt_tiles << tile
-    end
-
-    opt_tiles[0] = find_fitting_tile unless pos_exists?(opt_tiles)
-
-    opt_tiles
-  end
-
-  def show_tiles(all)
-    n = 1
-    all.each do |tile|
-      next unless tile
-      print " #{n}> "
-      show_tile(tile)
-      n += 1
-    end
-    n
-  end
-
-  def pos_exists?(tiles, debug=false)
-    tiles.each do |tile|
-      if debug
-        puts "Checking if tile #{tile} can be placed:"
-        show
-      end
-      @arr.each_with_index do |row, i|
-        row.each_with_index do |_col, j|
-          score = (_cell_occupied?(i, j) ? 0 : place(tile, i, j, true))
-          puts "score = #{score} at (#{i},#{j})" if debug
-          return [i, j, tile] if score > 0
-        end
-      end
-    end
-    puts "...no can place" if debug
-    false
-  end
-
-  def play
-    loop do
-      all = (!@options.empty? ? @options : generate_tiles)
-      @options = all
-      until all.empty?
-        show
-        puts "\n#{'=' * 20}\nCurrent score = #{current_score}\n#{'=' * 20}\n"
-        show_tiles(all)
-        ended unless pos_exists?(all)
-        i, j = get_position
-        opt = if all.size > 1
-                get_selected_option(i, j)
-              else
-                1
-              end
-        tile = all[opt - 1]
-        new_score = place(tile, i, j)
-        if new_score < 1
-          puts " Cannot place the tile #{tile} at (#{i}, #{j})"
-        else
-          all.delete_at(opt - 1)
-          cleanup
-        end
-      end
-    end
-  end
-
-  def start
-    @start_time = Time.now
-  end
-
-  def ended
-    puts "\n--- Game ended: no place for remaining tiles"
-    _over
-  end
-
-  def stop
-    puts "\n--- Game stopped: to be played later"
-    save
-    _over
-  end
-
-  def show
-    puts ""
-    print "   "; @cols.times {|j| print " #{j}" }
-    puts
-    @arr.each_with_index do |row, i|
-      print " #{i}["
-      row.each do |col|
-        if col.zero?
-          print " ."
-        else
-          print " X"
-        end
-      end
-      puts " ]"
-    end
-    puts ""
-  end
-
-  def find_starting_pos(tile)
-    positions = []
-    @arr.each_with_index do |row, i|
-      row.each_with_index do |_col, j|
-        score = place(tile, i, j, true)
-        positions << [i, j] if score > 0
-      end
-    end
-    positions
-  end
-
-  def neighbours(i, j)
-    count = 0
-
-    count += 1 if i > 0 && j > 0 && (@arr[i - 1][j - 1]).nonzero?
-    count += 1 if i > 0 && (@arr[i - 1][j]).nonzero?
-    count += 1 if i > 0 && j < 9 && (@arr[i - 1][j + 1]).nonzero?
-
-    count += 1 if i < 9 && j > 0 && (@arr[i + 1][j - 1]).nonzero?
-    count += 1 if i < 9 && (@arr[i + 1][j]).nonzero?
-    count += 1 if i < 9 && j < 9 && (@arr[i + 1][j + 1]).nonzero?
-
-    count += 1 if j > 0 && (@arr[i][j - 1]).nonzero?
-    count += 1 if j < 9 && (@arr[i][j + 1]).nonzero?
-
-    count
-  end
-
-  def jc_neighbours(i, j)
-    count = 0
-
-    count += 1 if i > 0 && j > 0 && (@arr[i - 1][j - 1]).nonzero?
-    count += 1 if i > 0 && (@arr[i - 1][j]).nonzero?
-    count += 1 if i > 0 && j < 9 && (@arr[i - 1][j + 1]).nonzero?
-
-    count += 1 if i < 9 && j > 0 && (@arr[i + 1][j - 1]).nonzero?
-    count += 1 if i < 9 && (@arr[i + 1][j]).nonzero?
-    count += 1 if i < 9 && j < 9 && (@arr[i + 1][j + 1]).nonzero?
-
-    count += 1 if j > 0 && (@arr[i][j - 1]).nonzero?
-    count += 1 if j < 9 && (@arr[i][j + 1]).nonzero?
-
-    count += 1 if i.zero? || (i == 9)
-    count += 1 if j.zero? || (j == 9)
-
-    count
-  end
-
-  def sam_algo(_positions)
-    ## Suggested by Sam:
-    ## Find the position which completely fills more rows and columns when the tile is placed
-    -1
-  end
-
-  def andy_algo(_positions)
-    ## Suggested by Andy:
-    ## Find the position which results into minimum empty cells after placing the tile but before
-    ## clearing the filled rows and columns
-    -1
-  end
-
-  def jc_algo(positions)
-    # Suggested by JC:
-    # The best position is one which has most neighbors occupied.
-    # But treat the edge cells as if their neighbors are always occupied.
-    neighbour_count = []
-    positions.each_with_index do |pos, k|
-      neighbour_count[k] = jc_neighbours(*pos)
-    end
-    neighbour_count.index(neighbour_count.max)
-  end
-
-  def shanko_algo(positions)
-    # The best position is one which has most neighbors occupied
-    # In other words: least neighboring cells empty
-    neighbour_count = []
-    positions.each_with_index do |pos, k|
-      neighbour_count[k] = neighbours(*pos)
-    end
-    neighbour_count.index(neighbour_count.max)
-  end
-
-  def first_fit(_positions)
-    # The best position is always the first position found
-    0
-  end
-
-  def last_fit(_positions)
-    # The best position is always the last position found
-    -1
-  end
-
-  def rand_fit(positions)
-    # The best position is always a random position found
-    rand(positions.size)
-  end
-
-  def best_starting_position(tile)
-    positions = find_starting_pos(tile)
-    # n = rand_fit(positions)
-    # n = first_fit(positions)
-    # n = last_fit(positions)
-    # n = shanko_algo(positions)
-    n = jc_algo(positions)
-    # n = sam_algo(positions)
-    # n = andy_algo(positions)
-    positions[n || 0]
+  # Fills the tile's squares and adds 1 point per square. Assumes it fits.
+  # Returns [row, col, value] of each square filled.
+  def place(tile, row, col)
+    squares = cells_for(tile, row, col)
+    squares.each {|r, c, value| @cells[r][c] = value }
+    @score += squares.size
+    squares
   end
 
   private
 
-  def _set_cell(i, j, val)
-    @arr[i][j] = val if _cell_valid?(i, j)
+  def clear_lines(rows, cols)
+    rows.each {|row| COLS.times {|col| @cells[row][col] = EMPTY } }
+    cols.each {|col| ROWS.times {|row| @cells[row][col] = EMPTY } }
   end
 
-  def _cell_valid?(i, j)
-    @arr[i] && @arr[i][j]
-  end
-
-  def _cell_empty?(i, j)
-    _cell_valid?(i, j) && @arr[i][j] == @val
-  end
-
-  def _cell_occupied?(i, j)
-    !_cell_empty?(i, j)
-  end
-
-  def _over
-    stop_time = Time.now
-    puts "Total time elapsed = #{stop_time - @start_time} seconds"
-    puts "Score = #{@score}"
-    puts
-    raise "Over!"
-  end
-
-  def _filled_cells
-    count = 0
-    @arr.each do |row|
-      row.each do |col|
-        count += 1 if col > 0
-      end
-    end
-    count
-  end
-end
-
-if __FILE__ == $PROGRAM_NAME
-  begin
-    puts "Total tiles = #{Board1010::ALL_TILES.size}"
-    b = Board1010.new
-    b.init
-    b.play
-  rescue
-    puts "> " + $ERROR_INFO.to_s
+  def every_cell
+    (0...ROWS).to_a.product((0...COLS).to_a)
   end
 end

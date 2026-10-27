@@ -1,5 +1,12 @@
-source 'https://rubygems.org'
+# frozen_string_literal: true
 
-ruby '2.5.1'
+source "https://rubygems.org"
 
-gem 'gosu'
+# On macOS with Homebrew's sdl2-compat, gosu needs extra link flags to build;
+# see "Installation" in README.md.
+gem "gosu", "~> 1.4"
+
+group :development, :test do
+  gem "minitest"
+  gem "rake"
+end

@@ -1,22 +1,40 @@
-Rails:
-  Enabled: true
+# Updated for RuboCop 1.x: many cops moved to the Layout and Naming
+# departments, and the Rails cops were removed (this isn't a Rails project).
+AllCops:
+  TargetRubyVersion: 3.0
+  NewCops: enable
+  SuggestExtensions: false
 
 # Commonly used screens these days easily fit more than 80 characters.
-Metrics/LineLength:
+Layout/LineLength:
   Max: 120
 
 # Too short methods lead to extraction of single-use methods, which can make
 # the code easier to read (by naming things), but can also clutter the class
-Metrics/MethodLength: 
+Metrics/MethodLength:
   Max: 20
 
 # The guiding principle of classes is SRP, SRP can't be accurately measured by LoC
 Metrics/ClassLength:
   Max: 1500
 
+# A test is easiest to read as one straight list of steps and checks.
+Metrics/AbcSize:
+  Exclude:
+    - "test/**/*"
+
+# Keyword arguments name themselves at every call, so they don't make a
+# method harder to call.
+Metrics/ParameterLists:
+  CountKeywordArgs: false
+
+# x, y and z are the natural names for coordinates in drawing code.
+Naming/MethodParameterName:
+  AllowedNames: [as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, to, x, y, z]
+
 # No space makes the method definition shorter and differentiates
 # from a regular assignment.
-Style/SpaceAroundEqualsInParameterDefault:
+Layout/SpaceAroundEqualsInParameterDefault:
   EnforcedStyle: no_space
 
 # Single quotes being faster is hardly measurable and only affects parse time.
@@ -31,7 +49,7 @@ Style/SymbolArray:
   Enabled: true
 
 # Most readable form.
-Style/AlignHash:
+Layout/HashAlignment:
   EnforcedHashRocketStyle: table
   EnforcedColonStyle: table
 
@@ -40,7 +58,7 @@ Style/HashSyntax:
   EnforcedStyle: ruby19_no_mixed_keys
 
 # has_key? and has_value? are far more readable than key? and value?
-Style/DeprecatedHashMethods:
+Style/PreferredHashMethods:
   Enabled: false
 
 # String#% is by far the least verbose and only object oriented variant.
@@ -62,13 +80,13 @@ Lint/AssignmentInCondition:
   AllowSafeAssignment: false
 
 # A specialized exception class will take one or more arguments and construct the message from it.
-# So both variants make sense. 
+# So both variants make sense.
 Style/RaiseArgs:
   Enabled: false
 
 # Indenting the chained dots beneath each other is not supported by this cop,
 # see https://github.com/bbatsov/rubocop/issues/1633
-Style/MultilineOperationIndentation:
+Layout/MultilineOperationIndentation:
   Enabled: false
 
 # Fail is an alias of raise. Avoid aliases, it's more cognitive load for no gain.
@@ -80,10 +98,10 @@ Style/SignalException:
 # Suppressing exceptions can be perfectly fine, and be it to avoid to
 # explicitly type nil into the rescue since that's what you want to return,
 # or suppressing LoadError for optional dependencies
-Lint/HandleExceptions:
+Lint/SuppressedException:
   Enabled: false
 
-Style/SpaceInsideBlockBraces:
+Layout/SpaceInsideBlockBraces:
   # The space here provides no real gain in readability while consuming
   # horizontal space that could be used for a better parameter name.
   # Also {| differentiates better from a hash than { | does.
@@ -91,7 +109,7 @@ Style/SpaceInsideBlockBraces:
 
 # No trailing space differentiates better from the block:
 # foo} means hash, foo } means block.
-Style/SpaceInsideHashLiteralBraces:
+Layout/SpaceInsideHashLiteralBraces:
   EnforcedStyle: no_space
 
 # { ... } for multi-line blocks is okay, follow Weirichs rule instead:
@@ -120,11 +138,11 @@ Lint/ShadowingOuterLocalVariable:
 
 # Check with yard instead.
 Style/Documentation:
-  Enabled: false 
+  Enabled: false
 
 # This is just silly. Calling the argument `other` in all cases makes no sense.
-Style/OpMethod:
-  Enabled: false 
+Naming/BinaryOperatorParameterName:
+  Enabled: false
 
 # There are valid cases, for example debugging Cucumber steps,
 # also they'll fail CI anyway

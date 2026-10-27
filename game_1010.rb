@@ -1,553 +1,578 @@
-# game_1010.rb
+# frozen_string_literal: true
+
+# game_1010.rb: the Gosu window for 1010! (drawing and input).
+#
+#   ruby game_1010.rb                     you play (continues a saved game if there is one)
+#   ruby game_1010.rb auto                the computer plays, game after game
+#   ruby game_1010.rb auto sam --seed 42  pick the computer's strategy, and repeat the same games
+#
+# The rules live in board.rb, the computer player in auto_player.rb and the
+# move animation in move_animation.rb. This file only reads input, updates
+# what is on screen and draws.
 require "gosu"
-require "./board"
+require_relative "board"
+require_relative "auto_player"
+require_relative "move_animation"
 
 class GameWindow < Gosu::Window
-  attr_reader :clicked_x, :clicked_y
+  # --- Layout (pixels) --------------------------------------------------------
 
+  WIDTH  = 480
+  HEIGHT = 480
+
+  CELL_SIZE    = 32
+  CELL_GAP     = 2
+  CELL_PITCH   = CELL_SIZE + CELL_GAP                # from one square to the next
+  CELL_CORNER  = 4                                   # size of the clipped corners
+  BOARD_PIXELS = (Board1010::COLS * CELL_PITCH) + 1  # 341
+  BORDER       = 5                                   # the gray edge right of and below the board
+
+  OPTION_X           = 360 # the 3 tiles to choose from, stacked on the right
+  OPTION_W           = 120
+  OPTION_TOP         = 20
+  OPTION_HEIGHT      = 105
+  OPTION_CELL_SIZE   = 16
+  OPTION_CELL_GAP    = 1
+  OPTION_CORNER      = 2
+  OPTION_LINE_ABOVE  = 10  # the blue line above each option
+  OPTION_LINE_LENGTH = 100
+
+  TEXT_X           = 20
+  SCORE_Y          = 360
+  STATUS_Y         = 390
+  MESSAGE_Y        = 425
+  RECORDING_MARK_Y = 455
+  HELP_X           = 330
+  HELP_Y           = 270
+  HELP_LINE_HEIGHT = 18
+
+  Z_BACKGROUND = 0
+  Z_CELLS      = 1
+  Z_DRAGGED    = 2
+  Z_TEXT       = 3
+  Z_HELP       = 4
+
+  # --- Timing (milliseconds) --------------------------------------------------
+
+  MESSAGE_MS      = 2000 # how long messages like "Game saved" stay up
+  AUTO_RESTART_MS = 500  # how long auto mode shows "Game Over!" before the next game
+  BLINK_MS        = 250  # how fast the recording mark blinks
+
+  # --- Colors -----------------------------------------------------------------
+
+  # Gosu::Color.argb takes 0xAARRGGBB: alpha (opacity) first, then red, green, blue.
   COLORS = {
-    maroon: Gosu::Color.new(*[222, 217, 17,  152]),
-    purple: Gosu::Color.new(*[245, 119, 47,  192]),
-    brown:  Gosu::Color.new(*[226, 236, 85, 37]),
-    grey:   Gosu::Color.new(*[62,  121, 218, 109]),
-    pink:   Gosu::Color.new(*[193, 254, 9,   124]),
-    bleau:  Gosu::Color.new(*[250, 5,   145, 245]),
-    green:  Gosu::Color.new(*[248, 27,  184, 139])
+    background:    Gosu::Color::WHITE,
+    border:        Gosu::Color::GRAY,
+    empty:         Gosu::Color.argb(0x3e_79_da_6d), # pale green
+    selected:      Gosu::Color::YELLOW,
+    hint:          Gosu::Color.argb(0xde_d9_11_98), # magenta
+    text:          Gosu::Color::RED,
+    option_line:   Gosu::Color::BLUE,
+    help_backdrop: Gosu::Color.argb(0xf0_ff_ff_ff)  # almost opaque white
   }.freeze
 
-  FONT_COLOR = Gosu::Color::RED
-  LINE_COLOR = Gosu::Color::BLUE
+  # By tile value (see Board1010::TILES).
+  TILE_COLORS = {
+    1 => Gosu::Color.argb(0xf8_1b_b8_8b), # green
+    2 => Gosu::Color.argb(0xe2_ec_55_25), # orange
+    3 => Gosu::Color::FUCHSIA,
+    4 => Gosu::Color.argb(0xf5_77_2f_c0), # purple
+    5 => Gosu::Color::BLUE
+  }.freeze
 
-  def initialize(auto=false)
-    @width  = 480
-    @height = 480
-    super(@width, @height, {fullscreen: false})
+  HELP_LINES = [
+    "Drag a tile onto the board,",
+    "or pick one (click or 1/2/3)",
+    "and click a square.",
+    "O (hold): show best position",
+    "U: undo       N: new game",
+    "A: auto play  E: one auto move",
+    "S: save       Q: save and quit",
+    "R: record     P: play recording",
+    "C: print positions (terminal)",
+    "ESC: quit, delete the save"
+  ].freeze
+
+  # Keys that work at any time, and the method each one calls.
+  KEY_ACTIONS = {
+    Gosu::KB_ESCAPE => :quit_without_saving,
+    Gosu::KB_Q      => :save_and_quit,
+    Gosu::KB_A      => :toggle_auto,
+    Gosu::KB_N      => :new_game,
+    Gosu::KB_S      => :save_game,
+    Gosu::KB_R      => :toggle_recording,
+    Gosu::KB_P      => :start_playback,
+    Gosu::KB_C      => :print_positions
+  }.freeze
+
+  # Keys and clicks that make moves, ignored while the computer or a playback is playing.
+  PLAYER_ACTIONS = {
+    Gosu::KB_E    => :auto_move, # let the computer make one move
+    Gosu::KB_U    => :undo,
+    Gosu::MS_LEFT => :start_drag
+  }.freeze
+
+  OPTION_KEYS = {Gosu::KB_1 => 0, Gosu::KB_2 => 1, Gosu::KB_3 => 2}.freeze
+
+  # A recorded game: the seed that deals its tiles, and the moves and undos made.
+  Recording = Struct.new(:seed, :events)
+
+  def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil)
+    super(WIDTH, HEIGHT, fullscreen: false)
     self.caption = "1010!"
-
     @score_font = Gosu::Font.new(30)
-    @help_font  = Gosu::Font.new(20)
+    @small_font = Gosu::Font.new(20)
 
-    @board           = Board1010.new # Dependency injection?
-    @selected_option = 0
-    @selected_row    = @selected_col = -1
-    @clicked_x       = @clicked_y    = -1
+    # Every game's seed comes from here, so `--seed` repeats a whole session.
+    @seeds       = Random.new(seed || Random.new_seed)
+    @auto_player = AutoPlayer.new(strategy, random: Random.new(@seeds.rand(2**32)))
+    @auto        = auto
+    @auto_runs   = 0
+    @max_score   = 0
+    @recording   = nil # the game being recorded
+    @last_recording = nil
+    @playback    = nil # events still to replay
+    @message     = nil
+    @opened_at   = Gosu.milliseconds # for the time played, over every game in this window
 
-    ## These should be even so that div by 2 is proper int
-    @gap  = 2
-    @size = 32
-    @option_cell_size = 20
-
-    @recording = []
-    @placed_positions = []
-    @rows_to_clean = []
-    @cols_to_clean = []
-    @ended = @undo = @show_pos = @record = @playback = @help = @drag = @step = false
-
-    @auto  = auto
-    @auto_count = @max_score = @count = 0
+    load_game unless @auto
+    new_game unless @board
   end
 
   def needs_cursor?
     true
   end
 
-  def draw_score
-    @score_font.draw("Score: #{@board.score}", 20, 360, 1, 1.0, 1.0, FONT_COLOR)
+  # ---------------------------------------------------------------------------
+  # Starting games
+  # ---------------------------------------------------------------------------
+
+  def new_game(seed: @seeds.rand(2**32))
+    board = Board1010.new(random: Random.new(seed))
+    board.deal_if_needed
+    start(board, seed: seed)
   end
 
-  def draw_help
-    return unless @help
-    x = 340
-    y = 340
-    @help_font.draw("ESC: abort",       x, y, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("A: auto",          x, y + 20, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("N: new game",      x, y + 40, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("O: show position", x, y + 60, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("Q: save and quit", x, y + 80, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("S: save",          x, y + 100, 1, 1.0, 1.0, FONT_COLOR)
-    @help_font.draw("U: undo",          x, y + 120, 1, 1.0, 1.0, FONT_COLOR)
+  # Everything that is reset when a game starts (new, loaded or played back).
+  def start(board, seed: nil)
+    stop_recording
+    @board          = board
+    @seed           = seed  # nil for a loaded game, which can't be recorded
+    @previous_board = nil   # for undo (one level, like the original)
+    @selected       = nil   # index of the chosen option
+    @dragging       = false
+    @animation      = nil
+    @ended_at       = nil
+    refresh_game_over
   end
 
-  def draw_background
-    draw_rect(0, 0, 0, @width + 5, @height + 5, Gosu::Color::WHITE)
-    boarder = 10 * (@size + @gap) + 1
-    draw_rect(boarder, 0, 0, 5, boarder + 5, Gosu::Color::GRAY)
-    draw_rect(0, boarder, 0, boarder,   5, Gosu::Color::GRAY)
+  # Call after every change to the board. (Checking every frame would mean
+  # trying every tile on every square 60 times a second.)
+  def refresh_game_over
+    @game_over = @board.game_over?
+    @ended_at  = @game_over ? (@ended_at || Gosu.milliseconds) : nil
   end
 
-  def cell_color(value=0)
-    color = case value
-            when 0
-              COLORS[:grey]
-            when -1
-              COLORS[:bleau]
-            when -2
-              COLORS[:maroon]
-            when 1
-              COLORS[:green]
-            when 2
-              COLORS[:brown]
-            when 3
-              Gosu::Color::FUCHSIA
-            when 4
-              COLORS[:purple]
-            else
-              Gosu::Color::BLUE
-    end
+  # ---------------------------------------------------------------------------
+  # Moves
+  # ---------------------------------------------------------------------------
 
-    # puts "Cell color of #{value} = #{color}"
-    color
+  # Plays option `index` with its anchor on (row, col), for the player, the
+  # computer and playback alike. Does nothing if the tile doesn't fit there.
+  def try_place(index, row, col)
+    previous = @board.copy
+    move = @board.play(index, row, col)
+    return unless move
+
+    @previous_board = previous
+    @recording&.events&.push([:move, index, row, col])
+    @selected  = nil
+    clear_step = @auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
+    @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
+    refresh_game_over
   end
 
-  def draw_cell(i, j, value)
-    x = @gap + (j * (@size + @gap))
-    y = @gap + (i * (@size + @gap))
-    z = 1
+  def undo
+    return show_message("Nothing to undo") unless @previous_board
 
-    draw_sqr(x, y, z, @size, cell_color(value), 4)
+    @board          = @previous_board
+    @previous_board = nil
+    @selected       = nil
+    @animation      = nil
+    @recording&.events&.push([:undo])
+    refresh_game_over
   end
 
-  def dragged_xy
-    [@drag_x, @drag_y]
+  def auto_move
+    move = @auto_player.choose_move(@board)
+    try_place(*move) if move
   end
 
-  def clicked_xy
-    x = @clicked_x
-    y = @clicked_y # these are from the latest click
-    @clicked_x = @clicked_y = -1 # so immediately reset the co-ordinates
-    [x, y]
+  def select_option(index)
+    @selected = index if index < @board.options.size
   end
 
-  def get_screen_position
-    x, y = clicked_xy
-    i = -1
-    j = -1
+  # ---------------------------------------------------------------------------
+  # The game loop
+  # ---------------------------------------------------------------------------
 
-    Board1010::MAX_COLS.times do |jj|
-      if (x >= @gap + (@size + @gap) * jj) && (x < @gap + (@size + @gap) * (jj + 1))
-        j = jj
-        break
-      end
-    end
+  def update
+    now = Gosu.milliseconds
+    expire_finished(now)
+    return if @animation # let a move finish before the next automatic one
 
-    Board1010::MAX_ROWS.times do |ii|
-      if (y >= @gap + (@size + @gap) * ii) && (y < @gap + (@size + @gap) * (ii + 1))
-        i = ii
-        break
-      end
-    end
-
-    [i, j]
-  end
-
-  def get_selected_option
-    x, y = clicked_xy
-    opt  = 0
-    gap  = @gap  / 2
-    size = @size / 2
-    (1..Board1010::MAX_OPTIONS).each do |i|
-      y1 = (@option_cell_size * i) + ((i - 1) * (size + gap) * 5)
-      y2 = (@option_cell_size * (i + 1)) + (i * (size + gap) * 5)
-      if (x > 360) && (y1 < y) && (y < y2)
-        opt = i
-        break
-      end
-    end
-
-    opt
-  end
-
-  def draw_option_tile(tile, pos, selected=false)
-    return unless (1..Board1010::MAX_OPTIONS).cover?(pos)
-
-    gap  = @gap  / 2
-    size = @size / 2
-
-    x = 360
-    y = (@option_cell_size * pos) + ((pos - 1) * (size + gap) * 5)
-
-    gap, size = _draw_option_tile(tile, x, y, selected && Gosu::Color::YELLOW, gap, size)
-
-    draw_line(360, ((@option_cell_size / 2) * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR,
-              460, ((@option_cell_size / 2) * pos) + ((pos - 1) * (size + gap) * 5), LINE_COLOR, 1)
-  end
-
-  def draw_sqr(x, y, z, length, color=Gosu::Color::WHITE, corner=0)
-    draw_rect(x, y, z, length, length, color)
-    draw_corners(x, y, length, length, Gosu::Color::WHITE, corner)
-  end
-
-  def draw_corners(x, y, width, height, color=nil, size=0)
-    return if size.zero?
-    color ||= Gosu::Color::WHITE
-
-    z = 1
-
-    # Top Left
-    x1 = x
-    y1 = y
-    c1 = color
-    x2 = x1 + size
-    y2 = y1
-    c2 = color
-    x3 = x1
-    y3 = y1 + size
-    c3 = color
-    draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
-
-    # Top Right
-    x1 = x + width
-    y1 = y
-    c1 = color
-    x2 = x1 - size
-    y2 = y1
-    c2 = color
-    x3 = x1
-    y3 = y1 + size
-    c3 = color
-    draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
-
-    # Bot Left
-    x1 = x
-    y1 = y + height
-    c1 = color
-    x2 = x1
-    y2 = y1 - size
-    c2 = color
-    x3 = x1 + size
-    y3 = y1
-    c3 = color
-    draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
-
-    # Bot Right
-    x1 = x + width
-    y1 = y + height
-    c1 = color
-    x2 = x1 - size
-    y2 = y1
-    c2 = color
-    x3 = x1
-    y3 = y1 - size
-    c3 = color
-    draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
-  end
-
-  def draw_rect(x, y, z, width, height, color=Gosu::Color::WHITE)
-    c1 = c2 = c3 = c4 = color
-    x1 = x
-    y1 = y
-    x2 = x1 + width
-    y2 = y1
-    x3 = x1
-    y3 = y1 + height
-    x4 = x2
-    y4 = y3
-    Gosu.draw_quad(x1, y1, c1, x2, y2, c2, x3, y3, c3, x4, y4, c4, z, :default)
-  end
-
-  def corrected_x(tile, x)
-    new_x = x
-    cell  = tile.first
-    cell.each do |val|
-      if val.zero?
-        new_x -= (@size + @gap)
-      else
-        break
-      end
-    end
-    new_x
-  end
-
-  def draw_dragged_tile
-    return unless @drag
-    return unless [1,2,3].include?(@selected_option)
-
-    x, y = dragged_xy
-    tile = @option_tiles[@selected_option - 1]
-       x = corrected_x(tile, x)
-    _draw_option_tile(tile, x, y)
-  end
-
-  def draw_open_pos
-    return unless @show_pos
-
-    tile      = @option_tiles[@selected_option - 1]
-    bpos      = @board.best_starting_position(tile)
-    positions = (bpos ? [bpos] : [])
-    positions.each do |pos|
-      i, j = pos
-      draw_cell(i, j, -2)
+    if @playback
+      play_back_next
+    elsif @auto
+      auto_step(now)
     end
   end
 
-  def draw_options
-    n = 1
-    @option_tiles.each_with_index do |tile, i|
-      if tile
-        draw_option_tile(tile, (i + 1), @selected_option == (i + 1))
-        n += 1
-      end
-    end
-    n
+  # Drops the move animation and the message once their time is up.
+  def expire_finished(now)
+    @animation = nil if @animation&.done?(now)
+    @message   = nil if @message && now >= @message[:until]
   end
 
-  def draw_board
-    @board.arr.each_with_index do |row, i|
-      row.each_with_index do |val, j|
-        draw_cell(i, j, val)
-      end
+  def auto_step(now)
+    return auto_move unless @game_over
+    return if now < @ended_at + AUTO_RESTART_MS
+
+    @auto_runs += 1
+    if @board.score > @max_score
+      @max_score = @board.score
+      puts "Score = #{@max_score}"
     end
+    self.caption = "1010!  Runs: #{@auto_runs}  Max Score: #{@max_score}"
+    new_game
   end
 
-  def place_selected_tile
-    if @placed_positions.empty?
-      if @rows_to_clean.empty? && @cols_to_clean.empty?
-        @rows_to_clean, @cols_to_clean = @board.cleanup(true)
-      else
-        unless @rows_to_clean.empty?
-          i = @rows_to_clean.shift
-          Board1010::MAX_ROWS.times {|j| @board.cell = [i, j, 0] }
-        end
+  def toggle_auto
+    @auto     = !@auto
+    @selected = nil
+    @dragging = false
+    self.caption = "1010!"
+  end
 
-        unless @cols_to_clean.empty?
-          j = @cols_to_clean.shift
-          Board1010::MAX_COLS.times {|i| @board.cell = [i, j, 0] }
-        end
+  # ---------------------------------------------------------------------------
+  # Recording and playback
+  # ---------------------------------------------------------------------------
 
-        sleep(0.25) unless @auto
-      end
+  # R starts recording a new game; pressing R again stops.
+  def toggle_recording
+    return stop_recording if @recording
+
+    new_game
+    @recording = Recording.new(@seed, [])
+    show_message("Recording a new game (R to stop)")
+  end
+
+  def stop_recording
+    return unless @recording
+
+    @last_recording = @recording
+    @recording = nil
+    show_message("Recording stopped (P to play it back)")
+  end
+
+  # P plays the last recording: the same tiles (from its seed) and the same moves.
+  def start_playback
+    stop_recording
+    return show_message("Nothing recorded yet (R to record)") unless @last_recording
+
+    recording = @last_recording
+    new_game(seed: recording.seed)
+    @auto     = false
+    @playback = recording.events.dup
+    self.caption = "1010! (playback)"
+  end
+
+  def play_back_next
+    event = @playback.shift
+    case event&.first
+    when :move then try_place(*event.drop(1))
+    when :undo then undo
     else
-      i, j, val = @placed_positions.shift
-      @board.cell = [i, j, val]
-      return
+      @playback = nil
+      self.caption = "1010!"
+      show_message("Playback finished")
     end
-
-    return unless (@selected_option > 0) && (@selected_row >= 0) && (@selected_col >= 0)
-
-    unless @undo
-      @prev_score   = @board.score
-      @prev_arr     = Marshal.load(Marshal.dump(@board.arr))
-      @prev_option_tiles = Marshal.load(Marshal.dump(@option_tiles))
-    end
-    tile = @option_tiles[@selected_option - 1]
-    new_score = @board.place(tile, @selected_row, @selected_col, true)
-    if new_score > 0
-      @board.score += new_score
-      @placed_positions = @board.placed_pos
-      @option_tiles.delete_at(@selected_option - 1)
-    end
-
-    @selected_option = 0
-    @selected_row = @selected_col = -1
   end
 
-  def draw_status
-    @count += 1
-    if @ended
-      @score_font.draw("Score: #{@board.score}     Game Over!", 20, 360, 1, 1.0, 1.0, FONT_COLOR)
-      if @auto
-        @auto_count += 1
-        if @board.score > @max_score
-          puts "Score = #{@board.score}"
-          @max_score  = @board.score
-        end
-        restart
-      else
-        @score_font.draw("N to start new game, ESC to Quit", 20, 390, 1, 1.0, 1.0, FONT_COLOR)
-      end
-    end
+  # ---------------------------------------------------------------------------
+  # Saving
+  # ---------------------------------------------------------------------------
 
-    return unless @record
-
-    if @count.even?
-      x1 = 20
-      y1 = 400
-      x2 = 40
-      y2 = 400
-      x3 = 30
-      y3 = 410
-    else
-      x1 = 20
-      y1 = 400
-      x2 = 40
-      y2 = 400
-      x3 = 30
-      y3 = 390
-    end
-
-    z = 1
-    c1 = c2 = c3 = Gosu::Color::RED
-    draw_triangle(x1, y1, c1, x2, y2, c2, x3, y3, c3, z, :default)
+  def save_game
+    File.write(Board1010::SAVE_FILE, @board.to_save)
+    show_message("Game saved")
+  rescue SystemCallError => e
+    show_message("Could not save: #{e.message}")
   end
+
+  # Like the original, carry on with a saved game if there is one.
+  def load_game
+    return unless File.exist?(Board1010::SAVE_FILE)
+
+    board = Board1010.from_save(File.read(Board1010::SAVE_FILE))
+    return show_message("The save file is damaged") unless board
+
+    board.deal_if_needed
+    start(board)
+    show_message("Loaded the saved game (N: new game)")
+  end
+
+  def show_message(text)
+    @message = {text: text, until: Gosu.milliseconds + MESSAGE_MS}
+    nil
+  end
+
+  def save_and_quit
+    save_game
+    close
+  end
+
+  # Deletes the saved game too, so the next start is a new game.
+  def quit_without_saving
+    File.delete(Board1010::SAVE_FILE) if File.exist?(Board1010::SAVE_FILE)
+    close
+  rescue SystemCallError => e
+    puts "Could not delete #{Board1010::SAVE_FILE}: #{e.message}"
+    close
+  end
+
+  # Called when the window closes (ESC, Q or the window's close button).
+  def close
+    puts "Total time played = #{play_seconds} seconds"
+    puts "Score = #{@board.score}"
+    super
+  end
+
+  # Since the window opened, like the original: in auto mode that covers every
+  # game played, not just the one in progress.
+  def play_seconds
+    (Gosu.milliseconds - @opened_at) / 1000
+  end
+
+  # ---------------------------------------------------------------------------
+  # Input
+  # ---------------------------------------------------------------------------
+
+  # Looks the key (or mouse button) up in KEY_ACTIONS, PLAYER_ACTIONS and OPTION_KEYS.
+  def button_down(id)
+    return send(KEY_ACTIONS[id]) if KEY_ACTIONS.key?(id)
+    return if @auto || @playback
+
+    if PLAYER_ACTIONS.key?(id)
+      send(PLAYER_ACTIONS[id])
+    elsif OPTION_KEYS.key?(id)
+      select_option(OPTION_KEYS[id])
+    end
+  end
+
+  # Two ways to place a tile, as before: drag it onto the board, or click it
+  # (or press 1/2/3) and then click a square. Either way the tile is placed
+  # when the mouse button is RELEASED over the board.
+  def button_up(id)
+    return unless id == Gosu::MS_LEFT
+
+    @dragging = false
+    return if @auto || @playback || @selected.nil?
+
+    row, col = cell_under_mouse
+    try_place(@selected, row, col) if row
+  end
+
+  def start_drag
+    index = option_under_mouse
+    return unless index
+
+    @selected = index
+    @dragging = true
+  end
+
+  # C: prints the first position where each option fits (for debugging).
+  def print_positions
+    @board.options.each_with_index do |tile, index|
+      puts "Option #{index + 1} #{tile.inspect} fits first at #{@board.find_position(tile).inspect}"
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Screen geometry
+  # ---------------------------------------------------------------------------
+
+  def cell_x(col)
+    CELL_GAP + (col * CELL_PITCH)
+  end
+
+  def cell_y(row)
+    CELL_GAP + (row * CELL_PITCH)
+  end
+
+  # [row, col] of the board square under the mouse, or nil.
+  def cell_under_mouse
+    row = ((mouse_y - CELL_GAP) / CELL_PITCH).floor
+    col = ((mouse_x - CELL_GAP) / CELL_PITCH).floor
+    [row, col] if @board.inside?(row, col)
+  end
+
+  # Where option 0, 1 or 2 is drawn and can be clicked. Used for both, so
+  # clicks and drawing can't disagree.
+  def option_rect(index)
+    {x: OPTION_X, y: OPTION_TOP + (index * OPTION_HEIGHT), w: OPTION_W, h: OPTION_HEIGHT}
+  end
+
+  def option_under_mouse
+    @board.options.each_index.find do |index|
+      rect = option_rect(index)
+      mouse_x.between?(rect[:x], rect[:x] + rect[:w]) && mouse_y.between?(rect[:y], rect[:y] + rect[:h])
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Drawing (only draws: never changes the game)
+  # ---------------------------------------------------------------------------
 
   def draw
     draw_background
     draw_board
-    draw_score
-    draw_help
     draw_options
     draw_dragged_tile
-    draw_open_pos
+    draw_hint
     draw_status
+    draw_recording_mark
+    draw_help
   end
 
-  def update
-    if @drag
-      @drag_x = mouse_x
-      @drag_y = mouse_y
-      return
-    end
+  def draw_background
+    Gosu.draw_rect(0, 0, WIDTH, HEIGHT, COLORS[:background], Z_BACKGROUND)
+    Gosu.draw_rect(BOARD_PIXELS, 0, BORDER, BOARD_PIXELS + BORDER, COLORS[:border], Z_BACKGROUND)
+    Gosu.draw_rect(0, BOARD_PIXELS, BOARD_PIXELS, BORDER, COLORS[:border], Z_BACKGROUND)
+  end
 
-    if @playback && !@recording.empty?
-      puts "playing back"
-      @selected_row, @selected_col, @selected_option, @option_tiles = @recording.shift
-      return
-    end
-
-    if @undo
-      @board.score = @prev_score
-      @board.restore_arr(@prev_arr)
-      @option_tiles = @prev_option_tiles
-
-      @undo = false
-    else
-      @option_tiles = @board.options
-      @option_tiles = @board.generate_tiles if @option_tiles.empty?
-      @ended = !@board.pos_exists?(@option_tiles)
-    end
-
-    if @auto || @step
-      @selected_option = rand(@option_tiles.size) + 1
-      tile = @option_tiles[@selected_option - 1]
-      position = @board.best_starting_position(tile)
-      @selected_row, @selected_col = position if position
-      @step = false
-    else
-      if @record
-        @recording << [@selected_row, @selected_col, @selected_option, @option_tiles]
+  def draw_board
+    now = Gosu.milliseconds
+    @board.cells.each_with_index do |values, row|
+      values.each_with_index do |value, col|
+        value = @animation.value_at(row, col, value, now) if @animation
+        draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value))
       end
     end
-
-    place_selected_tile
-
-    @board.restore_options(@option_tiles)
   end
 
-  def start
-    @start_time = Time.now
-    @auto ? @board.init(0) : @board.init
-    @ended = false
-    show
-  end
+  def draw_options
+    @board.options.each_with_index do |tile, index|
+      rect   = option_rect(index)
+      line_y = rect[:y] - OPTION_LINE_ABOVE
+      Gosu.draw_line(rect[:x], line_y, COLORS[:option_line],
+                     rect[:x] + OPTION_LINE_LENGTH, line_y, COLORS[:option_line], Z_CELLS)
 
-  def stop
-    stop_time = Time.now
-    puts "Total time played = #{(stop_time - @start_time).to_i} seconds"
-    puts "Score = #{@board.score}"
-    close
-  end
-
-  def restart
-    @board.init(0)
-    self.caption = "1010!  Runs: #{@auto_count}  Max Score: #{@max_score}" if @auto
-    @ended = false
-  end
-
-  def button_up(id)
-    case id
-    when Gosu::MsLeft
-      @drag = false
-      @clicked_x = mouse_x
-      @clicked_y = mouse_y
-      @selected_row, @selected_col = get_screen_position if @selected_row < 0 || @selected_col < 0
-
-    when Gosu::MsRight
-      # do nothing
-    when Gosu::KbO
-      @show_pos = false
-    when Gosu::KbH
-      @help = false
+      color = COLORS[:selected] if index == @selected # the original turned the selected tile yellow
+      draw_tile(tile, rect[:x], rect[:y], size: OPTION_CELL_SIZE, gap: OPTION_CELL_GAP,
+                                          corner: OPTION_CORNER, color: color)
     end
   end
 
-  def button_down(id)
-    case id
-    when Gosu::KbEscape
-      stop
-    when Gosu::KbA
-      @auto = !@auto
-    when Gosu::KbB
-      # about
-    when Gosu::KbC
-      # cheat
-      @board.pos_exists?(@option_tiles, true)
-    when Gosu::KbE
-      @step = true
-    when Gosu::KbH
-      @help = true
-    when Gosu::KbN
-      # new
-      restart
-    when Gosu::KbO
-      @show_pos = true
-    when Gosu::KbP
-      self.caption = "1010! (playback)"
-      @playback = true
-      restart
-    when Gosu::KbQ
-      @board.stop
-    when Gosu::KbR
-      @record = true
-      self.caption = "1010! (recording)"
-    when Gosu::KbS
-      @board.save
-    when Gosu::KbU
-      @undo = true
-    when Gosu::Kb1
-      @selected_option = 1
-    when Gosu::Kb2
-      @selected_option = 2
-    when Gosu::Kb3
-      @selected_option = 3
-    when Gosu::MsRight
-      # do nothing
-    when Gosu::MsLeft
-      @drag      = true
-      @clicked_x = mouse_x
-      @clicked_y = mouse_y
-      @selected_option = get_selected_option if @selected_option.zero?
-    else
-      puts "Button down pressed with id = #{id}"
+  # While dragging, the tile follows the mouse with its anchor square at the pointer.
+  def draw_dragged_tile
+    return unless @dragging && @selected
+
+    tile = @board.options[@selected]
+    x = mouse_x - (Board1010.anchor(tile) * CELL_PITCH)
+    draw_tile(tile, x, mouse_y, size: CELL_SIZE, gap: CELL_GAP, corner: CELL_CORNER, z: Z_DRAGGED)
+  end
+
+  # While O is held: the square where the computer would put the selected tile's anchor.
+  def draw_hint
+    return unless @selected && Gosu.button_down?(Gosu::KB_O)
+
+    row, col = @auto_player.best_position(@board, @board.options[@selected])
+    draw_square(cell_x(col), cell_y(row), CELL_SIZE, COLORS[:hint]) if row
+  end
+
+  def draw_status
+    score = "Score: #{@board.score}"
+    score += "     Game Over!" if @game_over
+    @score_font.draw_text(score, TEXT_X, SCORE_Y, Z_TEXT, 1, 1, COLORS[:text])
+
+    if @game_over && !@auto
+      @score_font.draw_text("N to start new game, ESC to Quit", TEXT_X, STATUS_Y, Z_TEXT, 1, 1, COLORS[:text])
+    end
+    @small_font.draw_text(@message[:text], TEXT_X, MESSAGE_Y, Z_TEXT, 1, 1, COLORS[:text]) if @message
+  end
+
+  # A blinking red triangle while a game is being recorded.
+  def draw_recording_mark
+    return unless @recording
+
+    tip   = (Gosu.milliseconds / BLINK_MS).even? ? 10 : -10
+    color = Gosu::Color::RED
+    x     = TEXT_X
+    y     = RECORDING_MARK_Y
+    Gosu.draw_triangle(x, y, color, x + 20, y, color, x + 10, y + tip, color, Z_TEXT)
+  end
+
+  # While H is held.
+  def draw_help
+    return unless Gosu.button_down?(Gosu::KB_H)
+
+    height = (HELP_LINES.size * HELP_LINE_HEIGHT) + 10
+    Gosu.draw_rect(HELP_X - 5, HELP_Y - 5, WIDTH - HELP_X + 5, height, COLORS[:help_backdrop], Z_HELP)
+    HELP_LINES.each_with_index do |line, index|
+      @small_font.draw_text(line, HELP_X, HELP_Y + (index * HELP_LINE_HEIGHT), Z_HELP, 0.8, 0.8, COLORS[:text])
     end
   end
 
-  private
+  # ---------------------------------------------------------------------------
+  # Drawing helpers
+  # ---------------------------------------------------------------------------
 
-  def _draw_option_tile(tile, x, y, color=nil, gap=nil, size=nil)
-    gap  ||= @gap
-    size ||= @size
-    tile.each_with_index do |cell, i|
-      cell.each_with_index do |ele, j|
-        next unless ele > 0
-        new_x = x + (size + gap) * j
-        new_y = y + (size + gap) * i
-        color ||= cell_color(ele)
-        draw_sqr(new_x, new_y, 1, size, color, 2)
+  def cell_color(value)
+    value == Board1010::EMPTY ? COLORS[:empty] : TILE_COLORS.fetch(value)
+  end
+
+  # Draws each filled square of the tile, with its top-left square at (x, y).
+  # `color` overrides the tile's own colors (used for the selected option).
+  def draw_tile(tile, x, y, size:, gap:, corner:, color: nil, z: Z_CELLS)
+    tile.each_with_index do |values, row|
+      values.each_with_index do |value, col|
+        next if value == Board1010::EMPTY
+
+        left = x + (col * (size + gap))
+        top  = y + (row * (size + gap))
+        draw_square(left, top, size, color || cell_color(value), corner: corner, z: z)
       end
     end
-    [gap, size]
+  end
+
+  # A square with clipped corners: a filled square, then a triangle in the
+  # background color over each corner.
+  def draw_square(x, y, size, color, corner: CELL_CORNER, z: Z_CELLS)
+    Gosu.draw_rect(x, y, size, size, color, z)
+
+    background = COLORS[:background]
+    [[x, y, 1, 1], [x + size, y, -1, 1], [x, y + size, 1, -1], [x + size, y + size, -1, -1]].each do |cx, cy, dx, dy|
+      Gosu.draw_triangle(cx, cy, background, cx + (dx * corner), cy, background, cx, cy + (dy * corner), background, z)
+    end
+  end
+
+  # Reads `[auto] [strategy] [--seed N]` from the command line.
+  def self.options_from(argv)
+    args = argv.dup
+    options = {}
+
+    seed_at = args.index("--seed")
+    if seed_at
+      options[:seed] = Integer(args[seed_at + 1])
+      args.slice!(seed_at, 2)
+    end
+
+    options[:auto]     = !args.delete("auto").nil?
+    options[:strategy] = args.shift unless args.empty?
+    options
   end
 end
 
-if __FILE__ == $PROGRAM_NAME
-  begin
-    win = GameWindow.new(ARGV[0])
-    win.start
-  rescue Exception => e
-    if RUBY_ENGINE == "mruby"
-      raise e
-    else
-      puts "> " + $ERROR_INFO.to_s
-    end
-  end
-end
+GameWindow.new(**GameWindow.options_from(ARGV)).show if __FILE__ == $PROGRAM_NAME

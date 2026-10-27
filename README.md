@@ -4,19 +4,23 @@
 
 ## Installation:
 
-The game logic is written in [Ruby] and has only one dependency which can be installed by:
-
-```sh
-$ gem install gosu
-```
-
-This in turn has more dependencies and will require you to compile/install them as described [here].  Needs [gcc] or similar compiler.
-
-After successful installation of gosu, you can simply clone the code for the game:
+The game logic is written in [Ruby] (3.0 or newer) and the window uses the [Gosu] gem. Clone the code and install the gems:
 
 ```sh
 $ git clone git@github.com:shanko/1010.git
+$ cd 1010
+$ bundle install
 ```
+
+Gosu in turn has more dependencies and will require you to compile/install them as described [here]. Needs [gcc] or similar compiler.
+
+**macOS with Homebrew:** Homebrew now installs `sdl2-compat` in place of `sdl2`, and its `sdl2-config` doesn't support the `--static-libs` option that gosu's build uses. Gosu then installs without errors but fails to load (`symbol not found ... _OBJC_CLASS_$_NSScreen` or `_SDL_GameControllerClose`). Pass the link flags yourself:
+
+```sh
+$ gem install gosu -v 1.4.6 -- --with-ldflags="-L/usr/local/lib -lSDL2 -framework Cocoa -framework AppKit"
+```
+
+(On Apple Silicon, Homebrew's libraries are in `/opt/homebrew/lib` instead of `/usr/local/lib`.)
 
 ## Version:
 
@@ -25,22 +29,62 @@ $ git clone git@github.com:shanko/1010.git
 ## To play the game: 
 
 ```sh
-$ ruby game_1010.rb
+$ bundle exec ruby game_1010.rb
 ```
 
-Click on one of the tiles presented on the right side of the 10x10 grid. The tile will turn yellow indicating selection. Then click on one of the empty cells in the grid where you want to place the tile. Keep on adding tiles to the grid till one or more rows or columns fill up. Filled up rows and columns get emptied again making space for more tiles to be placed. The idea is to try and keep as many tiles as possible to increase the score. 
+Click on one of the tiles presented on the right side of the 10x10 grid (or press 1, 2 or 3). The tile will turn yellow indicating selection. Then click on one of the empty cells in the grid where you want to place the tile, or drag the tile there. Keep on adding tiles to the grid till one or more rows or columns fill up. Filled up rows and columns get emptied again making space for more tiles to be placed. The idea is to try and keep as many tiles as possible to increase the score. 
 
 # Hints:
 
 * Press and hold the H key to see help.
+* Press and hold O to see where the computer would put the selected tile.
+
+| Key | Action |
+|---|---|
+| 1 / 2 / 3 | select a tile |
+| O (hold) | show the best position for the selected tile |
+| U | undo the last move |
+| N | new game |
+| A | auto mode on/off |
+| E | let the computer make one move |
+| S | save the game (to `1010game.txt`; it is loaded again at the next start) |
+| Q | save and quit |
+| R | record a new game (press R again to stop) |
+| P | play back the last recording |
+| C | print where each tile fits (in the terminal) |
+| ESC | quit without saving |
+
+## To play in the terminal:
+
+```sh
+$ ruby terminal_game.rb
+```
 
 ## To let the computer play the game:
 
 ```sh
-$ ruby game_1010.rb auto
+$ bundle exec ruby game_1010.rb auto
+$ bundle exec ruby game_1010.rb auto sam            # choose the strategy
+$ bundle exec ruby game_1010.rb auto jc --seed 42   # the same games every time
 ```
 
 Try defeating the computer (it is very hard) by taking turns and comparing the score AND time required to play it.
+
+The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc` (the default) and `sam`. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
+
+## Code:
+
+* `board.rb`: the rules (placing tiles, clearing lines, dealing, saving), with no input or output
+* `auto_player.rb`: the computer player and its strategies
+* `move_animation.rb`: shows a move square by square without pausing the window
+* `game_1010.rb`: the Gosu window (drawing and input)
+* `terminal_game.rb`: the terminal version
+
+## Tests:
+
+```sh
+$ bundle exec rake test
+```
 
 ## License: 
 
@@ -53,8 +97,8 @@ MIT
 ## To Do:
 
 * Rewrite using [graphics] gem
-* Make "auto" mode repeatable by passing a seed to random num generator
-* Save History
+* ~~Make "auto" mode repeatable by passing a seed to random num generator~~ (`--seed`)
+* Save History (games can be recorded and played back with R and P, but recordings aren't saved to a file yet)
 * Use repeatable history to compare "auto" mode algorithms
 * Improve "auto" mode algorithms to maximize score
 * Port to use [mruby]
@@ -66,6 +110,7 @@ MIT
 
   [1010!]: <http://web.eecs.umich.edu/~gameprof/gamewiki/index.php/1010!>
   [Ruby]: <http://ruby-lang.org>
+  [Gosu]: <https://www.libgosu.org>
   [here]: <http://libgosu.org>
   [gcc]: <http://gcc.gnu.org>
   [Gram]: <http://gram.gs/game-detail-1010.html>

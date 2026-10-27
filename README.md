@@ -52,7 +52,7 @@ Click on one of the tiles presented on the right side of the 10x10 grid (or pres
 | R | record a new game (press R again to stop) |
 | P | play back the last recording |
 | C | print where each tile fits (in the terminal) |
-| ESC | quit without saving |
+| ESC | quit without saving, and delete the saved game so the next start is a new game |
 
 ## To play in the terminal:
 

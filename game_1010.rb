@@ -91,12 +91,12 @@ class GameWindow < Gosu::Window
     "S: save       Q: save and quit",
     "R: record     P: play recording",
     "C: print positions (terminal)",
-    "ESC: quit without saving"
+    "ESC: quit, delete the save"
   ].freeze
 
   # Keys that work at any time, and the method each one calls.
   KEY_ACTIONS = {
-    Gosu::KB_ESCAPE => :close,
+    Gosu::KB_ESCAPE => :quit_without_saving,
     Gosu::KB_Q      => :save_and_quit,
     Gosu::KB_A      => :toggle_auto,
     Gosu::KB_N      => :new_game,
@@ -330,6 +330,15 @@ class GameWindow < Gosu::Window
 
   def save_and_quit
     save_game
+    close
+  end
+
+  # Deletes the saved game too, so the next start is a new game.
+  def quit_without_saving
+    File.delete(Board1010::SAVE_FILE) if File.exist?(Board1010::SAVE_FILE)
+    close
+  rescue SystemCallError => e
+    puts "Could not delete #{Board1010::SAVE_FILE}: #{e.message}"
     close
   end
 

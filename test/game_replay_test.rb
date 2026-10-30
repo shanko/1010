@@ -97,4 +97,30 @@ class GameReplayTest < Minitest::Test
     window.play_back_next(4_750)
     assert_nil window.instance_variable_get(:@playback)
   end
+
+  def test_failed_placement_clears_selection_highlight
+    board = Board1010.new(options: [Board1010::TILES[:dot]])
+    board.cells[0][0] = 1
+    window = GameWindow.allocate
+    window.instance_variable_set(:@board, board)
+    window.instance_variable_set(:@selected, 0)
+
+    window.try_place(0, 0, 0)
+
+    assert_nil window.instance_variable_get(:@selected)
+  end
+
+  def test_each_tile_value_has_a_distinct_non_black_non_white_color
+    window = GameWindow.allocate
+    colors = GameWindow::TILE_COLORS.values
+
+    assert_equal Board1010::TILES.size, colors.map(&:to_i).uniq.size
+    refute_includes colors.map(&:to_i), Gosu::Color::BLACK.to_i
+    refute_includes colors.map(&:to_i), Gosu::Color::WHITE.to_i
+    Board1010::TILES.each do |name, tile|
+      tile_id = Board1010::TILE_IDS.fetch(tile)
+      value = tile.flatten.find {|cell| cell != Board1010::EMPTY }
+      assert_equal GameWindow::TILE_COLORS.fetch(tile_id), window.cell_color(value, tile_id), name.to_s
+    end
+  end
 end

@@ -3,7 +3,7 @@
 # board.rb: the rules of 1010!, with no drawing and no terminal input or output.
 #
 # The board is a grid of cells with row 0 at the top. An empty cell holds EMPTY;
-# a filled cell holds the value of the tile that filled it, which picks its color.
+# a filled cell holds its value and the ID of its exact tile shape.
 class Board1010
   ROWS    = 10
   COLS    = 10
@@ -72,15 +72,20 @@ class Board1010
 
   # What a move did, so the window can animate it.
   #   placed:                [row, col, value] of each square the tile filled
-  #   cells_before_clearing: the cells after placing the tile, before full lines were emptied
+  #   cells_before_clearing / tile_ids_before_clearing: board state before full lines were emptied
   #   cleared_rows / cleared_cols: the full lines that were emptied
-  Move = Struct.new(:placed, :cells_before_clearing, :cleared_rows, :cleared_cols, keyword_init: true)
+  Move = Struct.new(:placed, :cells_before_clearing, :tile_ids_before_clearing,
+                    :cleared_rows, :cleared_cols, keyword_init: true)
 
-  attr_reader :cells, :options, :score, :random
+  TILE_NAMES = TILES.keys.freeze
+  TILE_IDS = TILES.values.each_with_index.to_h {|tile, index| [tile, index + 1] }.freeze
+
+  attr_reader :cells, :tile_ids, :options, :score, :random
 
   # `random` deals the tiles. Pass Random.new(seed) to get the same tiles every time.
-  def initialize(cells: nil, options: [], score: 0, random: Random.new)
+  def initialize(cells: nil, tile_ids: nil, options: [], score: 0, random: Random.new)
     @cells   = cells || Array.new(ROWS) { Array.new(COLS, EMPTY) }
+    @tile_ids = tile_ids || @cells.map {|values| values.map {|value| value == EMPTY ? EMPTY : value } }
     @options = options # the tiles waiting to be placed
     @score   = score
     @random  = random
@@ -89,7 +94,7 @@ class Board1010
   # A deep copy, used for undo. It shares the random number generator, so a
   # recorded game deals the same tiles when it is played back.
   def copy
-    Board1010.new(cells: @cells.map(&:dup), options: @options.dup, score: @score, random: @random)
+    Board1010.new(cells: @cells.map(&:dup), tile_ids: @tile_ids.map(&:dup), options: @options.dup, score: @score, random: @random)
   end
 
   # The column of the first filled square in the tile's top row. The square
@@ -112,11 +117,14 @@ class Board1010
     placed = place(tile, row, col)
     @options.delete_at(index)
     cells_before_clearing = @cells.map(&:dup)
+    tile_ids_before_clearing = @tile_ids.map(&:dup)
     rows, cols = full_lines
     clear_lines(rows, cols)
     deal_if_needed
 
-    Move.new(placed: placed, cells_before_clearing: cells_before_clearing, cleared_rows: rows, cleared_cols: cols)
+    Move.new(placed: placed, cells_before_clearing: cells_before_clearing,
+             tile_ids_before_clearing: tile_ids_before_clearing,
+             cleared_rows: rows, cleared_cols: cols)
   end
 
   # The game ends when none of the remaining tiles fit anywhere.
@@ -221,9 +229,13 @@ class Board1010
   #   score=133
   #   options=hl2,sq3,dot
   #   row=0000123000   (one line per row, top row first)
+  #   type=0000000000  (base-36 tile type IDs, one line per row)
   def to_save
     lines = ["score=#{@score}", "options=#{@options.map {|tile| TILES.key(tile) }.join(',')}"]
-    @cells.each {|values| lines << "row=#{values.join}" }
+    @cells.each_with_index do |values, row|
+      lines << "row=#{values.join}"
+      lines << "type=#{@tile_ids[row].map {|id| id.to_s(36) }.join}"
+    end
     lines.join("\n")
   end
 
@@ -233,12 +245,16 @@ class Board1010
     fields = parse_save(text)
     rows = fields[:rows]
     return nil if fields[:score].nil? || rows.size != ROWS || rows.any? {|values| values.size != COLS }
+    tile_ids = fields[:tile_ids]
+    if tile_ids && (tile_ids.size != ROWS || tile_ids.any? {|values| values.size != COLS || values.any? {|id| id.negative? || id > TILE_NAMES.size } })
+      return nil
+    end
 
-    Board1010.new(cells: rows, options: fields[:options], score: fields[:score], random: random)
+    Board1010.new(cells: rows, tile_ids: tile_ids, options: fields[:options], score: fields[:score], random: random)
   end
 
   def self.parse_save(text)
-    fields = {score: nil, options: [], rows: []}
+    fields = {score: nil, options: [], rows: [], tile_ids: nil}
     text.each_line {|line| parse_save_line(fields, *line.strip.split("=", 2)) }
     fields
   end
@@ -249,6 +265,7 @@ class Board1010
     when "score"   then fields[:score] = Integer(value, exception: false)
     when "options" then fields[:options] = value.to_s.split(",").filter_map {|name| TILES[name.to_sym] }
     when "row"     then fields[:rows] << value.to_s.chars.map(&:to_i)
+    when "type"    then (fields[:tile_ids] ||= []) << value.to_s.chars.map {|id| id.to_i(36) }
     end
   end
   private_class_method :parse_save, :parse_save_line
@@ -259,7 +276,11 @@ class Board1010
   # Returns [row, col, value] of each square filled.
   def place(tile, row, col)
     squares = cells_for(tile, row, col)
-    squares.each {|r, c, value| @cells[r][c] = value }
+    tile_id = TILE_IDS.fetch(tile)
+    squares.each do |r, c, value|
+      @cells[r][c] = value
+      @tile_ids[r][c] = tile_id
+    end
     @score += squares.size
     squares
   end
@@ -267,8 +288,16 @@ class Board1010
   private
 
   def clear_lines(rows, cols)
-    rows.each {|row| COLS.times {|col| @cells[row][col] = EMPTY } }
-    cols.each {|col| ROWS.times {|row| @cells[row][col] = EMPTY } }
+    rows.each do |row|
+      COLS.times do |col|
+        @cells[row][col] = @tile_ids[row][col] = EMPTY
+      end
+    end
+    cols.each do |col|
+      ROWS.times do |row|
+        @cells[row][col] = @tile_ids[row][col] = EMPTY
+      end
+    end
   end
 
   def every_cell

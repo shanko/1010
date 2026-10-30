@@ -15,6 +15,7 @@ class MoveAnimation
   # `move` is a Board1010::Move. `now` is the time in milliseconds (Gosu.milliseconds).
   def initialize(move, now, clear_step_ms: CLEAR_STEP_MS)
     @cells_before_clearing = move.cells_before_clearing
+    @tile_ids_before_clearing = move.tile_ids_before_clearing
     @appears_at = appear_times(move.placed, now)
 
     clearing_starts = now + (move.placed.size * PLACE_STEP_MS)
@@ -34,6 +35,18 @@ class MoveAnimation
     return @cells_before_clearing[row][col] if cleared_at && now < cleared_at
 
     board_value
+  end
+
+  # The tile type whose color should be shown at this point in the animation.
+  def tile_id_at(row, col, board_tile_id, now)
+    position = [row, col]
+    appears_at = @appears_at[position]
+    return Board1010::EMPTY if appears_at && now < appears_at
+
+    cleared_at = [@row_cleared_at[row], @col_cleared_at[col]].compact.min
+    return @tile_ids_before_clearing[row][col] if cleared_at && now < cleared_at
+
+    board_tile_id
   end
 
   private

@@ -50,6 +50,20 @@ class BoardTest < Minitest::Test
     assert_equal [[0, 0, 2], [0, 1, 2], [1, 0, 2], [1, 1, 2]], move.placed
   end
 
+  def test_placing_any_shape_records_its_distinct_tile_type_id
+    ids = Board1010::ALL_TILES.map {|tile| Board1010::TILE_IDS.fetch(tile) }
+    assert_equal Board1010::TILES.size, ids.uniq.size
+
+    Board1010::TILES.each do |name, tile|
+      board = Board1010.new(options: [tile])
+      row = 0
+      col = Board1010.anchor(tile)
+      board.play(0, row, col)
+      filled_ids = board.tile_ids.flatten.reject(&:zero?).uniq
+      assert_equal [Board1010::TILE_IDS.fetch(tile)], filled_ids, "#{name} cells retain their tile type"
+    end
+  end
+
   def test_play_returns_nil_and_changes_nothing_when_the_tile_does_not_fit
     board = Board1010.new(options: [TILES[:hl3]])
 
@@ -160,6 +174,7 @@ class BoardTest < Minitest::Test
     copy = Board1010.from_save(board.to_save)
 
     assert_equal board.cells, copy.cells
+    assert_equal board.tile_ids, copy.tile_ids
     assert_equal board.score, copy.score
     assert_equal board.options, copy.options
   end
@@ -167,5 +182,16 @@ class BoardTest < Minitest::Test
   def test_a_damaged_save_is_rejected
     assert_nil Board1010.from_save("score=10\nrow=000")
     assert_nil Board1010.from_save("not a saved game")
+  end
+
+  def test_loads_a_legacy_save_without_tile_type_rows
+    board = Board1010.new(options: [TILES[:dot]])
+    board.play(0, 0, 0)
+    old_format = board.to_save.lines.reject {|line| line.start_with?("type=") }.join
+
+    loaded = Board1010.from_save(old_format)
+
+    assert_equal board.cells, loaded.cells
+    assert_equal 1, loaded.tile_ids[0][0]
   end
 end

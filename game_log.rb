@@ -8,8 +8,17 @@ class GameLog
 
   def initialize(seed: nil, directory: DIRECTORY)
     Dir.mkdir(directory) unless Dir.exist?(directory)
-    @path = File.join(directory, "#{Time.now.strftime('%Y%m%d-%H%M%S')}-#{Process.pid}-#{object_id}.moves")
-    @file = File.open(@path, "ab")
+    timestamp = Time.now.strftime("%Y%m%d-%H%M%S-%6N")
+    suffix = 0
+    loop do
+      @path = File.join(directory, "#{timestamp}-#{Process.pid}-#{suffix}.moves")
+      begin
+        @file = File.open(@path, File::WRONLY | File::CREAT | File::EXCL, 0o644)
+        break
+      rescue Errno::EEXIST
+        suffix += 1
+      end
+    end
     @file.write("s#{seed || '-'}\n")
     @file.flush
   end

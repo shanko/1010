@@ -31,6 +31,14 @@ class MoveAnimationTest < Minitest::Test
     assert_equal EMPTY, value(5, 5, 1000)
   end
 
+  def test_placed_cells_use_the_placed_tile_type_color_identity
+    tile_id = Board1010::TILE_IDS.fetch(Board1010::TILES[:hl2])
+
+    assert_equal tile_id, @animation.tile_id_at(0, 8, @board.tile_ids[0][8], 1000)
+    assert_equal EMPTY, @animation.tile_id_at(0, 9, @board.tile_ids[0][9], 1000)
+    assert_equal tile_id, @animation.tile_id_at(0, 9, @board.tile_ids[0][9], 1000 + MoveAnimation::PLACE_STEP_MS)
+  end
+
   def test_done_after_the_last_line_empties
     ends_at = 1000 + (2 * MoveAnimation::PLACE_STEP_MS) + MoveAnimation::CLEAR_STEP_MS
     refute @animation.done?(ends_at - 1)

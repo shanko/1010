@@ -74,14 +74,31 @@ class GameWindow < Gosu::Window
     help_backdrop: Gosu::Color.argb(0xf0_ff_ff_ff)  # almost opaque white
   }.freeze
 
-  # By tile value (see Board1010::TILES).
-  TILE_COLORS = {
-    1 => Gosu::Color.argb(0xf8_1b_b8_8b), # green
-    2 => Gosu::Color.argb(0xe2_ec_55_25), # orange
-    3 => Gosu::Color::FUCHSIA,
-    4 => Gosu::Color.argb(0xf5_77_2f_c0), # purple
-    5 => Gosu::Color::BLUE
-  }.freeze
+  # One opaque color for each of the 19 tile shapes, in Board1010::TILE_NAMES order.
+  TILE_PALETTE = [
+    Gosu::Color.argb(0xff_20_9b_77), # dot: emerald
+    Gosu::Color.argb(0xff_ff_9f_1c), # hl2: orange
+    Gosu::Color.argb(0xff_83_38_ec), # hl3: purple
+    Gosu::Color.argb(0xff_3a_86_ff), # hl4: blue
+    Gosu::Color.argb(0xff_e6_39_46), # hl5: red
+    Gosu::Color.argb(0xff_00_b4_d8), # vl2: cyan
+    Gosu::Color.argb(0xff_9c_66_44), # vl3: brown
+    Gosu::Color.argb(0xff_70_e0_00), # vl4: lime
+    Gosu::Color.argb(0xff_ff_be_0b), # vl5: amber
+    Gosu::Color.argb(0xff_43_61_ee), # sq2: indigo
+    Gosu::Color.argb(0xff_b5_17_9e), # sq3: fuchsia
+    Gosu::Color.argb(0xff_fb_56_07), # bl2: vermilion
+    Gosu::Color.argb(0xff_57_75_90), # bl3: slate blue
+    Gosu::Color.argb(0xff_a7_c9_57), # tl2: yellow green
+    Gosu::Color.argb(0xff_2e_c4_b6), # tl3: turquoise
+    Gosu::Color.argb(0xff_d8_11_59), # br2: crimson
+    Gosu::Color.argb(0xff_4c_c9_f0), # br3: sky blue
+    Gosu::Color.argb(0xff_8a_c9_26), # tr2: leaf green
+    Gosu::Color.argb(0xff_c7_7d_ff)  # tr3: lilac
+  ].freeze
+  TILE_COLORS = Board1010::TILE_NAMES.each_with_index.to_h do |name, index|
+    [Board1010::TILE_IDS.fetch(Board1010::TILES.fetch(name)), TILE_PALETTE[index]]
+  end.freeze
 
   HELP_LINES = [
     "Drag a tile onto the board,",
@@ -200,7 +217,10 @@ class GameWindow < Gosu::Window
   def try_place(index, row, col)
     previous = @board.copy
     move = @board.play(index, row, col)
-    return unless move
+    unless move
+      @selected = nil
+      return
+    end
 
     @previous_board = previous
     @recording&.events&.push([:move, index, row, col])
@@ -483,7 +503,8 @@ class GameWindow < Gosu::Window
     @board.cells.each_with_index do |values, row|
       values.each_with_index do |value, col|
         value = @animation.value_at(row, col, value, now) if @animation
-        draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value))
+        tile_id = @animation ? @animation.tile_id_at(row, col, @board.tile_ids[row][col], now) : @board.tile_ids[row][col]
+        draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value, tile_id))
       end
     end
   end
@@ -555,20 +576,23 @@ class GameWindow < Gosu::Window
   # Drawing helpers
   # ---------------------------------------------------------------------------
 
-  def cell_color(value)
-    value == Board1010::EMPTY ? COLORS[:empty] : TILE_COLORS.fetch(value)
+  def cell_color(value, tile_id = nil)
+    return COLORS[:empty] if value == Board1010::EMPTY
+
+    TILE_COLORS.fetch(tile_id && tile_id.positive? ? tile_id : value)
   end
 
   # Draws each filled square of the tile, with its top-left square at (x, y).
   # `color` overrides the tile's own colors (used for the selected option).
   def draw_tile(tile, x, y, size:, gap:, corner:, color: nil, z: Z_CELLS)
+    tile_id = Board1010::TILE_IDS.fetch(tile)
     tile.each_with_index do |values, row|
       values.each_with_index do |value, col|
         next if value == Board1010::EMPTY
 
         left = x + (col * (size + gap))
         top  = y + (row * (size + gap))
-        draw_square(left, top, size, color || cell_color(value), corner: corner, z: z)
+        draw_square(left, top, size, color || cell_color(value, tile_id), corner: corner, z: z)
       end
     end
   end

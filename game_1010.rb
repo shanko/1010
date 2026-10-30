@@ -13,6 +13,7 @@ require "gosu"
 require_relative "board"
 require_relative "auto_player"
 require_relative "move_animation"
+require_relative "game_log"
 
 class GameWindow < Gosu::Window
   # --- Layout (pixels) --------------------------------------------------------
@@ -57,6 +58,7 @@ class GameWindow < Gosu::Window
   MESSAGE_MS      = 2000 # how long messages like "Game saved" stay up
   AUTO_RESTART_MS = 500  # how long auto mode shows "Game Over!" before the next game
   BLINK_MS        = 250  # how fast the recording mark blinks
+  REPLAY_DELAY_SECONDS = 0.5
 
   # --- Colors -----------------------------------------------------------------
 
@@ -118,7 +120,8 @@ class GameWindow < Gosu::Window
   # A recorded game: the seed that deals its tiles, and the moves and undos made.
   Recording = Struct.new(:seed, :events)
 
-  def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil)
+  def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, replay_file: nil,
+                 replay_delay: REPLAY_DELAY_SECONDS)
     super(WIDTH, HEIGHT, fullscreen: false)
     self.caption = "1010!"
     @score_font = Gosu::Font.new(30)
@@ -133,11 +136,22 @@ class GameWindow < Gosu::Window
     @recording   = nil # the game being recorded
     @last_recording = nil
     @playback    = nil # events still to replay
+    @replay_delay_ms = (Float(replay_delay) * 1000).round
+    raise ArgumentError, "replay delay must be a finite non-negative number" unless
+      @replay_delay_ms >= 0 && Float(replay_delay).finite?
     @message     = nil
     @opened_at   = Gosu.milliseconds # for the time played, over every game in this window
 
-    load_game unless @auto
-    new_game unless @board
+    if replay_file
+      replay_seed, replay_events = self.class.read_moves(replay_file)
+      @auto = false
+      new_game(seed: replay_seed) if replay_seed
+      @board ||= new_game(seed: seed)
+      @playback = replay_events
+    else
+      load_game unless @auto
+      new_game unless @board
+    end
   end
 
   def needs_cursor?
@@ -157,12 +171,15 @@ class GameWindow < Gosu::Window
   # Everything that is reset when a game starts (new, loaded or played back).
   def start(board, seed: nil)
     stop_recording
+    @game_log&.close
+    @game_log = GameLog.new(seed: seed)
     @board          = board
     @seed           = seed  # nil for a loaded game, which can't be recorded
     @previous_board = nil   # for undo (one level, like the original)
     @selected       = nil   # index of the chosen option
     @dragging       = false
     @animation      = nil
+    @playback_next_at = nil
     @ended_at       = nil
     refresh_game_over
   end
@@ -187,6 +204,7 @@ class GameWindow < Gosu::Window
 
     @previous_board = previous
     @recording&.events&.push([:move, index, row, col])
+    @game_log.move(index, row, col)
     @selected  = nil
     clear_step = @auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
     @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
@@ -201,6 +219,7 @@ class GameWindow < Gosu::Window
     @selected       = nil
     @animation      = nil
     @recording&.events&.push([:undo])
+    @game_log.undo
     refresh_game_over
   end
 
@@ -223,7 +242,7 @@ class GameWindow < Gosu::Window
     return if @animation # let a move finish before the next automatic one
 
     if @playback
-      play_back_next
+      play_back_next(now)
     elsif @auto
       auto_step(now)
     end
@@ -288,11 +307,17 @@ class GameWindow < Gosu::Window
     self.caption = "1010! (playback)"
   end
 
-  def play_back_next
+  def play_back_next(now = Gosu.milliseconds)
+    return if @playback_next_at && now < @playback_next_at
+
     event = @playback.shift
     case event&.first
-    when :move then try_place(*event.drop(1))
-    when :undo then undo
+    when :move
+      try_place(*event.drop(1))
+      @playback_next_at = now + @replay_delay_ms
+    when :undo
+      undo
+      @playback_next_at = now + @replay_delay_ms
     else
       @playback = nil
       self.caption = "1010!"
@@ -344,6 +369,7 @@ class GameWindow < Gosu::Window
 
   # Called when the window closes (ESC, Q or the window's close button).
   def close
+    @game_log&.close
     puts "Total time played = #{play_seconds} seconds"
     puts "Score = #{@board.score}"
     super
@@ -569,9 +595,48 @@ class GameWindow < Gosu::Window
       args.slice!(seed_at, 2)
     end
 
+    delay_at = args.index("--delay")
+    if delay_at
+      value = args[delay_at + 1]
+      raise ArgumentError, "--delay requires seconds (for example: --delay 1.5)" unless value
+
+      begin
+        options[:replay_delay] = Float(value)
+      rescue ArgumentError
+        raise ArgumentError, "invalid --delay value #{value.inspect}; use seconds, for example --delay 1.5"
+      end
+      unless options[:replay_delay].finite? && options[:replay_delay] >= 0
+        raise ArgumentError, "--delay must be a finite non-negative number of seconds"
+      end
+      args.slice!(delay_at, 2)
+    end
+
+    replay_at = args.index {|arg| arg.end_with?(".moves") }
+    options[:replay_file] = args.delete_at(replay_at) if replay_at
+
     options[:auto]     = !args.delete("auto").nil?
     options[:strategy] = args.shift unless args.empty?
     options
+  end
+
+  # Reads the compact format written by GameLog: seed header, then m-index-row-col
+  # records and optional u records. Coordinates and option indexes are zero-based.
+  def self.read_moves(path)
+    lines = File.readlines(path, chomp: true)
+    seed_line = lines.shift
+    raise ArgumentError, "#{path} is not a supported .moves file" unless seed_line&.start_with?("s")
+
+    seed = Integer(seed_line[1..], exception: false)
+    raise ArgumentError, "#{path} has no replayable seed" unless seed
+
+    events = lines.filter_map do |line|
+      case line
+      when /\Am([0-2])([0-9])([0-9])\z/ then [:move, *Regexp.last_match.captures.map(&:to_i)]
+      when "u" then [:undo]
+      else raise ArgumentError, "invalid move record in #{path}: #{line.inspect}"
+      end
+    end
+    [seed, events]
   end
 end
 

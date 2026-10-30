@@ -7,13 +7,21 @@
 # Type a position as "row, col" (e.g. "3, 4"), then the tile number. A negative
 # position, or "q" at either question, stops the game and offers to save it.
 require_relative "board"
+require_relative "game_log"
 
 class TerminalGame
-  def initialize(input: $stdin, output: $stdout, board: nil)
+  def initialize(input: $stdin, output: $stdout, board: nil, game_log: nil)
     @input  = input
     @output = output
-    @board  = board || load_game || Board1010.new
+    @seed = nil
+    @board = board || load_game
+    unless @board
+      @seed = Random.new_seed
+      @board = Board1010.new(random: Random.new(@seed))
+    end
     @board.deal_if_needed
+    @game_log = game_log || GameLog.new(seed: @seed)
+    game_log.seed = @seed if game_log&.respond_to?(:seed=)
   end
 
   def run
@@ -30,10 +38,15 @@ class TerminalGame
         break
       end
       index, row, col = move
-      say(" Cannot place that tile at (#{row}, #{col})") unless @board.play(index, row, col)
+      if @board.play(index, row, col)
+        @game_log.move(index, row, col)
+      else
+        say(" Cannot place that tile at (#{row}, #{col})")
+      end
     end
     say("Total time elapsed = #{(Time.now - started_at).round} seconds")
     say("Score = #{@board.score}")
+    @game_log.close
   end
 
   private

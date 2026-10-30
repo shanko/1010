@@ -66,6 +66,15 @@ $ ruby terminal_game.rb
 $ bundle exec ruby game_1010.rb auto
 $ bundle exec ruby game_1010.rb auto sam            # choose the strategy
 $ bundle exec ruby game_1010.rb auto jc --seed 42   # the same games every time
+$ bundle exec ruby game_1010.rb logs/20261030-123456-1234-567.moves # replay a logged game
+```
+
+Pass a `.moves` file as the command line argument to replay it. Moves are shown
+in order, with 0.5 seconds between successive moves by default. Set another
+interval in seconds with `--delay` (for example, `--delay 2`):
+
+```sh
+$ bundle exec ruby game_1010.rb --delay 2 logs/<game>.moves
 ```
 
 Try defeating the computer (it is very hard) by taking turns and comparing the score AND time required to play it.
@@ -77,6 +86,7 @@ The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `
 * `board.rb`: the rules (placing tiles, clearing lines, dealing, saving), with no input or output
 * `auto_player.rb`: the computer player and its strategies
 * `move_animation.rb`: shows a move square by square without pausing the window
+* `game_log.rb`: writes compact move and undo events to one file per game in `logs/`
 * `game_1010.rb`: the Gosu window (drawing and input)
 * `terminal_game.rb`: the terminal version
 

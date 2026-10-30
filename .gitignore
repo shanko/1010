@@ -2,3 +2,5 @@
 *.err
 *.dat
 1010game.txt
+logs/*
+!logs/.gitkeep

@@ -18,6 +18,7 @@ Do not describe the optimizer's best result as a proven maximum unless it exhaus
 - `game_1010.rb` runs the graphical loop and records a seed plus move/undo records.
 - `game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `game_trace.rb` validates and replays v2 traces headlessly.
 - `game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
+- `improvement_search.rb` runs bounded beam search with strategy rollouts, seeded normal-deal search, and frozen-offer counterfactual search.
 - `learning_seed_sets.rb` defines disjoint baseline, training, tuning, and held-out seed lists.
 - `terminal_game.rb` is a second human-play path and also creates game logs.
 - `test/` contains Minitest coverage; run the full suite with `bundle exec rake test`.
@@ -89,6 +90,8 @@ Important rules for the implementation:
 
 ## Milestone 3: implement an anytime search for better complete games
 
+**Status: complete**
+
 ### Work
 
 1. Define an action as `(option_index, row, column)` and enumerate only legal actions.
@@ -100,6 +103,8 @@ Important rules for the implementation:
 7. Return structured results: baseline score, best score found, score delta, elapsed time, explored states, candidate move sequence, and status (`improved`, `no improvement found within budget`, or `budget exhausted`). Do not claim `optimal` without proof.
 8. Allow search to start from a captured initial state or a specified decision point. For a full-game comparison, search from the beginning so it can measure the whole trajectory.
 
+The current API is `ImprovementSearch.search` in `improvement_search.rb`. Its `time_budget_seconds`, `beam_width`, and `max_states` bound search expansion and frontier memory. Seeded mode runs the baseline simulator first, then searches from the exact initial board and RNG state. Frozen-offer mode accepts named offer batches and reports `complete: false` when a candidate reaches the end of the supplied offers; this is a counterfactual horizon, not necessarily Game Over. The result status never claims optimality.
+
 ### Acceptance criteria
 
 - On a small handcrafted state with a tractable action tree, search matches a brute-force test oracle.
@@ -107,6 +112,7 @@ Important rules for the implementation:
 - Every returned action is legal when replayed from the recorded initial state.
 - Search score equals the simulator's score for the returned sequence.
 - Search does not mutate the source board, its options, or its random/deal state.
+- `test/improvement_search_test.rb` checks a tractable frozen-offer board against a brute-force oracle, verifies legal candidate replay and source-state isolation, and checks the zero-budget best-so-far result.
 
 ## Milestone 4: persist and inspect learning lessons
 

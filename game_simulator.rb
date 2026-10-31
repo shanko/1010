@@ -27,6 +27,15 @@ class GameSimulator
     new.run(**options)
   end
 
+  # Constructs the exact initial board used by #run for a root seed.
+  def self.initial_board(seed:)
+    session_random = Random.new(Integer(seed))
+    session_random.rand(2**32) # reserve the auto-player's independent seed
+    board = Board1010.new(random: Random.new(session_random.rand(2**32)))
+    board.deal_if_needed
+    board
+  end
+
   # Replays the captured offers and choices without using the random dealer.
   def self.replay(result)
     raise ArgumentError, "simulation result has no offers" if result.offers.empty?

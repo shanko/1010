@@ -95,6 +95,7 @@ The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `
 * `move_animation.rb`: shows a move square by square without pausing the window
 * `game_log.rb` / `game_trace.rb`: write, validate and replay versioned game traces with initial state, exact offers, moves, undos and final score
 * `game_simulator.rb`: runs full games without Gosu for policy evaluation
+* `improvement_search.rb`: searches for better legal game sequences under explicit time, state, and beam limits
 * `learning_seed_sets.rb` / `scripts/benchmark.rb`: define disjoint seed sets and generate reproducible strategy benchmarks
 * `game_1010.rb`: the Gosu window (drawing and input)
 * `terminal_game.rb`: the terminal version

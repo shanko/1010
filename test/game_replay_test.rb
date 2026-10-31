@@ -8,6 +8,33 @@ require "rbconfig"
 require_relative "../game_1010"
 
 class GameReplayTest < Minitest::Test
+  def test_learned_hint_is_cached_until_the_board_or_selection_changes
+    board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:dot]])
+    player = Object.new
+    calls = []
+    player.define_singleton_method(:best_position) do |_board, tile|
+      calls << tile
+      [calls.size, calls.size]
+    end
+    window = GameWindow.allocate
+    window.instance_variable_set(:@board, board)
+    window.instance_variable_set(:@auto_player, player)
+    window.instance_variable_set(:@selected, 0)
+
+    assert_equal [1, 1], window.send(:hint_position)
+    assert_equal [1, 1], window.send(:hint_position)
+    assert_equal 1, calls.size
+
+    window.instance_variable_set(:@selected, 1)
+    assert_equal [2, 2], window.send(:hint_position)
+    assert_equal 2, calls.size
+
+    board.play(0, 0, 0)
+    window.instance_variable_set(:@selected, 0)
+    assert_equal [3, 3], window.send(:hint_position)
+    assert_equal 3, calls.size
+  end
+
   def with_moves(text)
     Tempfile.create(["game", ".moves"]) do |file|
       file.write(text)

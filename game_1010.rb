@@ -633,8 +633,15 @@ class GameWindow < Gosu::Window
   def draw_hint
     return unless @selected && Gosu.button_down?(Gosu::KB_O)
 
-    row, col = @auto_player.best_position(@board, @board.options[@selected])
+    row, col = hint_position
     draw_square(cell_x(col), cell_y(row), CELL_SIZE, COLORS[:hint]) if row
+  end
+
+  def hint_position
+    tile = @board.options[@selected]
+    key = [@board.object_id, @board.score, @selected, tile]
+    @hint_cache_key, @hint_cache_value = key, @auto_player.best_position(@board, tile) if @hint_cache_key != key
+    @hint_cache_value
   end
 
   def draw_status

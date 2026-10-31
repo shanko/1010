@@ -33,6 +33,11 @@ class Board1010
       end
     end.freeze
   end.freeze
+  FULL_BOARD_MASK = (1 << (ROWS * COLS)) - 1
+  FULL_ROW_MASK = (1 << COLS) - 1
+  FULL_COLUMN_MASKS = Array.new(COLS) do |col|
+    ROWS.times.sum {|row| 1 << (row * COLS + col) }
+  end.freeze
 
   # What a move did, so the window can animate it.
   #   placed:                [row, col, value] of each square the tile filled
@@ -161,6 +166,35 @@ class Board1010
     end
   end
 
+  def legal_placement_count(tiles, occupied_bits: occupancy_bitboard, exclude_index: nil)
+    tiles.each_with_index.sum do |tile, index|
+      next 0 if index == exclude_index
+
+      tile.placements.count {|_row, _col, mask| (occupied_bits & mask).zero? }
+    end
+  end
+
+  def placement_result(tile, row, col, occupied_bits: occupancy_bitboard)
+    placed = occupied_bits | tile.placement_mask(row, col)
+    full_rows = 0
+    clear_mask = 0
+    ROWS.times do |index|
+      row_mask = FULL_ROW_MASK << (index * COLS)
+      next unless (placed & row_mask) == row_mask
+
+      full_rows += 1
+      clear_mask |= row_mask
+    end
+    full_cols = 0
+    FULL_COLUMN_MASKS.each do |column_mask|
+      next unless (placed & column_mask) == column_mask
+
+      full_cols += 1
+      clear_mask |= column_mask
+    end
+    [placed & ~clear_mask, full_rows, full_cols]
+  end
+
   # Rows and columns that have no empty squares left.
   def full_lines
     rows = (0...ROWS).select {|row| @cells[row].none?(EMPTY) }
@@ -218,6 +252,10 @@ class Board1010
       end
       count
     end
+  end
+
+  def occupied_bits
+    occupancy_bitboard
   end
 
   # ---------------------------------------------------------------------------
@@ -310,8 +348,10 @@ class Board1010
   end
 
   def occupancy_bitboard
-    @cells.each_with_index.sum do |values, row|
-      occupancy_mask(values) << (row * COLS)
+    bits = 0
+    @cells.each_with_index do |values, row|
+      bits |= occupancy_mask(values) << (row * COLS)
     end
+    bits
   end
 end

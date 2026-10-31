@@ -33,6 +33,45 @@ class LearnedPlayerTest < Minitest::Test
     assert features.values.all?(&:finite?)
   end
 
+  def test_bitboard_empty_space_features_match_the_previous_grid_flood_fill
+    random = Random.new(812_991)
+    30.times do
+      board = Board1010.new
+      board.cells.each do |row|
+        row.map! { random.rand < 0.28 ? 1 : Board1010::EMPTY }
+      end
+
+      assert_equal reference_empty_space_features(board),
+                   ActionFeatures.send(:empty_space_features, board)
+    end
+  end
+
+  def test_incremental_action_features_match_board_copy_features
+    board = GameSimulator.initial_board(seed: 86_753_099)
+    board.options.each_with_index do |tile, option|
+      board.positions_for(tile).first(5).each do |row, col|
+        after = board.copy
+        move = after.play(option, row, col, deal: false)
+        next unless move
+
+        largest, regions, isolated = reference_empty_space_features(after)
+        legal = after.legal_placement_count(after.options)
+        occupied = after.cells.flatten.count {|value| value != Board1010::EMPTY }
+        expected = {
+          "completed_rows" => move.cleared_rows.size.to_f,
+          "completed_cols" => move.cleared_cols.size.to_f,
+          "remaining_legal_placements" => legal.to_f / 100.0,
+          "largest_empty_region" => largest.to_f / 100.0,
+          "empty_region_count" => regions.to_f / 100.0,
+          "isolated_empty_cells" => isolated.to_f / 100.0,
+          "occupied_fraction" => occupied.to_f / 100.0
+        }
+        actual = ActionFeatures.extract(board, option, row, col)
+        expected.each {|name, value| assert_equal value, actual.fetch(name), name }
+      end
+    end
+  end
+
   def test_completed_row_and_column_features_count_the_lines_cleared
     cells = Array.new(10) { Array.new(10, 9) }
     [[0, 0], [0, 4], [1, 1], [2, 2], [3, 3], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 4]].each do |row, col|
@@ -159,6 +198,36 @@ class LearnedPlayerTest < Minitest::Test
   end
 
   private
+
+  def reference_empty_space_features(board)
+    empty = board.cells.flatten.map {|value| value == Board1010::EMPTY }
+    seen = Array.new(100, false)
+    sizes = []
+    100.times do |index|
+      next unless empty[index] && !seen[index]
+
+      queue = [index]
+      seen[index] = true
+      size = 0
+      cursor = 0
+      while cursor < queue.size
+        current = queue[cursor]
+        cursor += 1
+        size += 1
+        ActionFeatures::NEIGHBORS_4[current].each do |neighbor|
+          next unless empty[neighbor] && !seen[neighbor]
+
+          seen[neighbor] = true
+          queue << neighbor
+        end
+      end
+      sizes << size
+    end
+    isolated = (0...100).count do |index|
+      empty[index] && ActionFeatures::NEIGHBORS_8[index].none? {|neighbor| empty[neighbor] }
+    end
+    [sizes.max || 0, sizes.size, isolated]
+  end
 
   def empty_model
     {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,

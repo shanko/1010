@@ -29,67 +29,103 @@ module ActionFeatures
     filled_neighbours edge_cells occupied_fraction
   ].freeze
   NAMES = (BASE_FEATURES + TILE_FEATURES).freeze
+  FEATURE_INDEX = NAMES.each_with_index.to_h.freeze
+  BYTE_COUNTS = Array.new(256) {|value| value.digits(2).sum }.freeze
+  LEFT_EDGE_MASK = (0...Board1010::ROWS).sum {|row| 1 << (row * Board1010::COLS) }
+  RIGHT_EDGE_MASK = (0...Board1010::ROWS).sum {|row| 1 << (row * Board1010::COLS + Board1010::COLS - 1) }
+
+  class FeatureVector < Array
+    def initialize
+      super(NAMES.size, 0.0)
+    end
+
+    def fetch(key, *defaults, &block)
+      return super(key, *defaults, &block) unless key.is_a?(String) || key.is_a?(Symbol)
+
+      index = NAMES.index(key.to_s)
+      return super(index, *defaults, &block) if index
+
+      raise KeyError, "key not found: #{key.inspect}" if defaults.empty? && !block
+      block ? block.call(key) : defaults.first
+    end
+
+    def keys
+      NAMES
+    end
+
+    def values
+      self
+    end
+  end
 
   def self.extract(board, option_index, row, col)
     tile = board.options.fetch(option_index)
     raise ArgumentError, "feature action is not legal" unless board.fits?(tile, row, col)
 
-    after = board.copy
-    move = after.play(option_index, row, col, deal: false)
-    raise ArgumentError, "feature action is not legal" unless move
-    largest_region, region_count, isolated = empty_space_features(after)
-    legal_placements = after.options.sum {|offered| after.positions_for(offered).size }
-    occupied = after.cells.flatten.count {|value| value != Board1010::EMPTY }
+    occupied_before = board.occupied_bits
+    occupied_after, completed_rows, completed_cols = board.placement_result(
+      tile, row, col, occupied_bits: occupied_before
+    )
+    largest_region, region_count, isolated = empty_space_features(occupied_after)
+    legal_placements = board.legal_placement_count(board.options, occupied_bits: occupied_after,
+                                                   exclude_index: option_index)
+    occupied = bit_count(occupied_after)
     tile_name = tile.name
-
-    features = {
-      "bias" => 1.0,
-      "tile_area" => tile.area.to_f / 25.0,
-      "completed_rows" => move.cleared_rows.size.to_f,
-      "completed_cols" => move.cleared_cols.size.to_f,
-      "remaining_legal_placements" => legal_placements.to_f / 100.0,
-      "largest_empty_region" => largest_region.to_f / 100.0,
-      "empty_region_count" => region_count.to_f / 100.0,
-      "isolated_empty_cells" => isolated.to_f / 100.0,
-      "filled_neighbours" => board.filled_neighbours(row, col).to_f / 8.0,
-      "edge_cells" => board.edges_touched(row, col).to_f / 2.0,
-      "occupied_fraction" => occupied.to_f / 100.0
-    }
-    TILE_FEATURES.each {|name| features[name] = name == "tile_#{tile_name}" ? 1.0 : 0.0 }
-    NAMES.to_h {|name| [name, features.fetch(name)] }
+    features = FeatureVector.new
+    features[FEATURE_INDEX.fetch("bias")] = 1.0
+    features[FEATURE_INDEX.fetch("tile_area")] = tile.area.to_f / 25.0
+    features[FEATURE_INDEX.fetch("completed_rows")] = completed_rows.to_f
+    features[FEATURE_INDEX.fetch("completed_cols")] = completed_cols.to_f
+    features[FEATURE_INDEX.fetch("remaining_legal_placements")] = legal_placements.to_f / 100.0
+    features[FEATURE_INDEX.fetch("largest_empty_region")] = largest_region.to_f / 100.0
+    features[FEATURE_INDEX.fetch("empty_region_count")] = region_count.to_f / 100.0
+    features[FEATURE_INDEX.fetch("isolated_empty_cells")] = isolated.to_f / 100.0
+    features[FEATURE_INDEX.fetch("filled_neighbours")] = board.filled_neighbours(row, col).to_f / 8.0
+    features[FEATURE_INDEX.fetch("edge_cells")] = board.edges_touched(row, col).to_f / 2.0
+    features[FEATURE_INDEX.fetch("occupied_fraction")] = occupied.to_f / 100.0
+    features[FEATURE_INDEX.fetch("tile_#{tile_name}")] = 1.0
+    features
   end
 
   # Empty regions use four-neighbor connectivity. Isolated cells use the
   # game's eight-neighbor geometry because diagonal gaps also affect fit.
-  def self.empty_space_features(board)
-    empty = board.cells.flatten.map {|value| value == Board1010::EMPTY }
-    seen = Array.new(100, false)
-    sizes = []
-    100.times do |index|
-      next unless empty[index] && !seen[index]
-
-      queue = [index]
-      seen[index] = true
-      size = 0
-      cursor = 0
-      while cursor < queue.size
-        current = queue[cursor]
-        cursor += 1
-        size += 1
-        NEIGHBORS_4[current].each do |neighbor|
-          next unless empty[neighbor] && !seen[neighbor]
-
-          seen[neighbor] = true
-          queue << neighbor
-        end
+  def self.empty_space_features(board_or_bits)
+    occupied = board_or_bits.is_a?(Board1010) ? board_or_bits.occupied_bits : board_or_bits
+    empty = Board1010::FULL_BOARD_MASK ^ occupied
+    remaining = empty
+    largest = 0
+    regions = 0
+    left_edge = LEFT_EDGE_MASK
+    right_edge = RIGHT_EDGE_MASK
+    until remaining.zero?
+      regions += 1
+      region = remaining & -remaining
+      frontier = region
+      until frontier.zero?
+        expanded = ((frontier & ~left_edge) >> 1) | ((frontier & ~right_edge) << 1) |
+                   (frontier >> Board1010::COLS) | (frontier << Board1010::COLS)
+        frontier = expanded & remaining & ~region
+        region |= frontier
       end
-      sizes << size
+      size = bit_count(region)
+      largest = size if size > largest
+      remaining &= ~region
     end
 
-    isolated = (0...100).count {|index| empty[index] && NEIGHBORS_8[index].none? {|neighbor| empty[neighbor] } }
-    [sizes.max || 0, sizes.size, isolated]
+    neighbors = ((empty & ~left_edge) >> 1) | ((empty & ~right_edge) << 1) |
+                (empty >> Board1010::COLS) | (empty << Board1010::COLS) |
+                ((empty & ~left_edge) >> (Board1010::COLS + 1)) |
+                ((empty & ~right_edge) >> (Board1010::COLS - 1)) |
+                ((empty & ~left_edge) << (Board1010::COLS - 1)) |
+                ((empty & ~right_edge) << (Board1010::COLS + 1))
+    [largest, regions, bit_count(empty & ~neighbors)]
   end
   private_class_method :empty_space_features
+
+  def self.bit_count(bits)
+    bits.digits(256).sum {|byte| BYTE_COUNTS[byte] }
+  end
+  private_class_method :bit_count
 end
 
 # Linear action scorer. The model file contains only versioned metadata and
@@ -126,10 +162,11 @@ class LearnedPlayer
 
       [name, weight]
     end
+    @weight_values = ActionFeatures::NAMES.map {|name| @weights.fetch(name) }
   end
 
   def score(features)
-    features.sum {|name, value| @weights.fetch(name) * value }
+    features.each_index.sum {|index| @weight_values[index] * features[index] }
   end
 
   # Returns the highest-ranked [option index, row, col], using seeded random
@@ -162,8 +199,11 @@ class LearnedPlayer
       draw -= probabilities[index]
       draw.negative?
     end || probabilities.size - 1
-    expected = ActionFeatures::NAMES.to_h do |name|
-      [name, actions.each_with_index.sum {|(_action, features), index| probabilities[index] * features.fetch(name) }]
+    expected = ActionFeatures::FeatureVector.new
+    ActionFeatures::NAMES.each_index do |feature_index|
+      expected[feature_index] = actions.each_with_index.sum do |(_action, features), index|
+        probabilities[index] * features[feature_index]
+      end
     end
     action, features = actions.fetch(selected_index)
     {action: action, log_probability: Math.log(probabilities.fetch(selected_index)),
@@ -178,9 +218,12 @@ class LearnedPlayer
     scale = Float(advantage) * Float(learning_rate) / temperature
     raise ArgumentError, "policy update scale must be finite" unless scale.finite?
 
-    ActionFeatures::NAMES.each do |name|
-      @weights[name] += scale * (chosen_features.fetch(name) - expected_features.fetch(name))
+    ActionFeatures::NAMES.each_with_index do |name, index|
+      chosen = chosen_features.is_a?(Array) ? chosen_features[index] : chosen_features.fetch(name)
+      expected = expected_features.is_a?(Array) ? expected_features[index] : expected_features.fetch(name)
+      @weights[name] += scale * (chosen - expected)
     end
+    @weight_values = ActionFeatures::NAMES.map {|name| @weights.fetch(name) }
     @model["weights"] = @weights
   end
 

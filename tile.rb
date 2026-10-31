@@ -61,4 +61,9 @@ class Tile < Struct.new(:name, :id, :rows, :offsets, :row_masks, :col_masks, :pl
     key = name.respond_to?(:to_sym) ? name.to_sym : name
     BY_NAME.fetch(key) { raise ArgumentError, "unknown tile #{name.inspect}" }
   end
+
+  def placement_mask(row, col)
+    left = col - anchor
+    row_masks.each_with_index.sum {|mask, offset| mask << ((row + offset) * 10 + left) }
+  end
 end

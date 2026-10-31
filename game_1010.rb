@@ -429,6 +429,11 @@ class GameWindow < Gosu::Window
   # ---------------------------------------------------------------------------
 
   def save_game
+    if saving_disabled?
+      show_message(@auto ? "Saving is off in auto mode" : "Saving is off during playback")
+      return
+    end
+
     File.write(Board1010::SAVE_FILE, @board.to_save)
     show_message("Game saved")
   rescue SystemCallError => e
@@ -453,13 +458,17 @@ class GameWindow < Gosu::Window
   end
 
   def save_and_quit
-    save_game
+    save_game unless saving_disabled?
     close
+  end
+
+  def saving_disabled?
+    @auto || @playback
   end
 
   # Deletes the saved game too, so the next start is a new game.
   def quit_without_saving
-    File.delete(Board1010::SAVE_FILE) if File.exist?(Board1010::SAVE_FILE)
+    File.delete(Board1010::SAVE_FILE) if !saving_disabled? && File.exist?(Board1010::SAVE_FILE)
     close
   rescue SystemCallError => e
     puts "Could not delete #{Board1010::SAVE_FILE}: #{e.message}"

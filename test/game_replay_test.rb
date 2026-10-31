@@ -196,6 +196,52 @@ class GameReplayTest < Minitest::Test
     assert_nil window.update
   end
 
+  def test_save_keys_preserve_player_save_in_auto_and_playback_modes
+    [{auto: true, playback: false, label: "auto mode", message: "Saving is off in auto mode"},
+     {auto: false, playback: true, label: "playback", message: "Saving is off during playback"}].each do |mode|
+      [Gosu::KB_S, Gosu::KB_Q, Gosu::KB_ESCAPE].each do |key|
+        Dir.mktmpdir do |directory|
+          Dir.chdir(directory) do
+            original = "player save bytes\n"
+            File.write(Board1010::SAVE_FILE, original)
+            window = save_test_window(auto: mode.fetch(:auto), playback: mode.fetch(:playback))
+
+            window.button_down(key)
+
+            assert_equal original, File.binread(Board1010::SAVE_FILE), "#{mode.fetch(:label)} key #{key}"
+            if key == Gosu::KB_S
+              assert_equal mode.fetch(:message), window.instance_variable_get(:@test_message)
+            else
+              assert window.instance_variable_get(:@test_closed), "#{mode.fetch(:label)} key #{key} should close"
+            end
+          end
+        end
+      end
+    end
+  end
+
+  def test_save_keys_keep_human_mode_behavior
+    [Gosu::KB_S, Gosu::KB_Q, Gosu::KB_ESCAPE].each do |key|
+      Dir.mktmpdir do |directory|
+        Dir.chdir(directory) do
+          File.write(Board1010::SAVE_FILE, "player save bytes\n")
+          window = save_test_window(auto: false, playback: false)
+
+          window.button_down(key)
+
+          if key == Gosu::KB_ESCAPE
+            refute File.exist?(Board1010::SAVE_FILE)
+          else
+            assert_equal window.instance_variable_get(:@board).to_save,
+                         File.read(Board1010::SAVE_FILE)
+            assert_equal "Game saved", window.instance_variable_get(:@test_message)
+            assert_equal(key == Gosu::KB_Q, window.instance_variable_get(:@test_closed) || false)
+          end
+        end
+      end
+    end
+  end
+
   def test_auto_run_window_helpers_use_one_injected_clock
     now = 1_000.0
     window = GameWindow.allocate
@@ -240,5 +286,17 @@ class GameReplayTest < Minitest::Test
       value = tile.flatten.find {|cell| cell != Board1010::EMPTY }
       assert_equal GameWindow::TILE_COLORS.fetch(tile_id), window.cell_color(value, tile_id), name.to_s
     end
+  end
+
+  private
+
+  def save_test_window(auto:, playback:)
+    window = GameWindow.allocate
+    window.instance_variable_set(:@auto, auto)
+    window.instance_variable_set(:@playback, playback ? [[:move]] : nil)
+    window.instance_variable_set(:@board, Board1010.new(options: [Board1010::TILES[:dot]]))
+    window.define_singleton_method(:close) { @test_closed = true }
+    window.define_singleton_method(:show_message) {|message| @test_message = message }
+    window
   end
 end

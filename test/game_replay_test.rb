@@ -43,12 +43,6 @@ class GameReplayTest < Minitest::Test
     end
   end
 
-  def test_reads_move_and_undo_records_and_seed
-    with_moves("s12345\nm012\nm290\nu\n") do |path|
-      assert_equal [12_345, [[:move, 0, 1, 2], [:move, 2, 9, 0], [:undo]]], GameWindow.read_moves(path)
-    end
-  end
-
   def test_v2_trace_replays_initial_board_deals_moves_and_undo_exactly
     Dir.mktmpdir do |directory|
       board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:dot]], random: Random.new(51))
@@ -83,29 +77,36 @@ class GameReplayTest < Minitest::Test
 
   def test_v2_trace_replays_an_undone_move_that_emptied_its_batch_and_its_new_deal
     Dir.mktmpdir do |directory|
-      board = Board1010.new(options: [Tile.fetch(:dot)], random: Random.new(9))
-      logger = GameLog.new(seed: nil, board: board, mode: "test", directory: directory)
-      play_first_fit = lambda do
-        previous = board.copy
-        tile = board.options.first
-        row, col = board.find_position(tile)
-        board.play(0, row, col)
-        logger.move(tile.name, 0, row, col)
-        logger.deal(board.options) if previous.options.size == 1
-        previous
-      end
+      path, board = record_undo_across_a_deal(directory)
 
-      board = play_first_fit.call
-      logger.undo
-      4.times { play_first_fit.call } # the dot again, then the whole next batch
-      logger.finish(reason: "stopped", score: board.score)
-
-      trace = GameTrace.read(logger.path)
+      trace = GameTrace.read(path)
       replayed_board = GameTrace.replay(trace)
 
       assert_equal 4, trace.deal_batches.size
       assert_equal board.cells, replayed_board.cells
       assert_equal board.options, replayed_board.options
+    end
+  end
+
+  def test_window_playback_reaches_the_recorded_board_and_logs_a_replayable_trace
+    Dir.mktmpdir do |directory|
+      Dir.chdir(directory) do
+        path, board = record_undo_across_a_deal(directory)
+        window = GameWindow.allocate
+        window.instance_variable_set(:@replay_delay_ms, 0)
+        window.define_singleton_method(:caption=) {|_text| }
+        window.define_singleton_method(:show_message) {|_text| }
+
+        window.send(:start_trace_playback, GameTrace.read(path), mode: "replay")
+        playback_log = window.instance_variable_get(:@game_log).path
+        window.play_back_next(0) while window.instance_variable_get(:@playback)
+
+        replayed = window.instance_variable_get(:@board)
+        assert_equal board.cells, replayed.cells
+        assert_equal board.options, replayed.options
+        assert_nil window.instance_variable_get(:@offer_replay)
+        assert_equal board.cells, GameTrace.replay(GameTrace.read(playback_log)).cells
+      end
     end
   end
 
@@ -137,24 +138,10 @@ class GameReplayTest < Minitest::Test
     end
   end
 
-  def test_rejects_a_file_without_the_expected_header
-    with_moves("m012\n") do |path|
-      error = assert_raises(ArgumentError) { GameWindow.read_moves(path) }
-      assert_match "not a supported .moves file", error.message
-    end
-  end
-
-  def test_rejects_a_file_without_a_replayable_seed
-    with_moves("s-\nm012\n") do |path|
-      error = assert_raises(ArgumentError) { GameWindow.read_moves(path) }
-      assert_match "no replayable seed", error.message
-    end
-  end
-
-  def test_rejects_malformed_move_records
-    with_moves("s42\nm912\n") do |path|
-      error = assert_raises(ArgumentError) { GameWindow.read_moves(path) }
-      assert_match "invalid move record", error.message
+  def test_rejects_an_old_format_moves_file
+    with_moves("s12345\nm012\nm290\nu\n") do |path|
+      error = assert_raises(ArgumentError) { GameTrace.read(path) }
+      assert_match "not a v2 1010 trace", error.message
     end
   end
 
@@ -202,13 +189,14 @@ class GameReplayTest < Minitest::Test
 
   def test_replays_moves_and_undoes_with_a_quarter_second_gap
     window = GameWindow.allocate
-    window.instance_variable_set(:@playback, [[:move, 1, 2, 3], [:undo], [:move, 0, 4, 5]])
+    window.instance_variable_set(:@board, Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:hl2)]))
+    window.instance_variable_set(:@playback, [[:move, :hl2, 1, 2, 3], [:undo], [:move, :dot, 0, 4, 5]])
     window.instance_variable_set(:@replay_delay_ms, 1_250)
     moves = []
     undos = 0
 
     window.define_singleton_method(:try_place) {|*args| moves << args }
-    window.define_singleton_method(:undo) {|**_options| undos += 1 }
+    window.define_singleton_method(:undo) { undos += 1 }
     window.define_singleton_method(:caption=) {|_text| }
     window.define_singleton_method(:show_message) {|_text| }
 
@@ -344,6 +332,28 @@ class GameReplayTest < Minitest::Test
   end
 
   private
+
+  # Records a trace that undoes the move which emptied the first batch, plays
+  # it again (logging a fresh deal), then plays through the next batch.
+  def record_undo_across_a_deal(directory)
+    board = Board1010.new(options: [Tile.fetch(:dot)], random: Random.new(9))
+    logger = GameLog.new(seed: nil, board: board, mode: "test", directory: directory)
+    play_first_fit = lambda do
+      previous = board.copy
+      tile = board.options.first
+      row, col = board.find_position(tile)
+      board.play(0, row, col)
+      logger.move(tile.name, 0, row, col)
+      logger.deal(board.options) if previous.options.size == 1
+      previous
+    end
+
+    board = play_first_fit.call
+    logger.undo
+    4.times { play_first_fit.call }
+    logger.finish(reason: "stopped", score: board.score)
+    [logger.path, board]
+  end
 
   def save_test_window(auto:, playback:)
     window = GameWindow.allocate

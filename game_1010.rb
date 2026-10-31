@@ -167,18 +167,7 @@ class GameWindow < Gosu::Window
 
     if replay_file
       @auto = false
-      if GameTrace.versioned_file?(replay_file)
-        trace = GameTrace.read(replay_file)
-        start(trace.starting_board, seed: trace.seed, mode: "replay")
-        @playback = trace.events
-        @offer_replay = OfferReplay.new(board: @board, offers: trace.deal_batches)
-      else
-        replay_seed, replay_events = self.class.read_moves(replay_file)
-        new_game(seed: replay_seed) if replay_seed
-        @board ||= new_game(seed: seed)
-        @playback = replay_events
-        @offer_replay = OfferReplay.new(board: @board, strict_offers: false, random_deal: true)
-      end
+      start_trace_playback(GameTrace.read(replay_file), mode: "replay")
     else
       load_game unless @auto
       new_game unless @board
@@ -242,18 +231,15 @@ class GameWindow < Gosu::Window
 
   # Plays option `index` with its anchor on (row, col), for the player, the
   # computer and playback alike. Does nothing if the tile doesn't fit there.
-  def try_place(index, row, col, deal: true, expected_tile_name: nil, replay: false)
+  # During playback the replayer checks the move and supplies the recorded
+  # offers, and play_back_next logs the recorded deal.
+  def try_place(index, row, col)
     previous = @board.copy
     tile_name = previous.options[index].name
-    if expected_tile_name && tile_name != expected_tile_name
-      raise ArgumentError, "replay expected #{expected_tile_name.inspect} at option #{index}, found #{tile_name.inspect}"
-    end
-    move = if replay && @offer_replay
-             result = @offer_replay.apply({tile: expected_tile_name || tile_name, option: index, row: row, col: col}, capture: true)
-             @board = @offer_replay.board
-             result
+    move = if @offer_replay
+             @offer_replay.apply({tile: tile_name, option: index, row: row, col: col}, capture: true)
            else
-             @board.play(index, row, col, deal: deal, capture: true)
+             @board.play(index, row, col, capture: true)
            end
     unless move
       @selected = nil
@@ -262,17 +248,17 @@ class GameWindow < Gosu::Window
 
     @previous_board = previous
     @game_log.move(tile_name, index, row, col)
-    @game_log.deal(@board.options) if deal && previous.options.size == 1
+    @game_log.deal(@board.options) if !@offer_replay && previous.options.size == 1
     @selected  = nil
     clear_step = @auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
     @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
     refresh_game_over
   end
 
-  def undo(replay: false)
+  def undo
     return show_message("Nothing to undo") unless @previous_board
 
-    @board          = replay && @offer_replay ? @offer_replay.undo : @previous_board
+    @board          = @offer_replay ? @offer_replay.undo : @previous_board
     @previous_board = nil
     @selected       = nil
     @animation      = nil
@@ -386,16 +372,18 @@ class GameWindow < Gosu::Window
     path = @last_recording_path || @game_log&.path
     return show_message("Nothing recorded yet (R to record)") unless path
 
-    if @game_log && @game_log.path == path && !@game_log.instance_variable_get(:@finished)
-      @game_log.finish(reason: @game_over ? "game_over" : "stopped", score: @board.score)
-    end
+    # The trace can only be read once it has its end record.
+    @game_log.finish(reason: @game_over ? "game_over" : "stopped", score: @board.score) if @game_log&.path == path
 
-    trace = GameTrace.read(path)
-    start(trace.starting_board.copy, seed: trace.seed, mode: "playback")
-    @auto     = false
+    start_trace_playback(GameTrace.read(path), mode: "playback")
+    @auto = false
+    self.caption = "1010! (playback)"
+  end
+
+  def start_trace_playback(trace, mode:)
+    start(trace.starting_board.copy, seed: trace.seed, mode: mode)
     @playback = trace.events
     @offer_replay = OfferReplay.new(board: @board, offers: trace.deal_batches)
-    self.caption = "1010! (playback)"
   end
 
   def play_back_next(now = Gosu.milliseconds)
@@ -404,39 +392,48 @@ class GameWindow < Gosu::Window
     event = @playback.shift
     case event&.first
     when :move
-      if event.size == 5
-        _type, tile_name, index, row, col = event
-        try_place(index, row, col, deal: false, expected_tile_name: tile_name, replay: true)
-        if @playback.first&.first == :deal
-          _deal_type, tiles = @playback.shift
-          @offer_replay.feed_deal(tiles)
-          @game_log.deal(tiles)
-          refresh_game_over
-        end
-      else
-        @offer_replay ? try_place(*event.drop(1), replay: true) : try_place(*event.drop(1))
-      end
+      _type, tile_name, index, row, col = event
+      play_back_move(tile_name, index, row, col)
       @playback_next_at = now + @replay_delay_ms
     when :deal
-      @offer_replay ? @offer_replay.feed_deal(event[1]) : @board.replace_options(event[1])
-      @game_log.deal(event[1])
-      refresh_game_over
+      play_back_deal(event[1])
     when :undo
-      undo(replay: !!@offer_replay)
+      undo
       @playback_next_at = now + @replay_delay_ms
     when :end
       _type, reason, score = event
-      raise ArgumentError, "replay score mismatch: expected #{score}, got #{@board.score}" unless score == @board.score
-      @offer_replay&.finish!(expected_score: score, require_all_offers: false)
+      @offer_replay.finish!(expected_score: score, require_all_offers: false)
       @game_log.finish(reason: reason, score: score)
-      @playback = nil
-      self.caption = "1010!"
-      show_message("Playback finished")
+      finish_playback
     else
-      @playback = nil
-      self.caption = "1010!"
-      show_message("Playback finished")
+      finish_playback
     end
+  end
+
+  # A move that empties its batch is followed by its deal record, which is
+  # shown straight away rather than after the playback delay.
+  def play_back_move(tile_name, index, row, col)
+    offered = @board.options[index]&.name
+    unless offered == tile_name
+      raise ArgumentError, "replay expected #{tile_name.inspect} at option #{index}, found #{offered.inspect}"
+    end
+
+    try_place(index, row, col)
+    play_back_deal(@playback.shift[1]) if @playback.first&.first == :deal
+  end
+
+  def play_back_deal(tiles)
+    @offer_replay.feed_deal(tiles)
+    @game_log.deal(tiles)
+    refresh_game_over
+  end
+
+  # After playback the player continues from the replayed board.
+  def finish_playback
+    @playback = nil
+    @offer_replay = nil
+    self.caption = "1010!"
+    show_message("Playback finished")
   end
 
   # ---------------------------------------------------------------------------
@@ -783,26 +780,6 @@ class GameWindow < Gosu::Window
     end
     raise ArgumentError, "unexpected command line arguments: #{args.join(' ')}" unless args.empty?
     options
-  end
-
-  # Reads the compact format written by GameLog: seed header, then m-index-row-col
-  # records and optional u records. Coordinates and option indexes are zero-based.
-  def self.read_moves(path)
-    lines = File.readlines(path, chomp: true)
-    seed_line = lines.shift
-    raise ArgumentError, "#{path} is not a supported .moves file" unless seed_line&.start_with?("s")
-
-    seed = Integer(seed_line[1..], exception: false)
-    raise ArgumentError, "#{path} has no replayable seed" unless seed
-
-    events = lines.filter_map do |line|
-      case line
-      when /\Am([0-2])([0-9])([0-9])\z/ then [:move, *Regexp.last_match.captures.map(&:to_i)]
-      when "u" then [:undo]
-      else raise ArgumentError, "invalid move record in #{path}: #{line.inspect}"
-      end
-    end
-    [seed, events]
   end
 end
 

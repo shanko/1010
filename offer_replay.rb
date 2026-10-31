@@ -7,11 +7,10 @@ require_relative "board"
 class OfferReplay
   attr_reader :board
 
-  def initialize(board:, offers: nil, strict_offers: true, random_deal: false)
+  def initialize(board:, offers: nil, strict_offers: true)
     @board = board
     @offers = offers&.map {|batch| batch.map {|tile| tile.is_a?(Tile) ? tile : Tile.fetch(tile) } }
     @strict_offers = strict_offers
-    @random_deal = random_deal
     @next_offer = 0
     if @offers && !@offers.empty?
       @board.replace_options(@offers.first)
@@ -20,7 +19,7 @@ class OfferReplay
     @history = []
   end
 
-  # A move may be a hash with option/row/col/tile keys or [option,row,col].
+  # A move is a hash with option/row/col/tile keys or a trace [:move, tile, option, row, col] event.
   def apply(move, capture: false)
     option, row, col, tile_name = move_values(move)
     check_tile!(option, tile_name)
@@ -64,8 +63,8 @@ class OfferReplay
     @board
   end
 
-  def self.replay(board:, moves:, offers:, expected_score: nil, strict_offers: true, random_deal: false)
-    replay = new(board: board, offers: offers, strict_offers: strict_offers, random_deal: random_deal)
+  def self.replay(board:, moves:, offers:, expected_score: nil, strict_offers: true)
+    replay = new(board: board, offers: offers, strict_offers: strict_offers)
     moves.each {|move| replay.apply(move) }
     replay.finish!(expected_score: expected_score)
   end
@@ -89,18 +88,16 @@ class OfferReplay
       @next_offer += 1
     elsif @strict_offers
       raise ArgumentError, "offers end before the move sequence"
-    elsif @random_deal
-      @board.deal_if_needed
     end
   end
 
   def move_values(move)
     if move.is_a?(Hash)
       option, row, col, tile = hash_move_values(move)
-    elsif move.first == :move
-      _type, tile, option, row, col = move
     else
-      option, row, col = move
+      raise ArgumentError, "unsupported move record #{move.inspect}" unless move.first == :move
+
+      _type, tile, option, row, col = move
     end
     [Integer(option), Integer(row), Integer(col), tile]
   end

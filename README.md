@@ -50,7 +50,7 @@ Click on one of the tiles presented on the right side of the 10x10 grid (or pres
 | S | save the game (to `1010game.txt`; it is loaded again at the next start) |
 | Q | save and quit |
 | R | record a new game (press R again to stop) |
-| P | play back the last recording |
+| P | play back the game recorded with R (without R, the most recent game in this window) |
 | C | print where each tile fits (in the terminal) |
 | ESC | quit without saving, and delete the saved game so the next start is a new game |
 
@@ -174,7 +174,8 @@ candidate, the extractor combines its tile and anchor context with simulated
 post-placement board features. The linear scorer uses deterministic seeded
 tie-breaking.
 
-Pass a `.moves` file as the command line argument to replay it. Moves are shown
+Pass a `.moves` file as the command line argument to replay it. Only v2 traces
+(first line `1010-moves-v2`, as written to `logs/`) can be replayed. Moves are shown
 in order, with 0.5 seconds between successive moves by default. Set another
 interval in seconds with `--delay` (for example, `--delay 2`):
 
@@ -192,6 +193,7 @@ The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `
 * `auto_player.rb`: the computer player and its strategies
 * `move_animation.rb`: shows a move square by square without pausing the window
 * `game_log.rb` / `game_trace.rb`: write, validate and replay versioned game traces with initial state, exact offers, moves, undos and final score
+* `offer_replay.rb`: the one replayer for recorded moves and offer batches, used by traces, lessons, the simulator, imitation training and window playback
 * `game_simulator.rb`: runs full games without Gosu for policy evaluation
 * `improvement_search.rb`: searches for better legal game sequences under explicit time, state, and beam limits
 * `lesson_analyzer.rb` / `lesson_store.rb`: analyze completed traces and persist reproducible, versioned lessons

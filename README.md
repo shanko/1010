@@ -98,7 +98,18 @@ $ bundle exec ruby scripts/learn.rb train-imitation --lessons learning_data --se
 Evaluate a learned policy headlessly (a model is required):
 
 ```sh
-$ bundle exec ruby scripts/benchmark.rb --seed-set held_out --strategies first_fit,jc,learned --model learning_data/models/imitation-v1.json --output learning_data/held-out.json
+$ bundle exec ruby scripts/benchmark.rb --seed-set held_out --strategies first_fit,last_fit,random_fit,shanko,jc,sam,learned --model learning_data/models/imitation-v1.json --output learning_data/held-out.json
+```
+
+For a full learned-versus-heuristics report, include all six heuristic strategies
+and `learned`. The report records per-seed results, pairwise score differences,
+95% confidence intervals, and the strongest heuristic by mean score. The held-out
+seed set is for final reporting only; choose models with tuning seeds.
+
+Start the graphical learned auto-player with the tuning-selected checkpoint:
+
+```sh
+$ bundle exec ruby game_1010.rb auto learned --model learning_data/checkpoints/selected.json --seed 42
 ```
 
 The simulator and benchmark support learned models now. To collect search
@@ -106,6 +117,24 @@ corrections from states visited by the learned policy, use training seeds only:
 
 ```sh
 $ bundle exec ruby scripts/learn.rb correct --model learning_data/models/imitation-v1.json --seeds 1000000,1000001 --budget 0.1 --stride 5
+```
+
+Fine-tune an imitation model with REINFORCE on complete training-seed games.
+The default tuning sample uses the first 20 tuning seeds. Each evaluated
+checkpoint is retained; `selected.json` points to the candidate with the best
+tuning mean. Resume from a checkpoint to continue its training state:
+
+```sh
+$ bundle exec ruby scripts/learn.rb train-rl --model learning_data/models/imitation-v1.json --episodes 10 --seed 17
+$ bundle exec ruby scripts/learn.rb train-rl --resume learning_data/checkpoints/selected.json --episodes 10 --seed 17
+```
+
+Use the selected checkpoint pointer directly for headless evaluation with
+`scripts/benchmark.rb --model learning_data/checkpoints/selected.json`.
+To reselect a retained checkpoint, evaluate it on tuning seeds first:
+
+```sh
+$ bundle exec ruby scripts/learn.rb select --checkpoint learning_data/checkpoints/reinforce-step-100.json
 ```
 
 Action feature version 1 records tile area and one-hot tile type, rows and
@@ -139,6 +168,7 @@ The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `
 * `lesson_analyzer.rb` / `lesson_store.rb`: analyze completed traces and persist reproducible, versioned lessons
 * `learned_player.rb`: versioned action features, linear policy, and deterministic imitation training
 * `policy_corrector.rb`: searches continuations from states visited by a learned policy
+* `reinforcement_trainer.rb`: REINFORCE training, resumable checkpoints, and tuning-based selection
 * `learning_seed_sets.rb` / `scripts/benchmark.rb`: define disjoint seed sets and generate reproducible strategy benchmarks
 * `game_1010.rb`: the Gosu window (drawing and input)
 * `terminal_game.rb`: the terminal version

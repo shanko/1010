@@ -97,10 +97,16 @@ end
 class LearnedPlayer
   MODEL_SCHEMA_VERSION = 1
 
-  attr_reader :model
+  attr_reader :model, :weights
 
   def self.load(path)
     model = JSON.parse(File.read(path))
+    if model["selected_checkpoint"]
+      selected_path = File.join(File.dirname(path), model.fetch("selected_checkpoint"))
+      raise ArgumentError, "selected checkpoint does not exist: #{selected_path}" unless File.file?(selected_path)
+
+      model = JSON.parse(File.read(selected_path))
+    end
     new(model)
   rescue JSON::ParserError => error
     raise ArgumentError, "invalid learned policy JSON: #{error.message}"
@@ -136,6 +142,42 @@ class LearnedPlayer
     best_score = scored.map(&:last).max
     tied = scored.select {|_action, value| value == best_score }.map(&:first)
     tied.sample(random: random)
+  end
+
+  # Draws a stochastic action for policy-gradient training and returns the
+  # sufficient statistics for grad(log pi): chosen features minus expectation.
+  def sample_action(board, random:, temperature: 1.0)
+    temperature = Float(temperature)
+    raise ArgumentError, "temperature must be finite and positive" unless temperature.finite? && temperature.positive?
+    actions = legal_actions(board)
+    return nil if actions.empty?
+
+    scores = actions.map {|_action, features| score(features) / temperature }
+    maximum = scores.max
+    masses = scores.map {|value| Math.exp([[value - maximum, -40.0].max, 0.0].min) }
+    total = masses.sum
+    probabilities = masses.map {|mass| mass / total }
+    draw = random.rand
+    selected_index = probabilities.each_index.find do |index|
+      draw -= probabilities[index]
+      draw.negative?
+    end || probabilities.size - 1
+    expected = ActionFeatures::NAMES.to_h do |name|
+      [name, actions.each_with_index.sum {|(_action, features), index| probabilities[index] * features.fetch(name) }]
+    end
+    action, features = actions.fetch(selected_index)
+    {action: action, log_probability: Math.log(probabilities.fetch(selected_index)),
+     chosen_features: features, expected_features: expected, probabilities: probabilities}
+  end
+
+  def update_policy_gradient!(chosen_features:, expected_features:, advantage:, learning_rate:)
+    scale = Float(advantage) * Float(learning_rate)
+    raise ArgumentError, "policy update scale must be finite" unless scale.finite?
+
+    ActionFeatures::NAMES.each do |name|
+      @weights[name] += scale * (chosen_features.fetch(name) - expected_features.fetch(name))
+    end
+    @model["weights"] = @weights
   end
 
   def best_position(board, tile, random: Random.new)

@@ -5,6 +5,7 @@
 #   ruby game_1010.rb                     you play (continues a saved game if there is one)
 #   ruby game_1010.rb auto                the computer plays, game after game
 #   ruby game_1010.rb auto sam --seed 42  pick the computer's strategy, and repeat the same games
+#   ruby game_1010.rb auto learned --model learning_data/checkpoints/selected.json
 #
 # The rules live in board.rb, the computer player in auto_player.rb and the
 # move animation in move_animation.rb. This file only reads input, updates
@@ -139,7 +140,7 @@ class GameWindow < Gosu::Window
   Recording = Struct.new(:seed, :events)
 
   def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, replay_file: nil,
-                 replay_delay: REPLAY_DELAY_SECONDS)
+                 replay_delay: REPLAY_DELAY_SECONDS, model: nil)
     super(WIDTH, HEIGHT, fullscreen: false)
     self.caption = "1010!"
     @score_font = Gosu::Font.new(30)
@@ -147,7 +148,8 @@ class GameWindow < Gosu::Window
 
     # Every game's seed comes from here, so `--seed` repeats a whole session.
     @seeds       = Random.new(seed || Random.new_seed)
-    @auto_player = AutoPlayer.new(strategy, random: Random.new(@seeds.rand(2**32)))
+    @strategy = strategy.to_sym
+    @auto_player = AutoPlayer.new(strategy, random: Random.new(@seeds.rand(2**32)), model: model)
     @auto        = auto
     @auto_runs   = 0
     @max_score   = 0
@@ -159,6 +161,7 @@ class GameWindow < Gosu::Window
       @replay_delay_ms >= 0 && Float(replay_delay).finite?
     @message     = nil
     @opened_at   = Gosu.milliseconds # for the time played, over every game in this window
+    self.caption = "1010!  Auto: #{@strategy}" if @auto
 
     if replay_file
       @auto = false
@@ -297,7 +300,7 @@ class GameWindow < Gosu::Window
       @max_score = @board.score
       puts "Score = #{@max_score}"
     end
-    self.caption = "1010!  Runs: #{@auto_runs}  Max Score: #{@max_score}"
+    self.caption = "1010!  Auto: #{@strategy}  Runs: #{@auto_runs}  Max Score: #{@max_score}"
     new_game
   end
 
@@ -644,7 +647,7 @@ class GameWindow < Gosu::Window
     end
   end
 
-  # Reads `[auto] [strategy] [--seed N]` from the command line.
+  # Reads `[auto] [strategy] [--seed N] [--model PATH]` from the command line.
   def self.options_from(argv)
     args = argv.dup
     options = {}
@@ -671,11 +674,28 @@ class GameWindow < Gosu::Window
       args.slice!(delay_at, 2)
     end
 
+    model_at = args.index("--model")
+    if model_at
+      value = args[model_at + 1]
+      raise ArgumentError, "--model requires a model JSON path" unless value
+
+      options[:model] = value
+      args.slice!(model_at, 2)
+    end
+
     replay_at = args.index {|arg| arg.end_with?(".moves") }
     options[:replay_file] = args.delete_at(replay_at) if replay_at
 
     options[:auto]     = !args.delete("auto").nil?
     options[:strategy] = args.shift unless args.empty?
+    strategy_name = (options[:strategy] || AutoPlayer::DEFAULT_STRATEGY).to_sym
+    if strategy_name == :learned
+      options[:model] ||= File.join("learning_data", "checkpoints", "selected.json")
+      unless File.file?(options[:model])
+        raise ArgumentError, "learned strategy needs --model PATH or a selected model at #{options[:model]}"
+      end
+    end
+    raise ArgumentError, "unexpected command line arguments: #{args.join(' ')}" unless args.empty?
     options
   end
 

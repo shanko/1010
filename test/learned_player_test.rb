@@ -102,6 +102,7 @@ class LearnedPlayerTest < Minitest::Test
         interval = results.fetch(:metrics).fetch(:score).fetch(:mean_ci_95)
         assert_operator interval.fetch(:lower), :<=, interval.fetch(:upper)
       end
+      assert_equal strategies, report.fetch(:pairwise_score_deltas).keys
     end
   end
 

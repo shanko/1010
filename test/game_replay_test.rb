@@ -111,6 +111,22 @@ class GameReplayTest < Minitest::Test
     assert_equal({auto: true, strategy: "sam"}, GameWindow.options_from(["auto", "sam"]))
   end
 
+  def test_command_line_options_accept_a_learned_model_path
+    Tempfile.create(["learned", ".json"]) do |model|
+      options = GameWindow.options_from(["auto", "learned", "--model", model.path, "--seed", "42"])
+
+      assert_equal true, options.fetch(:auto)
+      assert_equal "learned", options.fetch(:strategy)
+      assert_equal model.path, options.fetch(:model)
+      assert_equal 42, options.fetch(:seed)
+    end
+  end
+
+  def test_learned_mode_without_a_model_reports_the_selected_model_location
+    error = assert_raises(ArgumentError) { GameWindow.options_from(["auto", "learned"]) }
+    assert_match "selected model", error.message
+  end
+
   def test_command_line_delay_defaults_to_half_a_second
     assert_equal 0.5, GameWindow::REPLAY_DELAY_SECONDS
   end

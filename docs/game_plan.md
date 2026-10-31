@@ -20,6 +20,7 @@ Do not describe the optimizer's best result as a proven maximum unless it exhaus
 - `game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
 - `improvement_search.rb` runs bounded beam search with strategy rollouts, seeded normal-deal search, and frozen-offer counterfactual search.
 - `learned_player.rb` defines versioned action features, a Ruby-native linear scorer, and deterministic imitation training; `policy_corrector.rb` searches continuations from states visited by a learned policy.
+- `reinforcement_trainer.rb` runs REINFORCE episodes with a rolling return baseline and writes versioned checkpoints plus a tuning-selected pointer.
 - `learning_seed_sets.rb` defines disjoint baseline, training, tuning, and held-out seed lists.
 - `terminal_game.rb` is a second human-play path and also creates game logs.
 - `test/` contains Minitest coverage; run the full suite with `bundle exec rake test`.
@@ -161,6 +162,8 @@ Feature version 1 includes normalized tile area, one-hot tile type, cleared rows
 
 ## Milestone 6: fine-tune the policy with reinforcement learning
 
+**Status: complete**
+
 ### Work
 
 1. Use the same legal-action interface and feature-based policy as imitation learning.
@@ -170,14 +173,19 @@ Feature version 1 includes normalized tile area, one-hot tile type, cleared rows
 5. Save checkpoints with policy parameters, optimizer state, training step, seeds, feature/schema version, and training/evaluation summaries.
 6. Retain the best checkpoint according to tuning-set performance, not training reward. Never overwrite the only prior model; write versioned checkpoints and an explicit selected-model pointer.
 
+Run `bundle exec ruby scripts/learn.rb train-rl --model MODEL`. The trainer uses area-per-placement reward and an undiscounted return, with explicit softmax exploration temperature and a rolling baseline per decision index. It checks tuning seeds at checkpoint boundaries, keeps every checkpoint, resumes policy/baseline/step state, and atomically updates `selected.json` only when selecting the best tuning mean. The SGD optimizer is stateless and recorded as such.
+
 ### Acceptance criteria
 
 - A tiny deterministic board/task demonstrates that the RL update moves action preference toward higher return.
 - Training can resume from a checkpoint and produces reproducible results for fixed settings.
 - The RL model is compared against the imitation-only model and existing heuristics on held-out seeds.
 - Reports show average and distribution of scores, not only the single best game.
+- `test/reinforcement_trainer_test.rb` checks preference updates from positive return, deterministic fixed-seed training, tuning-based selection, checkpoint retention/resume, and seed-split guards.
 
 ## Milestone 7: integrate, compare, and document the learned auto mode
+
+**Status: implementation complete; full held-out evaluation awaits an eligible trained model**
 
 ### Work
 
@@ -187,6 +195,8 @@ Feature version 1 includes normalized tile area, one-hot tile type, cleared rows
 4. Add a comparison report that runs all policies on identical evaluation seeds and presents score distributions, game lengths, and paired score differences.
 5. Document how to reproduce a result, train from lessons, resume training, select a model, and revert to a heuristic.
 6. Keep logs, lessons, and trained models ignored by Git unless the user explicitly chooses to share a small model or fixture.
+
+Graphical auto mode accepts `learned` plus `--model PATH` (or defaults to `learning_data/checkpoints/selected.json`). The GUI loads the model once before play and keeps the existing heuristic strategies as the default. `scripts/benchmark.rb` produces paired per-seed comparisons, score distributions, confidence intervals, the strongest heuristic by mean, and learned-vs-strongest deltas. `scripts/learn.rb select` evaluates a retained checkpoint on tuning seeds before writing a selected pointer. A meaningful full held-out comparison still requires real improved lessons and a trained model; no local model or eligible training lessons were present when this milestone was implemented, so learned remains opt-in and JC remains the default.
 
 ### Acceptance criteria
 
@@ -205,6 +215,7 @@ Keep simulation, search, and training independent of Gosu so all long-running wo
 - `lesson_store.rb`: validate, append, query, and version lessons under `learning_data/`.
 - `learned_player.rb`: legal-action scoring, model load/save, imitation training, and RL updates.
 - `scripts/learn.rb`: command-line entry point for offline analysis, search, evaluation, and training.
+- `scripts/benchmark.rb`: paired-seed strategy evaluation and learned-model reports.
 - Add focused tests under `test/` for each component; do not require GUI initialization in those tests.
 
 Use a consistent CLI contract (exact flags can follow existing Ruby style, but keep these operations available):

@@ -163,6 +163,15 @@ class GameBenchmark
       end]
     end
     baseline = strategies.first
+    pairwise = strategies.to_h do |candidate|
+      [candidate, strategies.to_h do |baseline_strategy|
+        paired = results.fetch(candidate).zip(results.fetch(baseline_strategy)).map do |result, comparison|
+          {seed: result.seed, score_delta: result.score - comparison.score}
+        end
+        [baseline_strategy, {summary: summarize(paired.map {|entry| entry.fetch(:score_delta) }),
+                             per_seed: paired}]
+      end]
+    end
 
     {
       schema_version: SCHEMA_VERSION,
@@ -183,7 +192,8 @@ class GameBenchmark
           paired_score_delta_vs_baseline: summarize(deltas.map {|delta| delta[:score_delta] }),
           per_seed: episode_results.map(&:summary)
         }]
-      end
+      end,
+      pairwise_score_deltas: pairwise
     }
   end
 

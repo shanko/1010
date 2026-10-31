@@ -7,10 +7,11 @@ require "fileutils"
 require_relative "../lesson_analyzer"
 require_relative "../learned_player"
 require_relative "../policy_corrector"
+require_relative "../reinforcement_trainer"
 
 def usage
   warn "Usage: bundle exec ruby scripts/learn.rb COMMAND [options]"
-  warn "Commands: analyze GAME.moves, train-imitation, correct"
+  warn "Commands: analyze GAME.moves, train-imitation, correct, train-rl, select"
   warn "Analyze options:"
   warn "  --budget SECONDS    search time after baseline preparation (default: 1.0)"
   warn "  --beam-width N      beam width (default: 4)"
@@ -20,7 +21,7 @@ def usage
 end
 
 command = ARGV.shift
-unless %w[analyze train-imitation correct].include?(command)
+unless %w[analyze train-imitation correct train-rl select].include?(command)
   usage
   exit 2
 end
@@ -111,7 +112,7 @@ elsif command == "train-imitation"
     warn "Training failed: #{error.message}"
     exit 1
   end
-else
+elsif command == "correct"
   options = {budget: 0.1, beam_width: 4, max_states: 2_000, stride: 1,
              output: LessonStore::DIRECTORY}
   parser = OptionParser.new do |opts|
@@ -151,6 +152,106 @@ else
                                improvements_saved: result.improvements_saved})
   rescue ArgumentError, IOError, SystemCallError => error
     warn "Correction search failed: #{error.message}"
+    exit 1
+  end
+elsif command == "select"
+  options = {tuning_seeds: LearningSeedSets.fetch(:tuning).first(20)}
+  parser = OptionParser.new do |opts|
+    opts.banner = "Usage: bundle exec ruby scripts/learn.rb select --checkpoint FILE [options]"
+    opts.on("--checkpoint FILE", "Checkpoint to evaluate on tuning seeds") {|value| options[:checkpoint] = value }
+    opts.on("--tuning-seeds LIST", "Comma-separated tuning seeds; defaults to first 20") do |value|
+      options[:tuning_seeds] = value.split(",").map {|seed| Integer(seed) }
+    end
+    opts.on("--output FILE", "Selected pointer (default: sibling selected.json)") {|value| options[:output] = value }
+  end
+  begin
+    parser.parse!(ARGV)
+  rescue OptionParser::ParseError => error
+    warn "Invalid options: #{error.message}"
+    warn parser
+    exit 2
+  end
+  unless ARGV.empty? && options[:checkpoint]
+    warn parser
+    exit 2
+  end
+
+  begin
+    tuning = options[:tuning_seeds]
+    unless !tuning.empty? && tuning.all? {|seed| LearningSeedSets::DEFINITIONS.fetch(:tuning).cover?(seed) }
+      raise ArgumentError, "checkpoint selection must use tuning seeds"
+    end
+    checkpoint = File.expand_path(options[:checkpoint])
+    model = LearnedPlayer.load(checkpoint).model
+    report = GameBenchmark.run(seeds: tuning, strategies: [:learned], models: {learned: model})
+    metrics = report.fetch(:strategies).fetch(:learned).fetch(:metrics).fetch(:score)
+    evaluation = {"seeds" => tuning, "mean_score" => metrics.fetch(:mean),
+                  "score_summary" => metrics,
+                  "per_seed" => report.fetch(:strategies).fetch(:learned).fetch(:per_seed)}
+    pointer = File.expand_path(options[:output] || File.join(File.dirname(checkpoint), "selected.json"))
+    raise ArgumentError, "selected pointer must be beside the checkpoint" unless File.dirname(pointer) == File.dirname(checkpoint)
+
+    result = RLCheckpointStore.new(directory: File.dirname(pointer)).select(checkpoint,
+                                                                           tuning_evaluation: evaluation)
+    puts JSON.pretty_generate({checkpoint: checkpoint, selected_pointer: File.expand_path(result),
+                               tuning_evaluation: evaluation})
+  rescue ArgumentError, IOError, SystemCallError => error
+    warn "Checkpoint selection failed: #{error.message}"
+    exit 1
+  end
+else
+  options = {episodes: 1, random_seed: 1, learning_rate: 0.01, temperature: 1.0,
+             baseline_decay: 0.9, checkpoint_interval: 1,
+             checkpoints: File.join(LessonStore::DIRECTORY, "checkpoints")}
+  parser = OptionParser.new do |opts|
+    opts.banner = "Usage: bundle exec ruby scripts/learn.rb train-rl --model MODEL [options]"
+    opts.on("--model FILE", "Initial imitation model") {|value| options[:model] = value }
+    opts.on("--resume FILE", "Resume from an RL checkpoint or selected.json pointer") {|value| options[:resume] = value }
+    opts.on("--episodes N", Integer) {|value| options[:episodes] = value }
+    opts.on("--seeds LIST", "Comma-separated training seeds; default starts at the next training seed") do |value|
+      options[:seeds] = value.split(",").map {|seed| Integer(seed) }
+    end
+    opts.on("--tuning-seeds LIST", "Comma-separated tuning seeds; defaults to first 20 tuning seeds") do |value|
+      options[:tuning_seeds] = value.split(",").map {|seed| Integer(seed) }
+    end
+    opts.on("--seed N", Integer, "Policy exploration RNG seed") {|value| options[:random_seed] = value }
+    opts.on("--learning-rate RATE", Float) {|value| options[:learning_rate] = value }
+    opts.on("--temperature VALUE", Float) {|value| options[:temperature] = value }
+    opts.on("--baseline-decay VALUE", Float) {|value| options[:baseline_decay] = value }
+    opts.on("--checkpoint-interval N", Integer) {|value| options[:checkpoint_interval] = value }
+    opts.on("--checkpoints DIR") {|value| options[:checkpoints] = value }
+  end
+  begin
+    parser.parse!(ARGV)
+  rescue OptionParser::ParseError => error
+    warn "Invalid options: #{error.message}"
+    warn parser
+    exit 2
+  end
+  unless ARGV.empty? && (options[:model] || options[:resume])
+    warn parser
+    exit 2
+  end
+
+  begin
+    trainer = ReinforcementTrainer.new
+    result = trainer.train(initial_model: options[:model] || options[:resume],
+                           resume: options[:resume], episode_count: options[:episodes],
+                           random_seed: options[:random_seed], learning_rate: options[:learning_rate],
+                           temperature: options[:temperature], baseline_decay: options[:baseline_decay],
+                           seeds: options[:seeds], tuning_seeds: options[:tuning_seeds] || LearningSeedSets.fetch(:tuning).first(20),
+                           checkpoint_interval: options[:checkpoint_interval],
+                           checkpoint_store: RLCheckpointStore.new(directory: options[:checkpoints]))
+    puts JSON.pretty_generate({episodes: result.episodes, global_step: result.global_step,
+                               best_checkpoint: File.expand_path(result.best_checkpoint),
+                               selected_pointer: File.expand_path(result.selected_pointer),
+                               best_tuning_evaluation: result.best_tuning_evaluation,
+                               checkpoints: result.checkpoints.map do |checkpoint|
+                                 {path: File.expand_path(checkpoint.fetch(:path)),
+                                  mean_score: checkpoint.fetch(:evaluation).fetch("mean_score")}
+                               end})
+  rescue ArgumentError, IOError, SystemCallError => error
+    warn "RL training failed: #{error.message}"
     exit 1
   end
 end

@@ -14,6 +14,7 @@ class GameBenchmarkTest < Minitest::Test
     assert_equal 3, baseline.fetch(:per_seed).size
     assert_equal 3, comparison.fetch(:paired_score_delta_vs_baseline).fetch(:count)
     assert_equal 0, baseline.fetch(:paired_score_delta_vs_baseline).fetch(:mean)
+    assert_equal 0, report.fetch(:pairwise_score_deltas).fetch(:first_fit).fetch(:first_fit).fetch(:summary).fetch(:mean)
     %i[score placed_tiles cleared_lines option_batches].each do |metric|
       assert baseline.fetch(:metrics).fetch(metric).key?(:percentile_10)
       assert baseline.fetch(:metrics).fetch(metric).key?(:percentile_90)

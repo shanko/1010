@@ -41,9 +41,23 @@ end.parse!
 raise OptionParser::MissingArgument, "--seeds is required" unless options[:seeds]
 raise OptionParser::MissingArgument, "--output is required" unless options[:output]
 raise OptionParser::InvalidArgument, "--max-moves must be positive" unless options[:max_moves].positive?
+if options[:strategies].include?(:learned)
+  missing = AutoPlayer::STRATEGIES - options[:strategies]
+  raise OptionParser::InvalidArgument, "learned comparison must include all heuristic baselines: #{missing.join(', ')}" unless missing.empty?
+end
 
 report = GameBenchmark.run(seeds: options[:seeds], strategies: options[:strategies],
                            max_moves: options[:max_moves], models: options[:models])
+if options[:strategies].include?(:learned)
+  best_heuristic = AutoPlayer::STRATEGIES.max_by do |strategy|
+    report.fetch(:strategies).fetch(strategy).fetch(:metrics).fetch(:score).fetch(:mean)
+  end
+  report[:strongest_heuristic] = best_heuristic
+  report[:learned_vs_strongest_heuristic] = report.fetch(:pairwise_score_deltas)
+                                                      .fetch(:learned).fetch(best_heuristic)
+  report[:learned_model_path] = File.expand_path(options[:models].fetch(:learned))
+  report[:learned_model_sha256] = Digest::SHA256.file(options[:models].fetch(:learned)).hexdigest
+end
 revision, = Open3.capture2("git", "rev-parse", "HEAD")
 dirty = !Open3.capture2("git", "status", "--porcelain").first.empty?
 report[:source_revision] = revision.strip

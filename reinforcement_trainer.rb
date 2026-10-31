@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "json"
+require "pathname"
 require_relative "game_simulator"
 require_relative "learned_player"
 
@@ -26,7 +27,8 @@ class RLCheckpointStore
 
   def select(path, tuning_evaluation:)
     FileUtils.mkdir_p(@directory)
-    pointer = {"schema_version" => 1, "selected_checkpoint" => File.basename(path),
+    relative_path = Pathname.new(File.expand_path(path)).relative_path_from(Pathname.new(File.expand_path(@directory))).to_s
+    pointer = {"schema_version" => 1, "selected_checkpoint" => relative_path,
                "tuning_evaluation" => tuning_evaluation}
     temporary = File.join(@directory, "selected.json.tmp-#{Process.pid}")
     File.write(temporary, JSON.pretty_generate(pointer) + "\n")
@@ -35,6 +37,36 @@ class RLCheckpointStore
   ensure
     File.delete(temporary) if temporary && File.exist?(temporary)
   end
+
+  # Training may promote a candidate only when its mean is strictly higher on
+  # the same tuning seeds as the currently selected model. Manual `select`
+  # remains an explicit override.
+  def select_if_better(path, tuning_evaluation:)
+    pointer_path = File.join(@directory, "selected.json")
+    previous = if File.file?(pointer_path)
+                 JSON.parse(File.read(pointer_path))
+               end
+    previous_checkpoint = previous && File.join(@directory, previous.fetch("selected_checkpoint"))
+    if previous && !File.file?(previous_checkpoint)
+      raise ArgumentError, "selected checkpoint does not exist: #{previous_checkpoint}"
+    end
+    previous_evaluation = previous && previous["tuning_evaluation"]
+    rescored = false
+    if previous && previous_evaluation&.fetch("seeds", nil) != tuning_evaluation.fetch("seeds")
+      raise ArgumentError, "selected checkpoint cannot be compared: tuning seed list differs and no evaluator was provided" unless block_given?
+      raise ArgumentError, "selected checkpoint does not exist: #{previous_checkpoint}" unless File.file?(previous_checkpoint)
+
+      previous_evaluation = yield(previous_checkpoint)
+      rescored = true
+    end
+    should_select = !previous || tuning_evaluation.fetch("mean_score") > previous_evaluation.fetch("mean_score")
+    selected_pointer = should_select ? select(path, tuning_evaluation: tuning_evaluation) : pointer_path
+    {path: selected_pointer, selection_changed: should_select,
+     previous_checkpoint: previous_checkpoint, selected_checkpoint: should_select ? path : previous_checkpoint,
+     previous_evaluation: previous_evaluation, previous_rescored: rescored}
+  rescue JSON::ParserError, KeyError => error
+    raise ArgumentError, "invalid selected checkpoint pointer: #{error.message}"
+  end
 end
 
 # REINFORCE with a rolling per-decision return baseline. Rewards are tile areas,
@@ -42,6 +74,7 @@ end
 class ReinforcementTrainer
   Result = Struct.new(:model, :episodes, :global_step, :best_checkpoint,
                       :selected_pointer, :best_tuning_evaluation, :checkpoints,
+                      :selection_changed, :previous_selected_checkpoint,
                       keyword_init: true)
 
   def train(initial_model:, episode_count:, random_seed: 1, learning_rate: 0.01,
@@ -61,6 +94,7 @@ class ReinforcementTrainer
     raise ArgumentError, "checkpoint_interval must be positive" unless checkpoint_interval.positive?
     raise ArgumentError, "RL cannot train on the held-out seed set" if tuning_seeds.any? {|seed| LearningSeedSets::DEFINITIONS.fetch(:held_out).cover?(Integer(seed)) }
 
+    source_path = resolved_checkpoint_path(resume) if resume
     source = resume ? LearnedPlayer.load(resume).model : normalize_model(initial_model)
     rl_state = source.fetch("reinforcement_learning", {})
     global_step = Integer(rl_state.fetch("global_step", 0))
@@ -69,8 +103,13 @@ class ReinforcementTrainer
     end
     training_seeds = seeds ? seeds.map {|seed| Integer(seed) } :
       LearningSeedSets.fetch(:training).drop(global_step).first(episode_count)
-    unless training_seeds.size == episode_count && training_seeds.all? {|seed| LearningSeedSets::DEFINITIONS.fetch(:training).cover?(seed) }
-      raise ArgumentError, "RL episode seeds must contain #{episode_count} training seeds"
+    unless training_seeds.size == episode_count
+      raise ArgumentError, "--seeds has #{training_seeds.size} #{training_seeds.size == 1 ? 'seed' : 'seeds'} but --episodes is #{episode_count}"
+    end
+    invalid_seed = training_seeds.find {|seed| !LearningSeedSets::DEFINITIONS.fetch(:training).cover?(seed) }
+    if invalid_seed
+      set_name = LearningSeedSets::DEFINITIONS.find {|_name, range| range.cover?(invalid_seed) }&.first || :known
+      raise ArgumentError, "seed #{invalid_seed} is in #{set_name} seed set; RL training must use training seeds (#{LearningSeedSets::DEFINITIONS.fetch(:training)})"
     end
     tuning_seeds = tuning_seeds.map {|seed| Integer(seed) }
     raise ArgumentError, "tuning seeds must be non-empty and belong to the tuning set" if tuning_seeds.empty? || !tuning_seeds.all? {|seed| LearningSeedSets::DEFINITIONS.fetch(:tuning).cover?(seed) }
@@ -91,12 +130,23 @@ class ReinforcementTrainer
     trained_seeds = []
     checkpoints = []
 
-    current_eval = evaluate(player.model, tuning_seeds)
+    stored_eval = rl_state.dig("tuning_evaluation")
+    stored_seeds = rl_state["evaluated_tuning_seeds"]
+    current_eval = if resume && stored_eval && stored_seeds == tuning_seeds
+                     stored_eval
+                   else
+                     evaluate(player.model, tuning_seeds)
+                   end
     best_eval = current_eval
-    best_path = checkpoint_store.save(checkpoint_model(player.model, learning_rate, temperature,
-                                                        evaluated_seeds: tuning_seeds,
-                                                        tuning_evaluation: current_eval), step: global_step)
-    checkpoints << {path: best_path, evaluation: current_eval}
+    if resume
+      best_path = source_path
+      checkpoints << {path: best_path, evaluation: current_eval, existing: true}
+    else
+      best_path = checkpoint_store.save(checkpoint_model(player.model, learning_rate, temperature,
+                                                          evaluated_seeds: tuning_seeds,
+                                                          tuning_evaluation: current_eval), step: global_step)
+      checkpoints << {path: best_path, evaluation: current_eval}
+    end
 
     episode_count.times do |episode_index|
       episode_seed = training_seeds.fetch(episode_index)
@@ -144,10 +194,15 @@ class ReinforcementTrainer
       end
     end
 
-    selected_pointer = checkpoint_store.select(best_path, tuning_evaluation: best_eval)
+    selection = checkpoint_store.select_if_better(best_path, tuning_evaluation: best_eval) do |checkpoint_path|
+      evaluate(LearnedPlayer.load(checkpoint_path).model, tuning_seeds)
+    end
+    selected_pointer = selection.fetch(:path)
     Result.new(model: player.model, episodes: trained_seeds, global_step: global_step,
                best_checkpoint: best_path, selected_pointer: selected_pointer,
-               best_tuning_evaluation: best_eval, checkpoints: checkpoints)
+               best_tuning_evaluation: best_eval, checkpoints: checkpoints,
+               selection_changed: selection.fetch(:selection_changed),
+               previous_selected_checkpoint: selection.fetch(:previous_checkpoint))
   end
 
   private
@@ -156,6 +211,15 @@ class ReinforcementTrainer
     return LearnedPlayer.load(model).model if model.is_a?(String)
 
     LearnedPlayer.new(model).model
+  end
+
+  def resolved_checkpoint_path(path)
+    data = JSON.parse(File.read(path))
+    return path unless data["selected_checkpoint"]
+
+    File.expand_path(data.fetch("selected_checkpoint"), File.dirname(path))
+  rescue JSON::ParserError => error
+    raise ArgumentError, "invalid learned policy JSON: #{error.message}"
   end
 
   def run_episode(player, seed, random_seed:, step:, temperature:)

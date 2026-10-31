@@ -291,6 +291,8 @@ else
     puts JSON.pretty_generate({episodes: result.episodes, global_step: result.global_step,
                                best_checkpoint: File.expand_path(result.best_checkpoint),
                                selected_pointer: File.expand_path(result.selected_pointer),
+                               selection_changed: result.selection_changed,
+                               previous_selected_checkpoint: result.previous_selected_checkpoint && File.expand_path(result.previous_selected_checkpoint),
                                best_tuning_evaluation: result.best_tuning_evaluation,
                                checkpoints: result.checkpoints.map do |checkpoint|
                                  {path: File.expand_path(checkpoint.fetch(:path)),

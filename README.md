@@ -137,12 +137,18 @@ $ bundle exec ruby scripts/learn.rb train-rl --model learning_data/models/imitat
 $ bundle exec ruby scripts/learn.rb train-rl --resume learning_data/checkpoints/selected.json --episodes 10 --seed 17
 ```
 
+The `train-rl` JSON output lists every checkpoint path. Training replaces
+`selected.json` only when the candidate has a strictly higher tuning mean on
+the same tuning seed list; it rescans the prior selection if the lists differ.
+Use `scripts/learn.rb select` when you deliberately want to override that
+automatic selection.
+
 Use the selected checkpoint pointer directly for headless evaluation with
 `scripts/benchmark.rb --model learning_data/checkpoints/selected.json`.
 To reselect a retained checkpoint, evaluate it on tuning seeds first:
 
 ```sh
-$ bundle exec ruby scripts/learn.rb select --checkpoint learning_data/checkpoints/reinforce-step-100.json
+$ bundle exec ruby scripts/learn.rb select --checkpoint learning_data/checkpoints/reinforce-step-100-20261030T054859123456Z.json
 ```
 
 Action feature version 1 records tile area and one-hot tile type, rows and

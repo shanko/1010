@@ -9,7 +9,7 @@ require_relative "../game_simulator"
 require_relative "../learning_seed_sets"
 
 options = {strategies: AutoPlayer::STRATEGIES, max_moves: 100_000, models: {}}
-OptionParser.new do |parser|
+parser = OptionParser.new do |parser|
   parser.banner = "Usage: ruby scripts/benchmark.rb (--seeds 1..100 | --seed-set baseline) --output baseline.json"
   parser.on("--seeds LIST", "Comma-separated seeds or an inclusive range, e.g. 1,2,3 or 1..100") do |value|
     raise OptionParser::InvalidArgument, "use either --seeds or --seed-set" if options[:seed_set]
@@ -36,7 +36,10 @@ OptionParser.new do |parser|
   parser.on("--model PATH", "Learned policy model (required when learned strategy is selected)") do |value|
     options[:models][:learned] = value
   end
-end.parse!
+end
+
+begin
+parser.parse!(ARGV)
 
 raise OptionParser::MissingArgument, "--seeds is required" unless options[:seeds]
 raise OptionParser::MissingArgument, "--output is required" unless options[:output]
@@ -73,3 +76,8 @@ report[:source_code_sha256] = Digest::SHA256.hexdigest(source_digest_input)
 
 File.write(options[:output], JSON.pretty_generate(report) + "\n")
 puts "Wrote #{options[:output]} for #{options[:seeds].size} seeds and #{options[:strategies].size} strategies."
+rescue OptionParser::ParseError, ArgumentError, IOError, SystemCallError => error
+  warn "Benchmark failed: #{error.message}"
+  warn parser
+  exit 2
+end

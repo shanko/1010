@@ -3,6 +3,8 @@
 require "minitest/autorun"
 require "tempfile"
 require "tmpdir"
+require "open3"
+require "rbconfig"
 require_relative "../game_1010"
 
 class GameReplayTest < Minitest::Test
@@ -185,6 +187,31 @@ class GameReplayTest < Minitest::Test
     window.try_place(0, 0, 0)
 
     assert_nil window.instance_variable_get(:@selected)
+  end
+
+  def test_update_returns_without_touching_gosu_after_window_close
+    window = GameWindow.allocate
+    window.instance_variable_set(:@closing, true)
+
+    assert_nil window.update
+  end
+
+  def test_invalid_game_command_line_has_plain_error_without_backtrace
+    _stdout, stderr, status = Open3.capture3(RbConfig.ruby, "game_1010.rb", "--seed")
+
+    refute status.success?
+    assert_match "--seed requires an integer", stderr
+    assert_match "Usage:", stderr
+    refute_match(/game_1010\.rb:\d+:in/, stderr)
+  end
+
+  def test_invalid_benchmark_arguments_have_plain_error_without_backtrace
+    _stdout, stderr, status = Open3.capture3(RbConfig.ruby, "scripts/benchmark.rb")
+
+    refute status.success?
+    assert_match "Benchmark failed:", stderr
+    assert_match "Usage:", stderr
+    refute_match(/scripts\/benchmark\.rb:\d+:in/, stderr)
   end
 
   def test_each_tile_value_has_a_distinct_non_black_non_white_color

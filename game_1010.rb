@@ -16,6 +16,7 @@ require_relative "auto_player"
 require_relative "move_animation"
 require_relative "game_log"
 require_relative "game_trace"
+require_relative "auto_run_tracker"
 
 class GameWindow < Gosu::Window
   # --- Layout (pixels) --------------------------------------------------------
@@ -151,6 +152,8 @@ class GameWindow < Gosu::Window
     @strategy = strategy.to_sym
     @auto_player = AutoPlayer.new(strategy, random: Random.new(@seeds.rand(2**32)), model: model)
     @auto        = auto
+    @auto_run_tracker = AutoRunTracker.new
+    @closing = false
     @auto_runs   = 0
     @max_score   = 0
     @recording   = nil # the game being recorded
@@ -197,6 +200,9 @@ class GameWindow < Gosu::Window
 
   # Everything that is reset when a game starts (new, loaded or played back).
   def start(board, seed: nil, mode: "window")
+    if @auto_run_tracker&.active?
+      print_auto_run(@auto_run_tracker.finish_run(score: @board.score, status: :stopped))
+    end
     stop_recording
     if @game_log && @board
       @game_log.finish(reason: @game_over ? "game_over" : "new_game", score: @board.score)
@@ -210,14 +216,20 @@ class GameWindow < Gosu::Window
     @animation      = nil
     @playback_next_at = nil
     @ended_at       = nil
+    @game_over = false
+    @auto_run_tracker.start_run(at_ms: Gosu.milliseconds) if @auto && @auto_run_tracker && !@auto_run_tracker.active?
     refresh_game_over
   end
 
   # Call after every change to the board. (Checking every frame would mean
   # trying every tile on every square 60 times a second.)
   def refresh_game_over
+    was_game_over = @game_over
     @game_over = @board.game_over?
     @ended_at  = @game_over ? (@ended_at || Gosu.milliseconds) : nil
+    if @auto && @game_over && !was_game_over && @auto_run_tracker&.active?
+      print_auto_run(@auto_run_tracker.finish_run(score: @board.score))
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -274,6 +286,8 @@ class GameWindow < Gosu::Window
   # ---------------------------------------------------------------------------
 
   def update
+    return if @closing
+
     now = Gosu.milliseconds
     expire_finished(now)
     return if @animation # let a move finish before the next automatic one
@@ -295,20 +309,38 @@ class GameWindow < Gosu::Window
     return auto_move unless @game_over
     return if now < @ended_at + AUTO_RESTART_MS
 
-    @auto_runs += 1
-    if @board.score > @max_score
-      @max_score = @board.score
-      puts "Score = #{@max_score}"
-    end
-    self.caption = "1010!  Auto: #{@strategy}  Runs: #{@auto_runs}  Max Score: #{@max_score}"
+    @auto_runs = @auto_run_tracker.run_count
+    @max_score = @auto_run_tracker.max_score || 0
+    update_auto_caption
     new_game
   end
 
   def toggle_auto
-    @auto     = !@auto
+    if @auto
+      print_auto_run(@auto_run_tracker.finish_run(score: @board.score, status: :stopped)) if @auto_run_tracker.active?
+      @auto = false
+    else
+      @auto = true
+      @auto_run_tracker.start_run(at_ms: Gosu.milliseconds) unless @game_over
+    end
     @selected = nil
     @dragging = false
-    self.caption = "1010!"
+    @auto ? update_auto_caption : self.caption = "1010!"
+  end
+
+  def print_auto_run(line)
+    return unless line
+
+    puts line
+    update_auto_caption
+  end
+
+  def update_auto_caption
+    return unless @auto_run_tracker
+
+    last_time = @auto_run_tracker.last_duration_seconds
+    timing = last_time ? "  Last: #{format('%.1fs', last_time)}" : ""
+    self.caption = "1010!  Auto: #{@strategy}  Runs: #{@auto_run_tracker.completed_count}  Max Score: #{@auto_run_tracker.max_score || 0}#{timing}"
   end
 
   # ---------------------------------------------------------------------------
@@ -428,9 +460,19 @@ class GameWindow < Gosu::Window
 
   # Called when the window closes (ESC, Q or the window's close button).
   def close
+    return if @closing
+
+    @closing = true
+    if @auto_run_tracker&.active?
+      print_auto_run(@auto_run_tracker.finish_run(score: @board.score, status: :unfinished))
+    end
     @game_log&.finish(reason: @game_over ? "game_over" : "quit", score: @board.score)
-    puts "Total time played = #{play_seconds} seconds"
-    puts "Score = #{@board.score}"
+    if @auto_run_tracker&.any_runs?
+      puts @auto_run_tracker.summary
+    else
+      puts "Total time played = #{play_seconds} seconds"
+      puts "Score = #{@board.score}"
+    end
     super
   end
 
@@ -654,6 +696,8 @@ class GameWindow < Gosu::Window
 
     seed_at = args.index("--seed")
     if seed_at
+      raise ArgumentError, "--seed requires an integer" unless args[seed_at + 1]
+
       options[:seed] = Integer(args[seed_at + 1])
       args.slice!(seed_at, 2)
     end
@@ -720,4 +764,13 @@ class GameWindow < Gosu::Window
   end
 end
 
-GameWindow.new(**GameWindow.options_from(ARGV)).show if __FILE__ == $PROGRAM_NAME
+if __FILE__ == $PROGRAM_NAME
+  begin
+    window = GameWindow.new(**GameWindow.options_from(ARGV))
+  rescue ArgumentError, SystemCallError => error
+    warn "1010: #{error.message}"
+    warn "Usage: ruby game_1010.rb [auto [strategy]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]"
+    exit 2
+  end
+  window.show
+end

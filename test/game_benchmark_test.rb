@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "tempfile"
 require_relative "../game_simulator"
 
 class GameBenchmarkTest < Minitest::Test
@@ -35,5 +36,19 @@ class GameBenchmarkTest < Minitest::Test
     assert_equal 1, summary[:percentile_10]
     assert_equal 5, summary[:percentile_90]
     assert_in_delta Math.sqrt(2), summary[:standard_deviation], 0.000_001
+  end
+
+  def test_learned_benchmark_accepts_a_model_file_path
+    model = {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+             "feature_version" => ActionFeatures::VERSION,
+             "feature_names" => ActionFeatures::NAMES,
+             "weights" => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
+    Tempfile.create(["learned-model", ".json"]) do |file|
+      file.write(JSON.generate(model))
+      file.flush
+      report = GameBenchmark.run(seeds: [3_000_000], strategies: [:learned], models: {learned: file.path})
+
+      assert_equal 1, report.fetch(:strategies).fetch(:learned).fetch(:per_seed).size
+    end
   end
 end

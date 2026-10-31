@@ -61,6 +61,7 @@ class ReinforcementTrainerTest < Minitest::Test
                                                 tuning_seeds: [2_000_010], checkpoint_interval: 1,
                                                 checkpoint_store: store)
       first_checkpoint = initial.checkpoints.last.fetch(:path)
+      checkpoint_count_before_resume = Dir.glob(File.join(directory, "reinforce-step-*.json")).size
       first_baseline_size = JSON.parse(File.read(first_checkpoint)).dig("reinforcement_learning", "baseline_by_decision").size
       resumed = ReinforcementTrainer.new.train(initial_model: first_checkpoint, resume: first_checkpoint,
                                                 episode_count: 1, random_seed: 23, seeds: [1_000_011],
@@ -71,8 +72,8 @@ class ReinforcementTrainerTest < Minitest::Test
       assert_equal [1_000_010, 1_000_011], resumed.model.dig("reinforcement_learning", "episode_seeds")
       assert_operator resumed.model.dig("reinforcement_learning", "baseline_by_decision").size, :>=, first_baseline_size
       assert File.file?(first_checkpoint)
-      refute_equal first_checkpoint, resumed.best_checkpoint
-      assert_operator Dir.glob(File.join(directory, "reinforce-step-*.json")).size, :>=, 3
+      assert_equal checkpoint_count_before_resume + 1, Dir.glob(File.join(directory, "reinforce-step-*.json")).size
+      assert_equal true, resumed.checkpoints.first.fetch(:existing)
     end
   end
 
@@ -83,6 +84,7 @@ class ReinforcementTrainerTest < Minitest::Test
                                       tuning_seeds: [LearningSeedSets.fetch(:tuning).first])
     end
     assert_match "training seeds", error.message
+    assert_match "held_out seed set", error.message
 
     error = assert_raises(ArgumentError) do
       ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 1,
@@ -90,6 +92,51 @@ class ReinforcementTrainerTest < Minitest::Test
                                       tuning_seeds: [LearningSeedSets.fetch(:held_out).first])
     end
     assert_match "held-out", error.message
+  end
+
+  def test_training_seed_count_error_names_both_counts
+    error = assert_raises(ArgumentError) do
+      ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 2,
+                                      seeds: [1_000_000], tuning_seeds: [2_000_000])
+    end
+    assert_match "--seeds has 1 seed but --episodes is 2", error.message
+  end
+
+  def test_automatic_selection_keeps_better_checkpoint_and_rescores_different_seed_lists
+    Dir.mktmpdir do |directory|
+      store = RLCheckpointStore.new(directory: directory)
+      previous = store.save(empty_model, step: 1)
+      candidate = store.save(empty_model, step: 2)
+      store.select(previous, tuning_evaluation: {"seeds" => [2_000_000], "mean_score" => 100.0})
+
+      kept = store.select_if_better(candidate, tuning_evaluation: {"seeds" => [2_000_000], "mean_score" => 99.0})
+      assert_equal false, kept.fetch(:selection_changed)
+      assert_equal previous, kept.fetch(:selected_checkpoint)
+      equal = store.select_if_better(candidate, tuning_evaluation: {"seeds" => [2_000_000], "mean_score" => 100.0})
+      assert_equal false, equal.fetch(:selection_changed)
+
+      rescored = store.select_if_better(candidate,
+                                        tuning_evaluation: {"seeds" => [2_000_001], "mean_score" => 99.0}) do |path|
+        assert_equal previous, path
+        {"seeds" => [2_000_001], "mean_score" => 100.5}
+      end
+      assert_equal true, rescored.fetch(:previous_rescored)
+      assert_equal false, rescored.fetch(:selection_changed)
+
+      promoted = store.select_if_better(candidate,
+                                        tuning_evaluation: {"seeds" => [2_000_001], "mean_score" => 101.0}) do |path|
+        assert_equal previous, path
+        {"seeds" => [2_000_001], "mean_score" => 100.5}
+      end
+      assert_equal true, promoted.fetch(:selection_changed)
+      assert_equal candidate, promoted.fetch(:selected_checkpoint)
+
+      unchanged = store.select_if_better(previous,
+                                         tuning_evaluation: {"seeds" => [2_000_001], "mean_score" => 101.0}) do
+        flunk "matching tuning results should not need rescoring"
+      end
+      assert_equal false, unchanged.fetch(:selection_changed)
+    end
   end
 
   def test_selection_command_evaluates_only_tuning_seeds_and_writes_pointer

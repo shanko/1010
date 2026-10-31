@@ -95,6 +95,14 @@ and ignores incomplete or non-improving search results:
 $ bundle exec ruby scripts/learn.rb train-imitation --lessons learning_data --seed 17 --epochs 20
 ```
 
+If you have not accumulated replayable training games yet, generate seeded
+episodes and complete search corrections directly into the ignored lesson
+store. Start with a small range to inspect search yield before scaling up:
+
+```sh
+$ bundle exec ruby scripts/learn.rb collect-training --seeds 1000000..1000019 --budget 0.5
+```
+
 Evaluate a learned policy headlessly (a model is required):
 
 ```sh
@@ -166,6 +174,7 @@ The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `
 * `game_simulator.rb`: runs full games without Gosu for policy evaluation
 * `improvement_search.rb`: searches for better legal game sequences under explicit time, state, and beam limits
 * `lesson_analyzer.rb` / `lesson_store.rb`: analyze completed traces and persist reproducible, versioned lessons
+* `lesson_collector.rb`: generate complete improved lessons from reproducible training seeds
 * `learned_player.rb`: versioned action features, linear policy, and deterministic imitation training
 * `policy_corrector.rb`: searches continuations from states visited by a learned policy
 * `reinforcement_trainer.rb`: REINFORCE training, resumable checkpoints, and tuning-based selection

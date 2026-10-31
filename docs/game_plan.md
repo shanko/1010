@@ -185,7 +185,7 @@ Run `bundle exec ruby scripts/learn.rb train-rl --model MODEL`. The trainer uses
 
 ## Milestone 7: integrate, compare, and document the learned auto mode
 
-**Status: implementation complete; full held-out evaluation awaits an eligible trained model**
+**Status: implementation complete; 100-seed held-out pilot complete; full 2,000-seed evaluation remains**
 
 ### Work
 
@@ -196,7 +196,9 @@ Run `bundle exec ruby scripts/learn.rb train-rl --model MODEL`. The trainer uses
 5. Document how to reproduce a result, train from lessons, resume training, select a model, and revert to a heuristic.
 6. Keep logs, lessons, and trained models ignored by Git unless the user explicitly chooses to share a small model or fixture.
 
-Graphical auto mode accepts `learned` plus `--model PATH` (or defaults to `learning_data/checkpoints/selected.json`). The GUI loads the model once before play and keeps the existing heuristic strategies as the default. `scripts/benchmark.rb` produces paired per-seed comparisons, score distributions, confidence intervals, the strongest heuristic by mean, and learned-vs-strongest deltas. `scripts/learn.rb select` evaluates a retained checkpoint on tuning seeds before writing a selected pointer. A meaningful full held-out comparison still requires real improved lessons and a trained model; no local model or eligible training lessons were present when this milestone was implemented, so learned remains opt-in and JC remains the default.
+Graphical auto mode accepts `learned` plus `--model PATH` (or defaults to `learning_data/checkpoints/selected.json`). The GUI loads the model once before play and keeps the existing heuristic strategies as the default. `scripts/benchmark.rb` produces paired per-seed comparisons, score distributions, confidence intervals, the strongest heuristic by mean, and learned-vs-strongest deltas. `scripts/learn.rb select` evaluates a retained checkpoint on tuning seeds before writing a selected pointer. A meaningful full held-out comparison requires collecting improved lessons and training a model; learned remains opt-in and JC remains the default until the comparison shows repeatable improvement.
+
+`scripts/learn.rb collect-training --seeds START..END` fills the training data gap by simulating training-range episodes, running full seeded improvement searches with replayable candidate offer histories, and saving only complete, improved lessons after both paths validate. `LessonStore` retains separate actual/candidate offer streams so each normal seeded trajectory replays against the board-dependent dealer results it actually received. A pilot on the first 100 held-out seeds using 15 generated lessons yielded mean score 243.89 for the learned model and 207.87 for Sam; the paired mean difference was +36.02 (95% normal-approximation CI +11.36 to +60.68). The pilot report and generated model are in ignored local learning data; do not treat the pilot as the final 2,000-seed result.
 
 ### Acceptance criteria
 
@@ -213,6 +215,7 @@ Keep simulation, search, and training independent of Gosu so all long-running wo
 - `game_trace.rb`: versioned trace parsing/writing, state snapshots, offer batches, moves, undos, and final result.
 - `improvement_search.rb`: bounded search and candidate sequence validation.
 - `lesson_store.rb`: validate, append, query, and version lessons under `learning_data/`.
+- `lesson_collector.rb`: generate and validate full-game training lessons from disjoint training seeds.
 - `learned_player.rb`: legal-action scoring, model load/save, imitation training, and RL updates.
 - `scripts/learn.rb`: command-line entry point for offline analysis, search, evaluation, and training.
 - `scripts/benchmark.rb`: paired-seed strategy evaluation and learned-model reports.

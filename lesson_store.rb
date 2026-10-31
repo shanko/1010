@@ -67,7 +67,8 @@ class LessonStore
     board = Board1010.new(cells: cells, tile_ids: tile_ids,
                           score: initial.fetch("score"),
                           options: tiles_for(initial.fetch("options")))
-    offers = lesson.fetch("offers")
+    sequence_name = sequence_key.to_s.delete_suffix("_sequence")
+    offers = lesson["#{sequence_name}_offers"] || lesson.fetch("offers")
     next_offer = 1
 
     lesson.fetch(sequence_key).each_with_index do |move, index|
@@ -104,7 +105,9 @@ class LessonStore
   end
 
   def identity_for(lesson)
-    state = {initial_state: lesson.fetch(:initial_state), offers: lesson.fetch(:offers)}
+    state = {initial_state: lesson.fetch(:initial_state),
+             actual_offers: lesson.fetch(:actual_offers, lesson.fetch(:offers)),
+             candidate_offers: lesson.fetch(:candidate_offers, lesson.fetch(:offers))}
     Digest::SHA256.hexdigest(JSON.generate(state))
   end
 

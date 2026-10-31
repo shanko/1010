@@ -28,7 +28,13 @@ class AutoPlayer
     if strategy == :learned
       raise ArgumentError, "learned strategy requires a model hash or model path" unless model
 
-      @learned_player = model.is_a?(String) ? LearnedPlayer.load(model) : LearnedPlayer.new(model)
+      @learned_player = if model.is_a?(LearnedPlayer)
+                          model
+                        elsif model.is_a?(String)
+                          LearnedPlayer.load(model)
+                        else
+                          LearnedPlayer.new(model)
+                        end
     end
   end
 

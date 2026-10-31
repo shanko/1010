@@ -8,10 +8,11 @@ require_relative "../lesson_analyzer"
 require_relative "../learned_player"
 require_relative "../policy_corrector"
 require_relative "../reinforcement_trainer"
+require_relative "../lesson_collector"
 
 def usage
   warn "Usage: bundle exec ruby scripts/learn.rb COMMAND [options]"
-  warn "Commands: analyze GAME.moves, train-imitation, correct, train-rl, select"
+  warn "Commands: analyze GAME.moves, train-imitation, collect-training, correct, train-rl, select"
   warn "Analyze options:"
   warn "  --budget SECONDS    search time after baseline preparation (default: 1.0)"
   warn "  --beam-width N      beam width (default: 4)"
@@ -21,7 +22,7 @@ def usage
 end
 
 command = ARGV.shift
-unless %w[analyze train-imitation correct train-rl select].include?(command)
+unless %w[analyze train-imitation collect-training correct train-rl select].include?(command)
   usage
   exit 2
 end
@@ -110,6 +111,51 @@ elsif command == "train-imitation"
                                excluded: trained.excluded.transform_keys(&:to_s)})
   rescue ArgumentError, IOError, SystemCallError => error
     warn "Training failed: #{error.message}"
+    exit 1
+  end
+elsif command == "collect-training"
+  options = {strategy: :sam, budget: 0.5, beam_width: 4, max_states: 2_000,
+             output: LessonStore::DIRECTORY}
+  parser = OptionParser.new do |opts|
+    opts.banner = "Usage: bundle exec ruby scripts/learn.rb collect-training --seeds LIST [options]"
+    opts.on("--seeds LIST", "Comma-separated training seeds or inclusive range (start..end)") do |value|
+      if value.include?("..")
+        first, last = value.split("..", 2).map {|seed| Integer(seed) }
+        raise OptionParser::InvalidArgument, "range end must be >= start" if last < first
+        options[:seeds] = (first..last).to_a
+      else
+        options[:seeds] = value.split(",").map {|seed| Integer(seed) }
+      end
+    end
+    opts.on("--strategy NAME") {|value| options[:strategy] = value.to_sym }
+    opts.on("--budget SECONDS", Float) {|value| options[:budget] = value }
+    opts.on("--beam-width N", Integer) {|value| options[:beam_width] = value }
+    opts.on("--max-states N", Integer) {|value| options[:max_states] = value }
+    opts.on("--output DIR") {|value| options[:output] = value }
+  end
+  begin
+    parser.parse!(ARGV)
+  rescue OptionParser::ParseError => error
+    warn "Invalid options: #{error.message}"
+    warn parser
+    exit 2
+  end
+  unless ARGV.empty? && options[:seeds]
+    warn parser
+    exit 2
+  end
+
+  begin
+    result = LessonCollector.new.collect(seeds: options[:seeds], strategy: options[:strategy],
+                                          time_budget_seconds: options[:budget],
+                                          beam_width: options[:beam_width], max_states: options[:max_states],
+                                          store: LessonStore.new(directory: options[:output]))
+    puts JSON.pretty_generate({episodes: result.episodes,
+                               improvements_found: result.improvements_found,
+                               complete_improvements: result.complete_improvements,
+                               lessons_saved: result.lessons_saved})
+  rescue ArgumentError, IOError, SystemCallError => error
+    warn "Training lesson collection failed: #{error.message}"
     exit 1
   end
 elsif command == "correct"

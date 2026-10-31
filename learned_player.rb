@@ -288,7 +288,7 @@ class ImitationTrainer
     board = Board1010.new(cells: initial.fetch("cells"), tile_ids: initial.fetch("tile_ids"),
                           score: initial.fetch("score"),
                           options: initial.fetch("options").map {|name| Board1010::TILES.fetch(name.to_sym) })
-    offers = lesson.fetch("offers")
+    offers = lesson["candidate_offers"] || lesson.fetch("offers")
     next_offer = 1
     confidence = [Math.log(1 + lesson.fetch("improvement_delta").to_f), 2.0].min
     episode = lesson.dig("source_episode", "seed")

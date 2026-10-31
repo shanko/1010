@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
-# Compact append-only log for one played game.
+# Versioned, append-only trace for one game. Each file can be replayed without
+# relying on the current tile dealer or the original random number generator.
 class GameLog
   DIRECTORY = "logs"
+  VERSION_HEADER = "1010-moves-v2"
 
   attr_reader :path
 
-  def initialize(seed: nil, directory: DIRECTORY)
+  def initialize(seed: nil, board:, mode:, directory: DIRECTORY)
     Dir.mkdir(directory) unless Dir.exist?(directory)
     timestamp = Time.now.strftime("%Y%m%d-%H%M%S-%6N")
     suffix = 0
@@ -19,22 +21,52 @@ class GameLog
         suffix += 1
       end
     end
-    @file.write("s#{seed || '-'}\n")
+
+    @finished = false
+    @file.write("#{VERSION_HEADER}\ns#{seed || '-'}\nmode=#{mode}\n")
+    @file.write("i#{board.score}|#{board.cells.flatten.join}|#{board.tile_ids.flatten.map {|id| id.to_s(36) }.join}\n")
+    deal(board.options)
     @file.flush
   end
 
-  # Fixed width: m + option index + row + column, all zero-based single digits.
-  def move(index, row, col)
-    @file.write("m#{index}#{row}#{col}\n")
-    @file.flush
+  # Record the exact offered tiles in their offered order.
+  def deal(tiles)
+    write("d#{tile_names(tiles).join(',')}\n")
+  end
+
+  # Record tile identity as well as the chosen option and anchor coordinates.
+  def move(tile_name, index, row, col)
+    write("m#{tile_name},#{index},#{row},#{col}\n")
   end
 
   def undo
-    @file.write("u\n")
-    @file.flush
+    write("u\n")
+  end
+
+  def finish(reason:, score:)
+    return if @finished
+
+    write("z#{reason}|#{score}\n")
+    @finished = true
+    close
   end
 
   def close
     @file.close unless @file.closed?
+  end
+
+  private
+
+  def tile_names(tiles)
+    tiles.map do |tile|
+      Board1010::TILES.key(tile) || raise(ArgumentError, "cannot log an unknown tile")
+    end
+  end
+
+  def write(text)
+    raise IOError, "game trace is already finished" if @finished
+
+    @file.write(text)
+    @file.flush
   end
 end

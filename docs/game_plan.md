@@ -16,7 +16,9 @@ Do not describe the optimizer's best result as a proven maximum unless it exhaus
 - `board.rb` contains the rules, tile options, placement legality, score, line clearing, and deal generation. `Board1010#play` adds the tile's square count to the score.
 - `auto_player.rb` contains simple current strategies (`first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`). `choose_move` currently selects a fitting option randomly before selecting a location.
 - `game_1010.rb` runs the graphical loop and records a seed plus move/undo records.
-- `game_log.rb` writes one `.moves` file per game. The existing format is compact but does not explicitly identify every tile offer or initial board.
+- `game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `game_trace.rb` validates and replays v2 traces headlessly.
+- `game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
+- `learning_seed_sets.rb` defines disjoint baseline, training, tuning, and held-out seed lists.
 - `terminal_game.rb` is a second human-play path and also creates game logs.
 - `test/` contains Minitest coverage; run the full suite with `bundle exec rake test`.
 
@@ -24,26 +26,31 @@ Important rules for the implementation:
 
 - The board is 10x10 and the game has 19 fixed tile shapes.
 - An episode ends when none of the current options fit. The option dealer may replace the first random tile with a small fitting tile when none of the random options fit. That fallback depends on the board, so alternate action sequences can receive different effective options even with the same seed.
-- Board copies currently share their random number generator. Search branches must not accidentally consume one another's random draws. Make branch RNG state explicit and test it before relying on copied boards for simulation.
+- `Board1010#copy` snapshots random state independently. Preserve that branch isolation and test it whenever simulator or search state cloning changes.
 - Existing `.moves` files or saved games may not contain enough information to reconstruct their initial state or offers. Preserve compatibility where practical and report unsupported/incomplete data clearly.
 - Existing cell values and tile type IDs support rendering colors; score and legality must remain based on tile area and occupancy, not tile color.
 
 ## Milestone 0: establish and document the objective
 
+**Status: complete**
+
 ### Work
 
-1. Define the primary metric as final score at Game Over.
-2. Define secondary metrics: placed tile count, number of completed rows/columns, number of option batches reached, and score distribution across seeds.
+1. Define the primary metric as final score at Game Over. Define operational secondary metrics for retained placed tiles, total cleared row/column events, batches offered, and score distribution across seeds.
 3. Verify the invariant that the score for a run equals the sum of the areas of all successfully placed tiles. Do not add direct score for clearing lines unless the game rules are deliberately changed.
 4. Define a fair comparison protocol: run policies on the same list of seeds, but let each policy's board state drive the existing board-dependent offer fallback.
 5. Keep “same fixed observed offers” as a separate counterfactual analysis mode. In that mode, freeze the exact offers from the logged episode; label it clearly because it is not the same as playing the normal seeded environment after the board diverges.
+6. Store the definitions and comparison protocol in `docs/learning_objective.md` and keep that document aligned with the simulator and reports.
 
 ### Acceptance criteria
 
 - Tests establish score equals the sum of placed tile areas, including placements that clear rows and columns.
 - README or learning documentation explains why line clears affect later score rather than scoring immediately.
+- `docs/learning_objective.md` defines the primary/secondary metrics and the paired-seed and fixed-offer comparison modes.
 
 ## Milestone 1: capture replayable, versioned game episodes
+
+**Status: complete**
 
 ### Work
 
@@ -62,6 +69,8 @@ Important rules for the implementation:
 - Invalid, truncated, old, or incomplete traces fail with an actionable diagnostic rather than a misleading replay.
 
 ## Milestone 2: create a headless full-game simulator and benchmark
+
+**Status: complete**
 
 ### Work
 

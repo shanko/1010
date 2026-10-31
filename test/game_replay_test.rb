@@ -2,6 +2,7 @@
 
 require "minitest/autorun"
 require "tempfile"
+require "tmpdir"
 require_relative "../game_1010"
 
 class GameReplayTest < Minitest::Test
@@ -16,6 +17,66 @@ class GameReplayTest < Minitest::Test
   def test_reads_move_and_undo_records_and_seed
     with_moves("s12345\nm012\nm290\nu\n") do |path|
       assert_equal [12_345, [[:move, 0, 1, 2], [:move, 2, 9, 0], [:undo]]], GameWindow.read_moves(path)
+    end
+  end
+
+  def test_v2_trace_replays_initial_board_deals_moves_and_undo_exactly
+    Dir.mktmpdir do |directory|
+      board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:dot]], random: Random.new(51))
+      logger = GameLog.new(seed: 51, board: board, mode: "test", directory: directory)
+
+      tile_name = Board1010::TILES.key(board.options[0])
+      board.play(0, 0, 0)
+      logger.move(tile_name, 0, 0, 0)
+
+      previous_board = board.copy
+      tile_name = Board1010::TILES.key(board.options[0])
+      board.play(0, 0, 1)
+      logger.move(tile_name, 0, 0, 1)
+      logger.deal(board.options)
+
+      board = previous_board
+      logger.undo
+      logger.finish(reason: "stopped", score: board.score)
+
+      trace = GameTrace.read(logger.path)
+      replayed_board = GameTrace.replay(trace)
+
+      assert_equal 51, trace.seed
+      assert_equal "test", trace.mode
+      assert_equal 2, trace.deal_batches.size
+      assert_equal board.cells, replayed_board.cells
+      assert_equal board.tile_ids, replayed_board.tile_ids
+      assert_equal board.options, replayed_board.options
+      assert_equal board.score, replayed_board.score
+    end
+  end
+
+  def test_v2_trace_rejects_incomplete_files
+    with_moves("#{GameTrace::HEADER}\ns1\nmode=test\ni0|#{'0' * 100}|#{'0' * 100}\nddot\n") do |path|
+      error = assert_raises(ArgumentError) { GameTrace.read(path) }
+      assert_match "missing the end record", error.message
+    end
+  end
+
+  def test_v2_trace_replays_a_seedless_nonempty_starting_board
+    Dir.mktmpdir do |directory|
+      cells = Array.new(Board1010::ROWS) { Array.new(Board1010::COLS, Board1010::EMPTY) }
+      tile_ids = Array.new(Board1010::ROWS) { Array.new(Board1010::COLS, Board1010::EMPTY) }
+      cells[4][6] = 2
+      tile_ids[4][6] = Board1010::TILE_IDS.fetch(Board1010::TILES[:hl2])
+      board = Board1010.new(cells: cells, tile_ids: tile_ids, options: [Board1010::TILES[:dot]], score: 17)
+      logger = GameLog.new(board: board, mode: "terminal", directory: directory)
+      logger.finish(reason: "stopped", score: board.score)
+
+      trace = GameTrace.read(logger.path)
+      replayed_board = GameTrace.replay(trace)
+
+      assert_nil trace.seed
+      assert_equal board.cells, replayed_board.cells
+      assert_equal board.tile_ids, replayed_board.tile_ids
+      assert_equal board.options, replayed_board.options
+      assert_equal board.score, replayed_board.score
     end
   end
 

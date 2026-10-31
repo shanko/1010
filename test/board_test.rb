@@ -93,6 +93,24 @@ class BoardTest < Minitest::Test
 
     assert_equal [[0], [0]], [move.cleared_rows, move.cleared_cols]
     assert_equal [Board1010::EMPTY], board.cells.flatten.uniq
+    assert_equal move.placed.size, board.score, "clearing lines adds no score"
+  end
+
+  def test_score_is_the_sum_of_placed_tile_areas_even_when_a_line_is_cleared
+    board = Board1010.new(options: [TILES[:hl2], TILES[:dot]])
+    fill_row(board, 0, except: [8, 9])
+    starting_score = board.score
+    placed_area = 0
+
+    first_move = board.play(0, 0, 8)
+    placed_area += first_move.placed.size
+    second_move = board.play(0, 1, 1)
+    placed_area += second_move.placed.size
+
+    assert_equal [0], first_move.cleared_rows
+    assert_empty first_move.cleared_cols
+    assert_equal placed_area, board.score - starting_score
+    assert_equal 3, placed_area
   end
 
   # --- Dealing and game over --------------------------------------------------------
@@ -166,6 +184,18 @@ class BoardTest < Minitest::Test
     assert_equal Board1010::EMPTY, copy.cells[0][0]
     assert_equal [TILES[:dot]], copy.options
     assert_equal 0, copy.score
+  end
+
+  def test_copy_has_an_independent_snapshot_of_the_random_state
+    board = Board1010.new(random: Random.new(8675309))
+    first_branch = board.copy
+    second_branch = board.copy
+
+    expected_first_draw = board.random.rand
+    assert_equal expected_first_draw, first_branch.random.rand
+    assert_equal expected_first_draw, second_branch.random.rand
+    assert_equal board.random.rand, first_branch.random.rand
+    refute_same board.random, first_branch.random
   end
 
   def test_save_and_load_round_trip

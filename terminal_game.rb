@@ -20,8 +20,7 @@ class TerminalGame
       @board = Board1010.new(random: Random.new(@seed))
     end
     @board.deal_if_needed
-    @game_log = game_log || GameLog.new(seed: @seed)
-    game_log.seed = @seed if game_log&.respond_to?(:seed=)
+    @game_log = game_log || GameLog.new(seed: @seed, board: @board, mode: "terminal")
   end
 
   def run
@@ -38,15 +37,18 @@ class TerminalGame
         break
       end
       index, row, col = move
+      option_count = @board.options.size
+      tile_name = Board1010::TILES.key(@board.options[index])
       if @board.play(index, row, col)
-        @game_log.move(index, row, col)
+        @game_log.move(tile_name, index, row, col)
+        @game_log.deal(@board.options) if option_count == 1
       else
         say(" Cannot place that tile at (#{row}, #{col})")
       end
     end
     say("Total time elapsed = #{(Time.now - started_at).round} seconds")
     say("Score = #{@board.score}")
-    @game_log.close
+    @game_log.finish(reason: @board.game_over? ? "game_over" : "stopped", score: @board.score)
   end
 
   private

@@ -14,6 +14,7 @@ require_relative "board"
 require_relative "auto_player"
 require_relative "move_animation"
 require_relative "game_log"
+require_relative "game_trace"
 
 class GameWindow < Gosu::Window
   # --- Layout (pixels) --------------------------------------------------------
@@ -160,11 +161,17 @@ class GameWindow < Gosu::Window
     @opened_at   = Gosu.milliseconds # for the time played, over every game in this window
 
     if replay_file
-      replay_seed, replay_events = self.class.read_moves(replay_file)
       @auto = false
-      new_game(seed: replay_seed) if replay_seed
-      @board ||= new_game(seed: seed)
-      @playback = replay_events
+      if GameTrace.versioned_file?(replay_file)
+        trace = GameTrace.read(replay_file)
+        start(trace.starting_board, seed: trace.seed, mode: "replay")
+        @playback = trace.events
+      else
+        replay_seed, replay_events = self.class.read_moves(replay_file)
+        new_game(seed: replay_seed) if replay_seed
+        @board ||= new_game(seed: seed)
+        @playback = replay_events
+      end
     else
       load_game unless @auto
       new_game unless @board
@@ -182,14 +189,16 @@ class GameWindow < Gosu::Window
   def new_game(seed: @seeds.rand(2**32))
     board = Board1010.new(random: Random.new(seed))
     board.deal_if_needed
-    start(board, seed: seed)
+    start(board, seed: seed, mode: @auto ? "auto" : "window")
   end
 
   # Everything that is reset when a game starts (new, loaded or played back).
-  def start(board, seed: nil)
+  def start(board, seed: nil, mode: "window")
     stop_recording
-    @game_log&.close
-    @game_log = GameLog.new(seed: seed)
+    if @game_log && @board
+      @game_log.finish(reason: @game_over ? "game_over" : "new_game", score: @board.score)
+    end
+    @game_log = GameLog.new(seed: seed, board: board, mode: mode)
     @board          = board
     @seed           = seed  # nil for a loaded game, which can't be recorded
     @previous_board = nil   # for undo (one level, like the original)
@@ -214,9 +223,13 @@ class GameWindow < Gosu::Window
 
   # Plays option `index` with its anchor on (row, col), for the player, the
   # computer and playback alike. Does nothing if the tile doesn't fit there.
-  def try_place(index, row, col)
+  def try_place(index, row, col, deal: true, expected_tile_name: nil)
     previous = @board.copy
-    move = @board.play(index, row, col)
+    tile_name = Board1010::TILES.key(previous.options[index])
+    if expected_tile_name && tile_name != expected_tile_name
+      raise ArgumentError, "replay expected #{expected_tile_name.inspect} at option #{index}, found #{tile_name.inspect}"
+    end
+    move = @board.play(index, row, col, deal: deal)
     unless move
       @selected = nil
       return
@@ -224,7 +237,8 @@ class GameWindow < Gosu::Window
 
     @previous_board = previous
     @recording&.events&.push([:move, index, row, col])
-    @game_log.move(index, row, col)
+    @game_log.move(tile_name, index, row, col)
+    @game_log.deal(@board.options) if deal && previous.options.size == 1
     @selected  = nil
     clear_step = @auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
     @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
@@ -333,11 +347,33 @@ class GameWindow < Gosu::Window
     event = @playback.shift
     case event&.first
     when :move
-      try_place(*event.drop(1))
+      if event.size == 5
+        _type, tile_name, index, row, col = event
+        try_place(index, row, col, deal: false, expected_tile_name: tile_name)
+        if @playback.first&.first == :deal
+          _deal_type, tiles = @playback.shift
+          @board.replace_options(tiles)
+          @game_log.deal(tiles)
+          refresh_game_over
+        end
+      else
+        try_place(*event.drop(1))
+      end
       @playback_next_at = now + @replay_delay_ms
+    when :deal
+      @board.replace_options(event[1])
+      @game_log.deal(event[1])
+      refresh_game_over
     when :undo
       undo
       @playback_next_at = now + @replay_delay_ms
+    when :end
+      _type, reason, score = event
+      raise ArgumentError, "replay score mismatch: expected #{score}, got #{@board.score}" unless score == @board.score
+      @game_log.finish(reason: reason, score: score)
+      @playback = nil
+      self.caption = "1010!"
+      show_message("Playback finished")
     else
       @playback = nil
       self.caption = "1010!"
@@ -389,7 +425,7 @@ class GameWindow < Gosu::Window
 
   # Called when the window closes (ESC, Q or the window's close button).
   def close
-    @game_log&.close
+    @game_log&.finish(reason: @game_over ? "game_over" : "quit", score: @board.score)
     puts "Total time played = #{play_seconds} seconds"
     puts "Score = #{@board.score}"
     super

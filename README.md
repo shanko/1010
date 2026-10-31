@@ -69,6 +69,13 @@ $ bundle exec ruby game_1010.rb auto jc --seed 42   # the same games every time
 $ bundle exec ruby game_1010.rb logs/20261030-123456-1234-567.moves # replay a logged game
 ```
 
+Run all current auto strategies headlessly against the same seed list and save
+a reproducible JSON benchmark report:
+
+```sh
+$ bundle exec ruby scripts/benchmark.rb --seeds 1..100 --output benchmarks/baseline-v1.json
+```
+
 Pass a `.moves` file as the command line argument to replay it. Moves are shown
 in order, with 0.5 seconds between successive moves by default. Set another
 interval in seconds with `--delay` (for example, `--delay 2`):
@@ -86,7 +93,9 @@ The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `
 * `board.rb`: the rules (placing tiles, clearing lines, dealing, saving), with no input or output
 * `auto_player.rb`: the computer player and its strategies
 * `move_animation.rb`: shows a move square by square without pausing the window
-* `game_log.rb`: writes compact move and undo events to one file per game in `logs/`
+* `game_log.rb` / `game_trace.rb`: write, validate and replay versioned game traces with initial state, exact offers, moves, undos and final score
+* `game_simulator.rb`: runs full games without Gosu for policy evaluation
+* `learning_seed_sets.rb` / `scripts/benchmark.rb`: define disjoint seed sets and generate reproducible strategy benchmarks
 * `game_1010.rb`: the Gosu window (drawing and input)
 * `terminal_game.rb`: the terminal version
 

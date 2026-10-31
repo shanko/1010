@@ -91,10 +91,10 @@ class Board1010
     @random  = random
   end
 
-  # A deep copy, used for undo. It shares the random number generator, so a
-  # recorded game deals the same tiles when it is played back.
+  # A deep copy, used for undo and search branches. Copy the RNG state so
+  # advancing one branch cannot change another branch's future offers.
   def copy
-    Board1010.new(cells: @cells.map(&:dup), tile_ids: @tile_ids.map(&:dup), options: @options.dup, score: @score, random: @random)
+    Board1010.new(cells: @cells.map(&:dup), tile_ids: @tile_ids.map(&:dup), options: @options.dup, score: @score, random: @random.dup)
   end
 
   # The column of the first filled square in the tile's top row. The square
@@ -110,7 +110,7 @@ class Board1010
   # One whole move: puts option `index` with its anchor on (row, col), scores
   # 1 point per square, empties full rows and columns, and deals 3 new tiles
   # once all are used. Returns a Move, or nil if the tile doesn't fit there.
-  def play(index, row, col)
+  def play(index, row, col, deal: true)
     tile = @options[index]
     return nil unless tile && fits?(tile, row, col)
 
@@ -120,7 +120,7 @@ class Board1010
     tile_ids_before_clearing = @tile_ids.map(&:dup)
     rows, cols = full_lines
     clear_lines(rows, cols)
-    deal_if_needed
+    deal_if_needed if deal
 
     Move.new(placed: placed, cells_before_clearing: cells_before_clearing,
              tile_ids_before_clearing: tile_ids_before_clearing,
@@ -134,6 +134,12 @@ class Board1010
 
   def deal_if_needed
     @options = generate_options if @options.empty?
+  end
+
+  # Replaces the offered batch. Used by trace replay to apply recorded offers
+  # without consuming random numbers or repeating board-dependent fallback.
+  def replace_options(tiles)
+    @options = tiles.dup
   end
 
   # 3 random tiles. If none of them fit anywhere, the first one is swapped for

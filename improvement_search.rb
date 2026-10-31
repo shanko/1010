@@ -21,7 +21,7 @@ class ImprovementSearch
   def search(seed: nil, strategy: AutoPlayer::DEFAULT_STRATEGY, starting_board: nil,
              baseline_score: nil, baseline_sequence: nil, fixed_offers: nil,
              time_budget_seconds: 1.0, beam_width: 4, max_states: 10_000,
-             rollout_strategy: strategy)
+             rollout_strategy: strategy, baseline_model: nil, rollout_model: baseline_model)
     budget = Float(time_budget_seconds)
     raise ArgumentError, "time budget must be finite and non-negative" unless budget.finite? && budget >= 0
     beam_width = Integer(beam_width)
@@ -43,7 +43,7 @@ class ImprovementSearch
     else
       raise ArgumentError, "seed or starting_board is required" if seed.nil?
 
-      baseline_result = GameSimulator.run(seed: seed, strategy: strategy)
+      baseline_result = GameSimulator.run(seed: seed, strategy: strategy, model: baseline_model)
       root_board = GameSimulator.initial_board(seed: seed)
       baseline_score = baseline_result.score
       baseline_sequence = sequence_from_result(baseline_result)
@@ -116,6 +116,7 @@ class ImprovementSearch
 
           rollout = rollout_from(child, fixed_offers: fixed_offers,
                                   strategy: rollout_strategy,
+                                  model: rollout_model,
                                   seed: rollout_seed(seed, explored_states),
                                   deadline: deadline)
           child.rank_score = rollout[:score]
@@ -192,12 +193,12 @@ class ImprovementSearch
              offer_exhausted: offer_exhausted, rank_score: board.score)
   end
 
-  def rollout_from(node, fixed_offers:, strategy:, seed:, deadline:)
+  def rollout_from(node, fixed_offers:, strategy:, model:, seed:, deadline:)
     current = Node.new(board: node.board.copy, sequence: node.sequence.dup,
                        offers: node.offers.dup, next_offer_index: node.next_offer_index,
                        depth: node.depth, offer_exhausted: node.offer_exhausted,
                        rank_score: node.rank_score)
-    player = AutoPlayer.new(strategy, random: Random.new(seed))
+    player = AutoPlayer.new(strategy, random: Random.new(seed), model: model)
 
     loop do
       return rollout_result(current, complete: false, timed_out: true) if monotonic_time >= deadline

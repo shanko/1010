@@ -9,7 +9,7 @@ class GameSimulator
   VERSION = 1
 
   Result = Struct.new(:seed, :strategy, :score, :placed_tiles, :cleared_lines,
-                      :option_batches, :moves, :offers, :final_board,
+                      :option_batches, :moves, :offers, :final_board, :decision_states,
                       keyword_init: true) do
     def summary
       {
@@ -75,7 +75,8 @@ class GameSimulator
   end
   private_class_method :tiles_for
 
-  def run(seed:, strategy: AutoPlayer::DEFAULT_STRATEGY, max_moves: 100_000)
+  def run(seed:, strategy: AutoPlayer::DEFAULT_STRATEGY, max_moves: 100_000, model: nil,
+          capture_states: false)
     seed = Integer(seed)
     strategy = strategy.to_sym
 
@@ -86,16 +87,19 @@ class GameSimulator
     board_random = Random.new(session_random.rand(2**32))
     board = Board1010.new(random: board_random)
     board.deal_if_needed
-    player = AutoPlayer.new(strategy, random: player_random)
+    player = AutoPlayer.new(strategy, random: player_random, model: model)
 
     offers = [tile_names(board.options)]
     moves = []
+    decision_states = []
     placed_tiles = 0
     cleared_lines = 0
     placed_area = 0
 
     until board.game_over?
       raise RuntimeError, "simulation exceeded #{max_moves} moves (seed #{seed})" if moves.size >= max_moves
+
+      decision_states << {board: board.copy, offer_index: offers.size - 1} if capture_states
 
       index, row, col = player.choose_move(board)
       tile = board.options[index]
@@ -120,7 +124,7 @@ class GameSimulator
     Result.new(seed: seed, strategy: strategy, score: board.score,
                placed_tiles: placed_tiles, cleared_lines: cleared_lines,
                option_batches: offers.size, moves: moves, offers: offers,
-               final_board: board)
+               final_board: board, decision_states: decision_states)
   end
 
   private
@@ -135,18 +139,28 @@ class GameBenchmark
   SCHEMA_VERSION = 1
   METRICS = %i[score placed_tiles cleared_lines option_batches].freeze
 
-  def self.run(seeds:, strategies: AutoPlayer::STRATEGIES, max_moves: 100_000)
+  def self.run(seeds:, strategies: AutoPlayer::STRATEGIES, max_moves: 100_000, models: {})
     seeds = seeds.map {|seed| Integer(seed) }
     raise ArgumentError, "provide at least one seed" if seeds.empty?
     raise ArgumentError, "seed list must not contain duplicates" unless seeds.uniq.size == seeds.size
 
     strategies = strategies.map(&:to_sym)
     raise ArgumentError, "provide at least one strategy" if strategies.empty?
-    unknown = strategies - AutoPlayer::STRATEGIES
+    unknown = strategies - AutoPlayer::VALID_STRATEGIES
     raise ArgumentError, "unknown strategies: #{unknown.join(', ')}" unless unknown.empty?
+    if strategies.include?(:learned) && !models.key?(:learned) && !models.key?("learned")
+      raise ArgumentError, "benchmarking learned requires models[:learned] or models['learned']"
+    end
+
+    resolved_models = models.transform_keys(&:to_sym).transform_values do |model|
+      model.is_a?(String) ? LearnedPlayer.load(model) : model
+    end
 
     results = strategies.to_h do |strategy|
-      [strategy, seeds.map {|seed| GameSimulator.run(seed: seed, strategy: strategy, max_moves: max_moves) }]
+      [strategy, seeds.map do |seed|
+        GameSimulator.run(seed: seed, strategy: strategy, max_moves: max_moves,
+                          model: resolved_models[strategy])
+      end]
     end
     baseline = strategies.first
 
@@ -188,6 +202,8 @@ class GameBenchmark
       minimum: sorted.first,
       percentile_10: percentile(sorted, 0.1),
       percentile_90: percentile(sorted, 0.9),
+      mean_ci_95: {lower: mean - 1.96 * Math.sqrt(variance / values.size),
+                   upper: mean + 1.96 * Math.sqrt(variance / values.size)},
       maximum: sorted.last
     }
   end

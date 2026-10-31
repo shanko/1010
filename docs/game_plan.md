@@ -19,6 +19,7 @@ Do not describe the optimizer's best result as a proven maximum unless it exhaus
 - `game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `game_trace.rb` validates and replays v2 traces headlessly.
 - `game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
 - `improvement_search.rb` runs bounded beam search with strategy rollouts, seeded normal-deal search, and frozen-offer counterfactual search.
+- `learned_player.rb` defines versioned action features, a Ruby-native linear scorer, and deterministic imitation training; `policy_corrector.rb` searches continuations from states visited by a learned policy.
 - `learning_seed_sets.rb` defines disjoint baseline, training, tuning, and held-out seed lists.
 - `terminal_game.rb` is a second human-play path and also creates game logs.
 - `test/` contains Minitest coverage; run the full suite with `bundle exec rake test`.
@@ -137,6 +138,8 @@ The command is `bundle exec ruby scripts/learn.rb analyze GAME.moves`. It accept
 
 ## Milestone 5: train an imitation-learning policy from search examples
 
+**Status: complete**
+
 ### Work
 
 1. Add a policy interface that scores all legal `(option, row, column)` actions and chooses the highest-scoring action, with seeded random tie-breaking where needed.
@@ -146,12 +149,15 @@ The command is `bundle exec ruby scripts/learn.rb analyze GAME.moves`. It accept
 5. Include states visited by the learned policy and ask the searcher for corrections where possible. This reduces the mismatch between states in the demonstrations and states encountered by the learned player.
 6. Add a `learned` strategy name and a model-loading option. If no model exists, fail clearly or fall back only when explicitly requested.
 
+Feature version 1 includes normalized tile area, one-hot tile type, cleared rows and columns, remaining legal placements in the current offer, largest four-neighbor empty component, empty-component count, isolated empty cells under eight-neighbor adjacency, anchor neighbors, touched edges, and resulting occupancy. The linear scorer uses a softmax imitation update on complete improved lessons, weighted by score delta. Training only accepts lessons from the training seed range and excludes non-improvements, incomplete candidates, invalid replays, and held-out episodes. `scripts/learn.rb correct` captures decision states visited by the learned policy and asks the bounded searcher for better continuations using training seeds. `scripts/benchmark.rb` can load a learned model and reports per-seed results and 95% mean confidence intervals.
+
 ### Acceptance criteria
 
 - Training is deterministic for a fixed dataset and training seed.
 - The saved model can be loaded in a fresh process and ranks legal actions consistently.
 - Imitation policy is evaluated against all current strategies on held-out seeds, with reports including uncertainty and per-seed scores.
 - Model training never reads the held-out evaluation results.
+- `test/learned_player_test.rb` checks feature schema and values, legality, model loading, deterministic training, held-out exclusion, and learned-policy benchmark integration.
 
 ## Milestone 6: fine-tune the policy with reinforcement learning
 

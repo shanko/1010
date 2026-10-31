@@ -6,28 +6,37 @@
 # fits, and returns the position to use. Ties go to the position found first
 # (top-left first). Choose one with `ruby game_1010.rb auto <strategy>`.
 require_relative "board"
+require_relative "learned_player"
 
 class AutoPlayer
   STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam].freeze
+  VALID_STRATEGIES = (STRATEGIES + [:learned]).freeze
   DEFAULT_STRATEGY = :jc
 
   attr_reader :strategy
 
   # `random` picks which tile to play. Keep it separate from the board's
   # random numbers, so a recorded game deals the same tiles when played back.
-  def initialize(strategy=DEFAULT_STRATEGY, random: Random.new)
+  def initialize(strategy=DEFAULT_STRATEGY, random: Random.new, model: nil)
     strategy = strategy.to_sym
-    unless STRATEGIES.include?(strategy)
-      raise ArgumentError, "unknown strategy #{strategy.inspect}, use one of: #{STRATEGIES.join(', ')}"
+    unless VALID_STRATEGIES.include?(strategy)
+      raise ArgumentError, "unknown strategy #{strategy.inspect}, use one of: #{VALID_STRATEGIES.join(', ')}"
     end
 
     @strategy = strategy
     @random   = random
+    if strategy == :learned
+      raise ArgumentError, "learned strategy requires a model hash or model path" unless model
+
+      @learned_player = model.is_a?(String) ? LearnedPlayer.load(model) : LearnedPlayer.new(model)
+    end
   end
 
   # [option index, row, col] for the next move, or nil if no tile fits.
   # Picks a random tile among those that fit somewhere, then the best spot for it.
   def choose_move(board)
+    return @learned_player.choose_move(board, random: @random) if @learned_player
+
     fitting = board.options.each_index.select {|index| board.fits_anywhere?(board.options[index]) }
     return nil if fitting.empty?
 
@@ -38,6 +47,8 @@ class AutoPlayer
 
   # The [row, col] this strategy would pick for the tile, or nil if it fits nowhere.
   def best_position(board, tile)
+    return @learned_player.best_position(board, tile, random: @random) if @learned_player
+
     positions = board.positions_for(tile)
     return nil if positions.empty?
 

@@ -1,0 +1,295 @@
+# frozen_string_literal: true
+
+require "json"
+require_relative "board"
+require_relative "learning_seed_sets"
+require_relative "lesson_store"
+
+# Versioned, documented state/action features for legal placements.
+module ActionFeatures
+  VERSION = 1
+  TILE_FEATURES = Board1010::TILE_NAMES.map {|name| "tile_#{name}" }.freeze
+  NEIGHBORS_4 = Array.new(100) do |index|
+    row, col = index.divmod(10)
+    [[row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]]
+      .select {|r, c| r.between?(0, 9) && c.between?(0, 9) }
+      .map {|r, c| r * 10 + c }
+  end.freeze
+  NEIGHBORS_8 = Array.new(100) do |index|
+    row, col = index.divmod(10)
+    Board1010::NEIGHBOUR_OFFSETS.filter_map do |dr, dc|
+      r = row + dr
+      c = col + dc
+      r * 10 + c if r.between?(0, 9) && c.between?(0, 9)
+    end
+  end.freeze
+  BASE_FEATURES = %w[
+    bias tile_area completed_rows completed_cols remaining_legal_placements
+    largest_empty_region empty_region_count isolated_empty_cells
+    filled_neighbours edge_cells occupied_fraction
+  ].freeze
+  NAMES = (BASE_FEATURES + TILE_FEATURES).freeze
+
+  def self.extract(board, option_index, row, col)
+    tile = board.options.fetch(option_index)
+    raise ArgumentError, "feature action is not legal" unless board.fits?(tile, row, col)
+
+    after = board.copy
+    move = after.play(option_index, row, col, deal: false)
+    raise ArgumentError, "feature action is not legal" unless move
+    largest_region, region_count, isolated = empty_space_features(after)
+    legal_placements = after.options.sum {|offered| after.positions_for(offered).size }
+    occupied = after.cells.flatten.count {|value| value != Board1010::EMPTY }
+    tile_name = Board1010::TILES.key(tile)
+
+    features = {
+      "bias" => 1.0,
+      "tile_area" => tile.flatten.count {|value| value != Board1010::EMPTY }.to_f / 25.0,
+      "completed_rows" => move.cleared_rows.size.to_f,
+      "completed_cols" => move.cleared_cols.size.to_f,
+      "remaining_legal_placements" => legal_placements.to_f / 100.0,
+      "largest_empty_region" => largest_region.to_f / 100.0,
+      "empty_region_count" => region_count.to_f / 100.0,
+      "isolated_empty_cells" => isolated.to_f / 100.0,
+      "filled_neighbours" => board.filled_neighbours(row, col).to_f / 8.0,
+      "edge_cells" => board.edges_touched(row, col).to_f / 2.0,
+      "occupied_fraction" => occupied.to_f / 100.0
+    }
+    TILE_FEATURES.each {|name| features[name] = name == "tile_#{tile_name}" ? 1.0 : 0.0 }
+    NAMES.to_h {|name| [name, features.fetch(name)] }
+  end
+
+  # Empty regions use four-neighbor connectivity. Isolated cells use the
+  # game's eight-neighbor geometry because diagonal gaps also affect fit.
+  def self.empty_space_features(board)
+    empty = board.cells.flatten.map {|value| value == Board1010::EMPTY }
+    seen = Array.new(100, false)
+    sizes = []
+    100.times do |index|
+      next unless empty[index] && !seen[index]
+
+      queue = [index]
+      seen[index] = true
+      size = 0
+      cursor = 0
+      while cursor < queue.size
+        current = queue[cursor]
+        cursor += 1
+        size += 1
+        NEIGHBORS_4[current].each do |neighbor|
+          next unless empty[neighbor] && !seen[neighbor]
+
+          seen[neighbor] = true
+          queue << neighbor
+        end
+      end
+      sizes << size
+    end
+
+    isolated = (0...100).count {|index| empty[index] && NEIGHBORS_8[index].none? {|neighbor| empty[neighbor] } }
+    [sizes.max || 0, sizes.size, isolated]
+  end
+  private_class_method :empty_space_features
+end
+
+# Linear action scorer. The model file contains only versioned metadata and
+# feature weights, so it can be loaded without third-party ML libraries.
+class LearnedPlayer
+  MODEL_SCHEMA_VERSION = 1
+
+  attr_reader :model
+
+  def self.load(path)
+    model = JSON.parse(File.read(path))
+    new(model)
+  rescue JSON::ParserError => error
+    raise ArgumentError, "invalid learned policy JSON: #{error.message}"
+  end
+
+  def initialize(model)
+    model = JSON.parse(JSON.generate(model))
+    raise ArgumentError, "unsupported learned policy model schema" unless model["schema_version"] == MODEL_SCHEMA_VERSION
+    raise ArgumentError, "unsupported action feature version" unless model["feature_version"] == ActionFeatures::VERSION
+    raise ArgumentError, "model feature names do not match this code" unless model["feature_names"] == ActionFeatures::NAMES
+    raise ArgumentError, "model weights are missing" unless model["weights"].is_a?(Hash)
+
+    @model = model
+    @weights = ActionFeatures::NAMES.to_h do |name|
+      weight = Float(model["weights"].fetch(name, 0.0))
+      raise ArgumentError, "model weights must be finite" unless weight.finite?
+
+      [name, weight]
+    end
+  end
+
+  def score(features)
+    features.sum {|name, value| @weights.fetch(name) * value }
+  end
+
+  # Returns the highest-ranked [option index, row, col], using seeded random
+  # tie-breaking to avoid a permanent top-left bias.
+  def choose_move(board, random: Random.new)
+    actions = legal_actions(board)
+    return nil if actions.empty?
+
+    scored = actions.map {|action, features| [action, score(features)] }
+    best_score = scored.map(&:last).max
+    tied = scored.select {|_action, value| value == best_score }.map(&:first)
+    tied.sample(random: random)
+  end
+
+  def best_position(board, tile, random: Random.new)
+    option_index = board.options.index(tile)
+    return nil unless option_index
+
+    actions = board.positions_for(tile).map do |row, col|
+      action = [option_index, row, col]
+      [action, ActionFeatures.extract(board, *action)]
+    end
+    return nil if actions.empty?
+
+    scored = actions.map {|action, features| [action, score(features)] }
+    best_score = scored.map(&:last).max
+    scored.select {|_action, value| value == best_score }.map(&:first).map {|_index, row, col| [row, col] }.sample(random: random)
+  end
+
+  def legal_actions(board)
+    board.options.each_index.flat_map do |index|
+      board.positions_for(board.options[index]).map do |row, col|
+        action = [index, row, col]
+        [action, ActionFeatures.extract(board, *action)]
+      end
+    end
+  end
+end
+
+# Deterministic softmax imitation trainer over validated, improved lessons.
+class ImitationTrainer
+  Result = Struct.new(:model, :episodes_used, :examples_seen, :excluded, keyword_init: true)
+
+  def train(directory:, seed_set: :training, random_seed: 1, epochs: 10, learning_rate: 0.1)
+    epochs = Integer(epochs)
+    rate = Float(learning_rate)
+    raise ArgumentError, "epochs must be positive" unless epochs.positive?
+    raise ArgumentError, "learning rate must be finite and between 0 and 1" unless rate.finite? && rate.positive? && rate <= 1.0
+    raise ArgumentError, "imitation training must use the training seed set" unless seed_set.to_sym == :training
+
+    allowed_range = LearningSeedSets::DEFINITIONS.fetch(seed_set.to_sym) do
+      raise ArgumentError, "unknown training seed set #{seed_set.inspect}"
+    end
+    examples = []
+    excluded = Hash.new(0)
+    lesson_paths = Dir.glob(File.join(directory, "*.json")).sort
+    lesson_paths.each do |path|
+      lesson = LessonStore.read(path)
+      seed = lesson.dig("source_episode", "seed")
+      if seed && LearningSeedSets::DEFINITIONS.fetch(:held_out).cover?(Integer(seed))
+        excluded[:held_out] += 1
+        next
+      end
+      unless seed && allowed_range.cover?(Integer(seed))
+        excluded[:outside_seed_set] += 1
+        next
+      end
+      unless lesson["outcome"] == "improved" && lesson["improvement_delta"].to_i.positive? &&
+             lesson.dig("search", "candidate_complete") == true && lesson.dig("search", "status") == "improved"
+        excluded[:low_confidence_or_no_improvement] += 1
+        next
+      end
+
+      begin
+        actual = LessonStore.replay(lesson, "actual_sequence")
+        candidate = LessonStore.replay(lesson, "candidate_sequence")
+        unless actual.score == lesson.fetch("actual_score") && candidate.score == lesson.fetch("candidate_score") &&
+               candidate.score - actual.score == lesson.fetch("improvement_delta") &&
+               actual.game_over? && candidate.game_over? && !candidate.options.empty?
+          excluded[:invalid_replay] += 1
+          next
+        end
+        examples.concat(examples_for(lesson))
+      rescue ArgumentError, KeyError
+        excluded[:invalid_replay] += 1
+      end
+    end
+    raise ArgumentError, "no eligible improved lessons found in #{directory} (seed set #{seed_set})" if examples.empty?
+
+    weights = ActionFeatures::NAMES.to_h {|name| [name, 0.0] }
+    random = Random.new(Integer(random_seed))
+    examples_seen = 0
+    epochs.times do
+      examples.shuffle(random: random).each do |example|
+        update(weights, example, rate)
+        examples_seen += 1
+      end
+    end
+    model = {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+             "feature_version" => ActionFeatures::VERSION,
+             "feature_names" => ActionFeatures::NAMES,
+             "weights" => weights,
+             "training" => {"seed_set" => seed_set.to_s, "random_seed" => Integer(random_seed),
+                            "epochs" => epochs, "learning_rate" => rate,
+                            "episodes_used" => examples.map {|example| example[:episode] }.uniq.size,
+                            "examples_seen" => examples_seen}}
+    Result.new(model: model, episodes_used: examples.map {|example| example[:episode] }.uniq.size,
+               examples_seen: examples_seen, excluded: excluded)
+  end
+
+  def save(model, path)
+    File.write(path, JSON.pretty_generate(model) + "\n")
+    path
+  end
+
+  private
+
+  def examples_for(lesson)
+    initial = lesson.fetch("initial_state")
+    board = Board1010.new(cells: initial.fetch("cells"), tile_ids: initial.fetch("tile_ids"),
+                          score: initial.fetch("score"),
+                          options: initial.fetch("options").map {|name| Board1010::TILES.fetch(name.to_sym) })
+    offers = lesson.fetch("offers")
+    next_offer = 1
+    confidence = [Math.log(1 + lesson.fetch("improvement_delta").to_f), 2.0].min
+    episode = lesson.dig("source_episode", "seed")
+    policy = LearnedPlayer.new(empty_model)
+    lesson.fetch("candidate_sequence").map do |move|
+      legal = policy.legal_actions(board)
+      chosen = [Integer(move.fetch("option")), Integer(move.fetch("row")), Integer(move.fetch("col"))]
+      match = legal.find {|action, _features| action == chosen }
+      raise ArgumentError, "candidate contains an action outside the legal set" unless match
+
+      batch_exhausted = board.options.size == 1
+      board.play(chosen[0], chosen[1], chosen[2], deal: false)
+      if batch_exhausted && (batch = offers[next_offer])
+        board.replace_options(batch.map {|name| Board1010::TILES.fetch(name.to_sym) })
+        next_offer += 1
+      end
+      {legal: legal, chosen: match.last, weight: confidence, episode: episode}
+    end
+  end
+
+  def empty_model
+    {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+     "feature_version" => ActionFeatures::VERSION,
+     "feature_names" => ActionFeatures::NAMES,
+     "weights" => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
+  end
+
+  def update(weights, example, learning_rate)
+    scored = example[:legal].map {|_action, features| [features, dot(weights, features)] }
+    maximum = scored.map(&:last).max
+    probabilities = scored.map {|_features, value| Math.exp([[value - maximum, -40.0].max, 0.0].min) }
+    normalizer = probabilities.sum
+    chosen_features = example[:chosen]
+    expected = ActionFeatures::NAMES.to_h do |name|
+      value = scored.each_with_index.sum {|(features, _score), index| probabilities[index] * features.fetch(name) / normalizer }
+      [name, value]
+    end
+    ActionFeatures::NAMES.each do |name|
+      weights[name] += learning_rate * example[:weight] * (chosen_features.fetch(name) - expected.fetch(name))
+    end
+  end
+
+  def dot(weights, features)
+    ActionFeatures::NAMES.sum {|name| weights.fetch(name) * features.fetch(name) }
+  end
+end

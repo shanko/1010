@@ -8,7 +8,7 @@ require "time"
 require_relative "../game_simulator"
 require_relative "../learning_seed_sets"
 
-options = {strategies: AutoPlayer::STRATEGIES, max_moves: 100_000}
+options = {strategies: AutoPlayer::STRATEGIES, max_moves: 100_000, models: {}}
 OptionParser.new do |parser|
   parser.banner = "Usage: ruby scripts/benchmark.rb (--seeds 1..100 | --seed-set baseline) --output baseline.json"
   parser.on("--seeds LIST", "Comma-separated seeds or an inclusive range, e.g. 1,2,3 or 1..100") do |value|
@@ -33,19 +33,23 @@ OptionParser.new do |parser|
   end
   parser.on("--output PATH", "Write the JSON report to PATH (required)") {|value| options[:output] = value }
   parser.on("--max-moves COUNT", Integer, "Safety limit per simulated episode") {|value| options[:max_moves] = value }
+  parser.on("--model PATH", "Learned policy model (required when learned strategy is selected)") do |value|
+    options[:models][:learned] = value
+  end
 end.parse!
 
 raise OptionParser::MissingArgument, "--seeds is required" unless options[:seeds]
 raise OptionParser::MissingArgument, "--output is required" unless options[:output]
 raise OptionParser::InvalidArgument, "--max-moves must be positive" unless options[:max_moves].positive?
 
-report = GameBenchmark.run(seeds: options[:seeds], strategies: options[:strategies], max_moves: options[:max_moves])
+report = GameBenchmark.run(seeds: options[:seeds], strategies: options[:strategies],
+                           max_moves: options[:max_moves], models: options[:models])
 revision, = Open3.capture2("git", "rev-parse", "HEAD")
 dirty = !Open3.capture2("git", "status", "--porcelain").first.empty?
 report[:source_revision] = revision.strip
 report[:working_tree_dirty] = dirty
 report[:seed_set] = options[:seed_set] if options[:seed_set]
-source_files = %w[board.rb auto_player.rb game_simulator.rb learning_seed_sets.rb scripts/benchmark.rb]
+source_files = %w[board.rb auto_player.rb learned_player.rb game_simulator.rb learning_seed_sets.rb scripts/benchmark.rb]
 source_digest_input = source_files.map do |path|
   absolute_path = File.expand_path("../#{path}", __dir__)
   "#{path}\0#{File.binread(absolute_path)}"

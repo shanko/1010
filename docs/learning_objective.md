@@ -25,6 +25,8 @@ Report final score as the primary metric. Also report:
 
 For normal policy evaluation, run each policy on the same list of initial seeds under the unchanged game rules. Each policy gets the same underlying seeded random stream. The game may replace the first randomly dealt tile with a small tile that fits when none of the three random tiles fit; because this fallback depends on the board, the effective offer batches can differ after policies create different boards. Record those actual batches and report that distinction.
 
+Benchmark score summaries include a normal-approximation 95% confidence interval for the mean, plus per-seed scores and paired differences. Use a sufficiently large held-out sample before drawing conclusions about a learned policy.
+
 For a counterfactual analysis of one recorded episode, freeze the exact observed option batches and compare alternative legal placement sequences against those same offers. Label this result **fixed-offer counterfactual**; it measures a different setup from normal seeded policy evaluation.
 
 Use the repository's disjoint seed sets for learning and comparisons:

@@ -87,6 +87,35 @@ The command reports actual and candidate scores, the first action divergence,
 and whether the search found an improvement. Search results are best-found
 candidates, not proofs of an optimal sequence.
 
+Train a deterministic imitation model from completed, improved lessons whose
+source seeds are in the training range. The trainer rejects held-out lessons,
+and ignores incomplete or non-improving search results:
+
+```sh
+$ bundle exec ruby scripts/learn.rb train-imitation --lessons learning_data --seed 17 --epochs 20
+```
+
+Evaluate a learned policy headlessly (a model is required):
+
+```sh
+$ bundle exec ruby scripts/benchmark.rb --seed-set held_out --strategies first_fit,jc,learned --model learning_data/models/imitation-v1.json --output learning_data/held-out.json
+```
+
+The simulator and benchmark support learned models now. To collect search
+corrections from states visited by the learned policy, use training seeds only:
+
+```sh
+$ bundle exec ruby scripts/learn.rb correct --model learning_data/models/imitation-v1.json --seeds 1000000,1000001 --budget 0.1 --stride 5
+```
+
+Action feature version 1 records tile area and one-hot tile type, rows and
+columns cleared, remaining legal placements, largest four-neighbor empty
+region, empty-region count, isolated eight-neighbor empty cells, filled
+neighbors, touched edges, and resulting occupied fraction. For every legal
+candidate, the extractor combines its tile and anchor context with simulated
+post-placement board features. The linear scorer uses deterministic seeded
+tie-breaking.
+
 Pass a `.moves` file as the command line argument to replay it. Moves are shown
 in order, with 0.5 seconds between successive moves by default. Set another
 interval in seconds with `--delay` (for example, `--delay 2`):
@@ -108,6 +137,8 @@ The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `
 * `game_simulator.rb`: runs full games without Gosu for policy evaluation
 * `improvement_search.rb`: searches for better legal game sequences under explicit time, state, and beam limits
 * `lesson_analyzer.rb` / `lesson_store.rb`: analyze completed traces and persist reproducible, versioned lessons
+* `learned_player.rb`: versioned action features, linear policy, and deterministic imitation training
+* `policy_corrector.rb`: searches continuations from states visited by a learned policy
 * `learning_seed_sets.rb` / `scripts/benchmark.rb`: define disjoint seed sets and generate reproducible strategy benchmarks
 * `game_1010.rb`: the Gosu window (drawing and input)
 * `terminal_game.rb`: the terminal version

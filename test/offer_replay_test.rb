@@ -45,15 +45,17 @@ class OfferReplayTest < Minitest::Test
     assert_raises(ArgumentError) { mismatch.finish!(expected_score: 2) }
   end
 
-  def test_undo_restores_the_board_and_offer_cursor
-    replay = OfferReplay.new(board: Board1010.new, offers: [%w[dot], %w[hl2]])
+  def test_undo_restores_the_board_and_the_next_move_takes_the_next_recorded_batch
+    replay = OfferReplay.new(board: Board1010.new, offers: [%w[dot], %w[hl2], %w[vl2], %w[dot]])
     replay.apply({tile: "dot", option: 0, row: 0, col: 0})
     replay.undo
 
     assert_equal 0, replay.board.score
     assert_equal [:dot], replay.board.options.map(&:name)
     replay.apply({tile: "dot", option: 0, row: 0, col: 0})
-    assert_equal [:hl2], replay.board.options.map(&:name)
+    assert_equal [:vl2], replay.board.options.map(&:name)
+    replay.apply({tile: "vl2", option: 0, row: 1, col: 0})
+    assert_equal [:dot], replay.finish!(expected_score: 3).options.map(&:name)
   end
 
   def test_explicit_deal_events_are_checked_against_the_consumed_batch

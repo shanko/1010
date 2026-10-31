@@ -25,7 +25,7 @@ class OfferReplay
     option, row, col, tile_name = move_values(move)
     check_tile!(option, tile_name)
 
-    @history << [@board.copy, @next_offer]
+    @history << @board.copy
     batch_exhausted = @board.options.size == 1
     result = @board.play(option, row, col, deal: false, capture: capture)
     unless result
@@ -46,12 +46,11 @@ class OfferReplay
     @board
   end
 
+  # Restores the board from before the last move. The offer cursor stays put:
+  # a trace records every deal in file order, so replaying an undone move that
+  # emptied its batch is followed by a fresh deal record of its own.
   def undo
-    snapshot = @history.pop
-    raise ArgumentError, "undo has no corresponding move" unless snapshot
-
-    @board, @next_offer = snapshot
-    @board
+    @board = @history.pop || raise(ArgumentError, "undo has no corresponding move")
   end
 
   def finish!(expected_score: nil, require_all_offers: true)

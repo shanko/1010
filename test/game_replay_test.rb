@@ -81,6 +81,34 @@ class GameReplayTest < Minitest::Test
     end
   end
 
+  def test_v2_trace_replays_an_undone_move_that_emptied_its_batch_and_its_new_deal
+    Dir.mktmpdir do |directory|
+      board = Board1010.new(options: [Tile.fetch(:dot)], random: Random.new(9))
+      logger = GameLog.new(seed: nil, board: board, mode: "test", directory: directory)
+      play_first_fit = lambda do
+        previous = board.copy
+        tile = board.options.first
+        row, col = board.find_position(tile)
+        board.play(0, row, col)
+        logger.move(tile.name, 0, row, col)
+        logger.deal(board.options) if previous.options.size == 1
+        previous
+      end
+
+      board = play_first_fit.call
+      logger.undo
+      4.times { play_first_fit.call } # the dot again, then the whole next batch
+      logger.finish(reason: "stopped", score: board.score)
+
+      trace = GameTrace.read(logger.path)
+      replayed_board = GameTrace.replay(trace)
+
+      assert_equal 4, trace.deal_batches.size
+      assert_equal board.cells, replayed_board.cells
+      assert_equal board.options, replayed_board.options
+    end
+  end
+
   def test_v2_trace_rejects_incomplete_files
     with_moves("#{GameTrace::HEADER}\ns1\nmode=test\ni0|#{'0' * 100}|#{'0' * 100}\nddot\n") do |path|
       error = assert_raises(ArgumentError) { GameTrace.read(path) }

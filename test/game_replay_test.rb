@@ -180,7 +180,7 @@ class GameReplayTest < Minitest::Test
     undos = 0
 
     window.define_singleton_method(:try_place) {|*args| moves << args }
-    window.define_singleton_method(:undo) { undos += 1 }
+    window.define_singleton_method(:undo) {|**_options| undos += 1 }
     window.define_singleton_method(:caption=) {|_text| }
     window.define_singleton_method(:show_message) {|_text| }
 

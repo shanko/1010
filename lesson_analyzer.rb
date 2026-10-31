@@ -19,7 +19,7 @@ class LessonAnalyzer
     raise ArgumentError, "#{path} is missing a replayable initial offer" if baseline[:offers].empty?
 
     starting_board = trace.starting_board.copy
-    starting_board.replace_options(LessonStore.tiles_for(baseline[:offers].first))
+    starting_board.replace_options(baseline[:offers].first.map {|name| Tile.fetch(name) })
     result = ImprovementSearch.search(starting_board: starting_board,
                                       baseline_score: baseline[:board].score,
                                       baseline_sequence: baseline[:sequence],
@@ -67,20 +67,20 @@ class LessonAnalyzer
     board = trace.starting_board.copy
     sequence = []
     offers = [trace.deal_batches.first]
-    board.replace_options(LessonStore.tiles_for(offers.first))
+    board.replace_options(offers.first.map {|name| Tile.fetch(name) })
     undo_stack = []
 
     trace.events.each do |event|
       case event.first
       when :deal
-        names = event[1].map {|tile| Board1010::TILES.key(tile) }
+        names = event[1].map(&:name)
         offers << names
         board.replace_options(event[1])
       when :move
         _type, tile_name, option, row, col = event
         undo_stack << [board.copy, sequence.dup, offers.dup]
         actual = board.options[option]
-        unless actual && Board1010::TILES.key(actual) == tile_name
+        unless actual && actual.name == tile_name
           raise ArgumentError, "trace move selects #{tile_name.inspect} but option #{option} differs"
         end
         raise ArgumentError, "trace contains an illegal move" unless board.play(option, row, col, deal: false)

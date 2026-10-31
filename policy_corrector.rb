@@ -82,12 +82,8 @@ class PolicyCorrector
 
   private
 
-  def tile_names(tiles)
-    tiles.map {|tile| Board1010::TILES.key(tile) }
-  end
-
   def fixed_offers_for(state, episode)
-    [tile_names(state.fetch(:board).options)] +
+    [state.fetch(:board).options.map(&:name)] +
       episode.offers.drop(state.fetch(:offer_index) + 1)
   end
 end

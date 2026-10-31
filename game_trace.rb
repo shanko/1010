@@ -43,7 +43,11 @@ class GameTrace
       case line
       when /\Ad(.*)\z/
         names = Regexp.last_match(1).split(",")
-        tiles = parse_tiles(names, path, index + 5)
+        tiles = names.map do |name|
+          Tile.fetch(name)
+        rescue ArgumentError
+          raise ArgumentError, "#{path} has unknown tile #{name.inspect} on line #{index + 5}"
+        end
         unless tiles.size.between?(1, Board1010::OPTIONS)
           raise ArgumentError, "#{path} has an invalid offer batch on line #{index + 5}"
         end
@@ -55,7 +59,7 @@ class GameTrace
         end
       when /\Am([a-z0-9]+),([0-2]),([0-9]),([0-9])\z/
         name, option, row, col = Regexp.last_match.captures
-        raise ArgumentError, "#{path} contains an unknown tile #{name.inspect}" unless Board1010::TILES.key?(name.to_sym)
+        Tile.fetch(name)
         events << [:move, name.to_sym, option.to_i, row.to_i, col.to_i]
       when "u"
         events << [:undo]
@@ -86,7 +90,7 @@ class GameTrace
       when :move
         _type, tile_name, option, row, col = event
         actual_tile = board.options[option]
-        unless actual_tile && Board1010::TILES.key(actual_tile) == tile_name
+        unless actual_tile && actual_tile.name == tile_name
           raise ArgumentError, "trace move #{index + 1} selects #{tile_name.inspect} but option #{option} differs"
         end
 
@@ -116,13 +120,4 @@ class GameTrace
   end
   private_class_method :decode_grid
 
-  def self.parse_tiles(names, path, line)
-    names.map do |name|
-      tile = Board1010::TILES[name.to_sym]
-      raise ArgumentError, "#{path} has unknown tile #{name.inspect} on line #{line}" unless tile
-
-      tile
-    end
-  end
-  private_class_method :parse_tiles
 end

@@ -113,7 +113,7 @@ class LearnedPlayerTest < Minitest::Test
     result.decision_states.each_with_index do |state, index|
       assert state.fetch(:board).options.any?
       assert_operator state.fetch(:offer_index), :>=, 0
-      assert_equal result.moves[index][:tile], Board1010::TILES.key(state.fetch(:board).options[result.moves[index][:option]])
+      assert_equal result.moves[index][:tile], state.fetch(:board).options[result.moves[index][:option]].name
     end
   end
 
@@ -133,7 +133,7 @@ class LearnedPlayerTest < Minitest::Test
     offers = corrector.send(:fixed_offers_for, state, episode)
     board = state.fetch(:board)
     assert_equal 2, board.options.size, "decision 2 should be mid-batch"
-    assert_equal board.options.map {|tile| Board1010::TILES.key(tile) }, offers.first
+    assert_equal board.options.map(&:name), offers.first
 
     lesson = {
       "initial_state" => {"cells" => board.cells, "tile_ids" => board.tile_ids,

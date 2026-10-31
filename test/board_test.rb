@@ -18,9 +18,23 @@ class BoardTest < Minitest::Test
   end
 
   def test_anchor_is_the_first_filled_square_of_the_top_row
-    assert_equal 0, Board1010.anchor(TILES[:tl3])
-    assert_equal 1, Board1010.anchor(TILES[:br2])
-    assert_equal 2, Board1010.anchor(TILES[:br3])
+    assert_equal 0, TILES[:tl3].anchor
+    assert_equal 1, TILES[:br2].anchor
+    assert_equal 2, TILES[:br3].anchor
+  end
+
+  def test_tile_values_are_immutable_and_precompute_shape_metadata
+    tile = Tile.fetch("br2")
+
+    assert_equal :br2, tile.name
+    assert_equal 3, tile.area
+    assert_equal [[0, 1, 2], [1, 0, 2], [1, 1, 2]], tile.offsets
+    assert tile.frozen?
+    assert tile.rows.frozen?
+    assert tile.rows.all?(&:frozen?)
+    assert_raises(FrozenError) { tile.rows[0][0] = 9 }
+    assert_same tile, Tile.fetch(:br2)
+    assert_raises(ArgumentError) { Tile.fetch(:missing) }
   end
 
   # --- Placing ----------------------------------------------------------------
@@ -51,16 +65,16 @@ class BoardTest < Minitest::Test
   end
 
   def test_placing_any_shape_records_its_distinct_tile_type_id
-    ids = Board1010::ALL_TILES.map {|tile| Board1010::TILE_IDS.fetch(tile) }
+    ids = Board1010::ALL_TILES.map(&:id)
     assert_equal Board1010::TILES.size, ids.uniq.size
 
     Board1010::TILES.each do |name, tile|
       board = Board1010.new(options: [tile])
       row = 0
-      col = Board1010.anchor(tile)
+      col = tile.anchor
       board.play(0, row, col)
       filled_ids = board.tile_ids.flatten.reject(&:zero?).uniq
-      assert_equal [Board1010::TILE_IDS.fetch(tile)], filled_ids, "#{name} cells retain their tile type"
+      assert_equal [tile.id], filled_ids, "#{name} cells retain their tile type"
     end
   end
 

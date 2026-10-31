@@ -16,7 +16,7 @@ class GameSimulatorTest < Minitest::Test
 
   def test_episode_score_equals_sum_of_placed_tile_areas
     result = GameSimulator.run(seed: 17, strategy: :sam)
-    area = result.moves.sum {|move| Board1010::TILES.fetch(move[:tile]).flatten.count {|cell| cell != Board1010::EMPTY } }
+    area = result.moves.sum {|move| Tile.fetch(move[:tile]).area }
 
     assert_equal area, result.score
     assert_equal result.moves.size, result.placed_tiles

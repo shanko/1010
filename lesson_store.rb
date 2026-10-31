@@ -66,7 +66,7 @@ class LessonStore
     tile_ids = initial.fetch("tile_ids")
     board = Board1010.new(cells: cells, tile_ids: tile_ids,
                           score: initial.fetch("score"),
-                          options: tiles_for(initial.fetch("options")))
+                          options: initial.fetch("options").map {|name| Tile.fetch(name) })
     sequence_name = sequence_key.to_s.delete_suffix("_sequence")
     offers = lesson["#{sequence_name}_offers"] || lesson.fetch("offers")
     next_offer = 1
@@ -74,7 +74,7 @@ class LessonStore
     lesson.fetch(sequence_key).each_with_index do |move, index|
       option = Integer(move.fetch("option"))
       tile_name = move.fetch("tile").to_sym
-      unless board.options[option] && Board1010::TILES.key(board.options[option]) == tile_name
+      unless board.options[option] && board.options[option].name == tile_name
         raise ArgumentError, "#{sequence_key} move #{index + 1} does not match its offered tile"
       end
 
@@ -83,17 +83,11 @@ class LessonStore
         raise ArgumentError, "#{sequence_key} move #{index + 1} is illegal"
       end
       if batch_exhausted && (batch = offers[next_offer])
-        board.replace_options(tiles_for(batch))
+        board.replace_options(batch.map {|name| Tile.fetch(name) })
         next_offer += 1
       end
     end
     board
-  end
-
-  def self.tiles_for(names)
-    names.map do |name|
-      Board1010::TILES[name.to_sym] || raise(ArgumentError, "unknown tile in lesson offer: #{name.inspect}")
-    end
   end
 
   private

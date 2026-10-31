@@ -38,7 +38,7 @@ class TerminalGame
       end
       index, row, col = move
       option_count = @board.options.size
-      tile_name = Board1010::TILES.key(@board.options[index])
+      tile_name = @board.options[index].name
       if @board.play(index, row, col)
         @game_log.move(tile_name, index, row, col)
         @game_log.deal(@board.options) if option_count == 1

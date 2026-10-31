@@ -40,11 +40,11 @@ class GameSimulator
   def self.replay(result)
     raise ArgumentError, "simulation result has no offers" if result.offers.empty?
 
-    board = Board1010.new(options: tiles_for(result.offers.first))
+    board = Board1010.new(options: result.offers.first.map {|name| Tile.fetch(name) })
     next_offer = 1
     result.moves.each_with_index do |move, move_index|
       tile = board.options[move.fetch(:option)]
-      actual_name = Board1010::TILES.key(tile)
+      actual_name = tile.name
       unless actual_name == move.fetch(:tile)
         raise ArgumentError, "captured move #{move_index + 1} does not match its offer"
       end
@@ -57,7 +57,7 @@ class GameSimulator
         offered = result.offers[next_offer]
         raise ArgumentError, "captured offers end before move #{move_index + 1}" unless offered
 
-        board.replace_options(tiles_for(offered))
+        board.replace_options(offered.map {|name| Tile.fetch(name) })
         next_offer += 1
       end
     end
@@ -67,13 +67,6 @@ class GameSimulator
 
     board
   end
-
-  def self.tiles_for(names)
-    names.map do |name|
-      Board1010::TILES[name.to_sym] || raise(ArgumentError, "captured result has unknown tile #{name.inspect}")
-    end
-  end
-  private_class_method :tiles_for
 
   def run(seed:, strategy: AutoPlayer::DEFAULT_STRATEGY, max_moves: 100_000, model: nil,
           capture_states: false)
@@ -89,7 +82,7 @@ class GameSimulator
     board.deal_if_needed
     player = AutoPlayer.new(strategy, random: player_random, model: model)
 
-    offers = [tile_names(board.options)]
+    offers = [board.options.map(&:name)]
     moves = []
     decision_states = []
     placed_tiles = 0
@@ -106,7 +99,7 @@ class GameSimulator
       raise RuntimeError, "#{strategy} returned an invalid move for seed #{seed}" unless tile && board.fits?(tile, row, col)
 
       option_count = board.options.size
-      tile_name = Board1010::TILES.key(tile)
+      tile_name = tile.name
       move = board.play(index, row, col)
       raise RuntimeError, "legal move rejected for seed #{seed}" unless move
 
@@ -114,7 +107,7 @@ class GameSimulator
       placed_tiles += 1
       placed_area += move.placed.size
       cleared_lines += move.cleared_rows.size + move.cleared_cols.size
-      offers << tile_names(board.options) if option_count == 1
+      offers << board.options.map(&:name) if option_count == 1
     end
 
     unless board.score == placed_area
@@ -129,9 +122,6 @@ class GameSimulator
 
   private
 
-  def tile_names(tiles)
-    tiles.map {|tile| Board1010::TILES.key(tile) }
-  end
 end
 
 # Paired-seed evaluation and distribution summaries for player strategies.

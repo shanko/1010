@@ -27,12 +27,12 @@ class GameReplayTest < Minitest::Test
       board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:dot]], random: Random.new(51))
       logger = GameLog.new(seed: 51, board: board, mode: "test", directory: directory)
 
-      tile_name = Board1010::TILES.key(board.options[0])
+      tile_name = board.options[0].name
       board.play(0, 0, 0)
       logger.move(tile_name, 0, 0, 0)
 
       previous_board = board.copy
-      tile_name = Board1010::TILES.key(board.options[0])
+      tile_name = board.options[0].name
       board.play(0, 0, 1)
       logger.move(tile_name, 0, 0, 1)
       logger.deal(board.options)
@@ -66,7 +66,7 @@ class GameReplayTest < Minitest::Test
       cells = Array.new(Board1010::ROWS) { Array.new(Board1010::COLS, Board1010::EMPTY) }
       tile_ids = Array.new(Board1010::ROWS) { Array.new(Board1010::COLS, Board1010::EMPTY) }
       cells[4][6] = 2
-      tile_ids[4][6] = Board1010::TILE_IDS.fetch(Board1010::TILES[:hl2])
+      tile_ids[4][6] = Tile.fetch(:hl2).id
       board = Board1010.new(cells: cells, tile_ids: tile_ids, options: [Board1010::TILES[:dot]], score: 17)
       logger = GameLog.new(board: board, mode: "terminal", directory: directory)
       logger.finish(reason: "stopped", score: board.score)
@@ -282,8 +282,8 @@ class GameReplayTest < Minitest::Test
     refute_includes colors.map(&:to_i), Gosu::Color::BLACK.to_i
     refute_includes colors.map(&:to_i), Gosu::Color::WHITE.to_i
     Board1010::TILES.each do |name, tile|
-      tile_id = Board1010::TILE_IDS.fetch(tile)
-      value = tile.flatten.find {|cell| cell != Board1010::EMPTY }
+      tile_id = tile.id
+      value = tile.rows.flatten.find {|cell| cell != Board1010::EMPTY }
       assert_equal GameWindow::TILE_COLORS.fetch(tile_id), window.cell_color(value, tile_id), name.to_s
     end
   end

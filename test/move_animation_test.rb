@@ -32,7 +32,7 @@ class MoveAnimationTest < Minitest::Test
   end
 
   def test_placed_cells_use_the_placed_tile_type_color_identity
-    tile_id = Board1010::TILE_IDS.fetch(Board1010::TILES[:hl2])
+    tile_id = Board1010::TILES[:hl2].id
 
     assert_equal tile_id, @animation.tile_id_at(0, 8, @board.tile_ids[0][8], 1000)
     assert_equal EMPTY, @animation.tile_id_at(0, 9, @board.tile_ids[0][9], 1000)

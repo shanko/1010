@@ -91,7 +91,7 @@ class LessonStoreTest < Minitest::Test
       raise "unexpected illegal fixture move" unless board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false)
       if batch_exhausted
         names = episode.offers.fetch(next_offer)
-        board.replace_options(names.map {|name| Board1010::TILES.fetch(name) })
+      board.replace_options(names.map {|name| Tile.fetch(name) })
         log.deal(board.options)
         next_offer += 1
       end

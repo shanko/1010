@@ -53,7 +53,7 @@ class ImprovementSearch
     raise ArgumentError, "fixed_offers: :baseline requires a seeded search" if fixed_offers == :baseline
     fixed_offers = normalize_offers(fixed_offers) if fixed_offers
 
-    initial_names = tile_names(root_board.options)
+    initial_names = root_board.options.map(&:name)
     if fixed_offers && fixed_offers.first != initial_names
       raise ArgumentError, "first fixed offer must match the starting board's current options"
     end
@@ -158,7 +158,7 @@ class ImprovementSearch
   def each_legal_action(board)
     board.options.each_with_index do |tile, option_index|
       board.positions_for(tile).each do |row, col|
-        yield({tile: Board1010::TILES.key(tile), option: option_index, row: row, col: col})
+          yield({tile: tile.name, option: option_index, row: row, col: col})
       end
     end
   end
@@ -177,14 +177,14 @@ class ImprovementSearch
       if fixed_offers
         next_names = fixed_offers[next_offer_index]
         if next_names
-          board.replace_options(names_to_tiles(next_names))
+          board.replace_options(next_names.map {|name| Tile.fetch(name) })
           offers << next_names
           next_offer_index += 1
         else
           offer_exhausted = true
         end
       else
-        offers << tile_names(board.options)
+          offers << board.options.map(&:name)
       end
     end
 
@@ -206,7 +206,7 @@ class ImprovementSearch
       return rollout_result(current, complete: true) if current.board.game_over?
 
       index, row, col = player.choose_move(current.board)
-      action = {tile: Board1010::TILES.key(current.board.options[index]), option: index, row: row, col: col}
+      action = {tile: current.board.options[index].name, option: index, row: row, col: col}
       current = advance(current, action, fixed_offers)
     end
   end
@@ -218,7 +218,7 @@ class ImprovementSearch
 
   def state_key(node, fixed_offers)
     occupied = node.board.cells.flatten.map {|value| value == Board1010::EMPTY ? "0" : "1" }.join
-    options = tile_names(node.board.options).join(",")
+    options = node.board.options.map(&:name).join(",")
     rng_state = fixed_offers ? "" : Marshal.dump(node.board.random)
     [occupied, options, node.board.score, node.depth, node.next_offer_index, rng_state]
   end
@@ -226,19 +226,9 @@ class ImprovementSearch
   def normalize_offers(offers)
     offers.map do |batch|
       names = batch.map(&:to_sym)
-      names_to_tiles(names)
+      names.each {|name| Tile.fetch(name) }
       names
     end
-  end
-
-  def names_to_tiles(names)
-    names.map do |name|
-      Board1010::TILES[name.to_sym] || raise(ArgumentError, "unknown tile in fixed offer: #{name.inspect}")
-    end
-  end
-
-  def tile_names(tiles)
-    tiles.map {|tile| Board1010::TILES.key(tile) }
   end
 
   def sequence_from_result(result)

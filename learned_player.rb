@@ -40,11 +40,11 @@ module ActionFeatures
     largest_region, region_count, isolated = empty_space_features(after)
     legal_placements = after.options.sum {|offered| after.positions_for(offered).size }
     occupied = after.cells.flatten.count {|value| value != Board1010::EMPTY }
-    tile_name = Board1010::TILES.key(tile)
+    tile_name = tile.name
 
     features = {
       "bias" => 1.0,
-      "tile_area" => tile.flatten.count {|value| value != Board1010::EMPTY }.to_f / 25.0,
+      "tile_area" => tile.area.to_f / 25.0,
       "completed_rows" => move.cleared_rows.size.to_f,
       "completed_cols" => move.cleared_cols.size.to_f,
       "remaining_legal_placements" => legal_placements.to_f / 100.0,
@@ -291,7 +291,7 @@ class ImitationTrainer
     initial = lesson.fetch("initial_state")
     board = Board1010.new(cells: initial.fetch("cells"), tile_ids: initial.fetch("tile_ids"),
                           score: initial.fetch("score"),
-                          options: initial.fetch("options").map {|name| Board1010::TILES.fetch(name.to_sym) })
+                          options: initial.fetch("options").map {|name| Tile.fetch(name) })
     offers = lesson["candidate_offers"] || lesson.fetch("offers")
     next_offer = 1
     confidence = [Math.log(1 + lesson.fetch("improvement_delta").to_f), 2.0].min
@@ -306,7 +306,7 @@ class ImitationTrainer
       batch_exhausted = board.options.size == 1
       board.play(chosen[0], chosen[1], chosen[2], deal: false)
       if batch_exhausted && (batch = offers[next_offer])
-        board.replace_options(batch.map {|name| Board1010::TILES.fetch(name.to_sym) })
+        board.replace_options(batch.map {|name| Tile.fetch(name) })
         next_offer += 1
       end
       {legal: legal, chosen: match.last, weight: confidence, episode: episode}

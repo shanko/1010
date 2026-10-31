@@ -68,13 +68,13 @@ class ImprovementSearchTest < Minitest::Test
     return board.score if board.options.empty? || board.game_over?
 
     actions = board.options.flat_map do |tile|
-      board.positions_for(tile).map {|row, col| [Board1010::TILES.key(tile), row, col] }
+      board.positions_for(tile).map {|row, col| [tile.name, row, col] }
     end
     return board.score if actions.empty?
 
     actions.map do |name, row, col|
       child = board.copy
-      option = child.options.index(Board1010::TILES.fetch(name))
+      option = child.options.index(Tile.fetch(name))
       child.play(option, row, col, deal: false)
       brute_force_score(child)
     end.max
@@ -87,7 +87,7 @@ class ImprovementSearchTest < Minitest::Test
       exhausted = copy.options.size == 1
       assert copy.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false), "illegal candidate move: #{move}"
       if exhausted && (batch = offers[offer_index])
-        copy.replace_options(batch.map {|name| Board1010::TILES.fetch(name) })
+        copy.replace_options(batch.map {|name| Tile.fetch(name) })
         offer_index += 1
       end
     end
@@ -102,7 +102,7 @@ class ImprovementSearchTest < Minitest::Test
       assert board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false), "illegal candidate move: #{move}"
       if exhausted
         batch = offers.fetch(offer_index)
-        board.replace_options(batch.map {|name| Board1010::TILES.fetch(name) })
+        board.replace_options(batch.map {|name| Tile.fetch(name) })
         offer_index += 1
       end
     end

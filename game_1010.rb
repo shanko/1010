@@ -100,7 +100,7 @@ class GameWindow < Gosu::Window
     Gosu::Color.argb(0xff_c7_7d_ff)  # tr3: lilac
   ].freeze
   TILE_COLORS = Board1010::TILE_NAMES.each_with_index.to_h do |name, index|
-    [Board1010::TILE_IDS.fetch(Board1010::TILES.fetch(name)), TILE_PALETTE[index]]
+    [Tile.fetch(name).id, TILE_PALETTE[index]]
   end.freeze
 
   HELP_LINES = [
@@ -240,7 +240,7 @@ class GameWindow < Gosu::Window
   # computer and playback alike. Does nothing if the tile doesn't fit there.
   def try_place(index, row, col, deal: true, expected_tile_name: nil)
     previous = @board.copy
-    tile_name = Board1010::TILES.key(previous.options[index])
+    tile_name = previous.options[index].name
     if expected_tile_name && tile_name != expected_tile_name
       raise ArgumentError, "replay expected #{expected_tile_name.inspect} at option #{index}, found #{tile_name.inspect}"
     end
@@ -625,7 +625,7 @@ class GameWindow < Gosu::Window
     return unless @dragging && @selected
 
     tile = @board.options[@selected]
-    x = mouse_x - (Board1010.anchor(tile) * CELL_PITCH)
+    x = mouse_x - (tile.anchor * CELL_PITCH)
     draw_tile(tile, x, mouse_y, size: CELL_SIZE, gap: CELL_GAP, corner: CELL_CORNER, z: Z_DRAGGED)
   end
 
@@ -683,8 +683,8 @@ class GameWindow < Gosu::Window
   # Draws each filled square of the tile, with its top-left square at (x, y).
   # `color` overrides the tile's own colors (used for the selected option).
   def draw_tile(tile, x, y, size:, gap:, corner:, color: nil, z: Z_CELLS)
-    tile_id = Board1010::TILE_IDS.fetch(tile)
-    tile.each_with_index do |values, row|
+    tile_id = tile.id
+    tile.rows.each_with_index do |values, row|
       values.each_with_index do |value, col|
         next if value == Board1010::EMPTY
 

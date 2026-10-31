@@ -4,6 +4,8 @@
 #
 # The board is a grid of cells with row 0 at the top. An empty cell holds EMPTY;
 # a filled cell holds its value and the ID of its exact tile shape.
+require_relative "tile"
+
 class Board1010
   ROWS    = 10
   COLS    = 10
@@ -13,59 +15,12 @@ class Board1010
   # Where the window and the terminal game keep a saved game.
   SAVE_FILE = "1010game.txt"
 
-  # The 19 tile shapes. Each inner array is one row of the tile, top row first:
-  # 0 is a gap, any other number is a filled square (and picks its color).
-  # HL = horizontal line, VL = vertical line, SQ = square, and
-  # BL / TL / BR / TR = the corner shapes.
-  TILES = {
-    dot: [[1]],
-
-    hl2: [[2, 2]],
-    hl3: [[3, 3, 3]],
-    hl4: [[4, 4, 4, 4]],
-    hl5: [[5, 5, 5, 5, 5]],
-
-    vl2: [[2], [2]],
-    vl3: [[3], [3], [3]],
-    vl4: [[4], [4], [4], [4]],
-    vl5: [[5], [5], [5], [5], [5]],
-
-    sq2: [[2, 2],
-          [2, 2]],
-    sq3: [[3, 3, 3],
-          [3, 3, 3],
-          [3, 3, 3]],
-
-    bl2: [[2, 0],
-          [2, 2]],
-    bl3: [[3, 0, 0],
-          [3, 0, 0],
-          [3, 3, 3]],
-
-    tl2: [[2, 2],
-          [0, 2]],
-    tl3: [[3, 3, 3],
-          [0, 0, 3],
-          [0, 0, 3]],
-
-    br2: [[0, 2],
-          [2, 2]],
-    br3: [[0, 0, 3],
-          [0, 0, 3],
-          [3, 3, 3]],
-
-    tr2: [[2, 2],
-          [2, 0]],
-    tr3: [[3, 3, 3],
-          [3, 0, 0],
-          [3, 0, 0]]
-  }.freeze
-
-  ALL_TILES = TILES.values.freeze
+  TILES = Tile::BY_NAME
+  ALL_TILES = Tile::ALL
 
   # When none of the tiles dealt fit, the first one is swapped for the first
   # of these that does.
-  SMALL_TILES = TILES.values_at(:hl2, :vl2, :sq2, :bl2, :tl2, :br2, :tr2, :dot).freeze
+  SMALL_TILES = %i[hl2 vl2 sq2 bl2 tl2 br2 tr2 dot].map {|name| Tile.fetch(name) }.freeze
 
   # [row, col] steps to the 8 squares around a square.
   NEIGHBOUR_OFFSETS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].freeze
@@ -77,8 +32,7 @@ class Board1010
   Move = Struct.new(:placed, :cells_before_clearing, :tile_ids_before_clearing,
                     :cleared_rows, :cleared_cols, keyword_init: true)
 
-  TILE_NAMES = TILES.keys.freeze
-  TILE_IDS = TILES.values.each_with_index.to_h {|tile, index| [tile, index + 1] }.freeze
+  TILE_NAMES = Tile::NAMES
 
   attr_reader :cells, :tile_ids, :options, :score, :random
 
@@ -86,7 +40,7 @@ class Board1010
   def initialize(cells: nil, tile_ids: nil, options: [], score: 0, random: Random.new)
     @cells   = cells || Array.new(ROWS) { Array.new(COLS, EMPTY) }
     @tile_ids = tile_ids || @cells.map {|values| values.map {|value| value == EMPTY ? EMPTY : value } }
-    @options = options # the tiles waiting to be placed
+    @options = options.map {|tile| tile.is_a?(Tile) ? tile : Tile.fetch(tile) }
     @score   = score
     @random  = random
   end
@@ -95,12 +49,6 @@ class Board1010
   # advancing one branch cannot change another branch's future offers.
   def copy
     Board1010.new(cells: @cells.map(&:dup), tile_ids: @tile_ids.map(&:dup), options: @options.dup, score: @score, random: @random.dup)
-  end
-
-  # The column of the first filled square in the tile's top row. The square
-  # you click on is where this square goes.
-  def self.anchor(tile)
-    tile.first.index {|value| value != EMPTY }
   end
 
   # ---------------------------------------------------------------------------
@@ -171,14 +119,9 @@ class Board1010
 
   # [row, col, value] of each square the tile would cover with its anchor on (row, col).
   def cells_for(tile, row, col)
-    left = col - Board1010.anchor(tile)
-    squares = []
-    tile.each_with_index do |values, r|
-      values.each_with_index do |value, c|
-        squares << [row + r, left + c, value] unless value == EMPTY
-      end
+    tile.offsets.map do |row_offset, col_offset, value|
+      [row + row_offset, col + col_offset - tile.anchor, value]
     end
-    squares
   end
 
   def fits?(tile, row, col)
@@ -237,7 +180,7 @@ class Board1010
   #   row=0000123000   (one line per row, top row first)
   #   type=0000000000  (base-36 tile type IDs, one line per row)
   def to_save
-    lines = ["score=#{@score}", "options=#{@options.map {|tile| TILES.key(tile) }.join(',')}"]
+    lines = ["score=#{@score}", "options=#{@options.map(&:name).join(',')}"]
     @cells.each_with_index do |values, row|
       lines << "row=#{values.join}"
       lines << "type=#{@tile_ids[row].map {|id| id.to_s(36) }.join}"
@@ -269,7 +212,7 @@ class Board1010
   def self.parse_save_line(fields, key=nil, value=nil)
     case key
     when "score"   then fields[:score] = Integer(value, exception: false)
-    when "options" then fields[:options] = value.to_s.split(",").filter_map {|name| TILES[name.to_sym] }
+    when "options" then fields[:options] = value.to_s.split(",").filter_map {|name| Tile::BY_NAME[name.to_sym] }
     when "row"     then fields[:rows] << value.to_s.chars.map(&:to_i)
     when "type"    then (fields[:tile_ids] ||= []) << value.to_s.chars.map {|id| id.to_i(36) }
     end
@@ -282,7 +225,7 @@ class Board1010
   # Returns [row, col, value] of each square filled.
   def place(tile, row, col)
     squares = cells_for(tile, row, col)
-    tile_id = TILE_IDS.fetch(tile)
+    tile_id = tile.id
     squares.each do |r, c, value|
       @cells[r][c] = value
       @tile_ids[r][c] = tile_id

@@ -31,7 +31,7 @@ class GameLog
 
   # Record the exact offered tiles in their offered order.
   def deal(tiles)
-    write("d#{tile_names(tiles).join(',')}\n")
+    write("d#{tiles.map(&:name).join(',')}\n")
   end
 
   # Record tile identity as well as the chosen option and anchor coordinates.
@@ -56,12 +56,6 @@ class GameLog
   end
 
   private
-
-  def tile_names(tiles)
-    tiles.map do |tile|
-      Board1010::TILES.key(tile) || raise(ArgumentError, "cannot log an unknown tile")
-    end
-  end
 
   def write(text)
     raise IOError, "game trace is already finished" if @finished

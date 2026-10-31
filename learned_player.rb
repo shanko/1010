@@ -41,7 +41,7 @@ module ActionFeatures
     end
 
     def fetch(key, *defaults, &block)
-      return super(key, *defaults, &block) unless key.is_a?(String) || key.is_a?(Symbol)
+      return super unless key.is_a?(String) || key.is_a?(Symbol)
 
       index = NAMES.index(key.to_s)
       return super(index, *defaults, &block) if index

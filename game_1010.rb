@@ -655,7 +655,10 @@ class GameWindow < Gosu::Window
   def hint_position
     tile = @board.options[@selected]
     key = [@board.object_id, @board.score, @selected, tile]
-    @hint_cache_key, @hint_cache_value = key, @auto_player.best_position(@board, tile) if @hint_cache_key != key
+    if @hint_cache_key != key
+      @hint_cache_key = key
+      @hint_cache_value = @auto_player.best_position(@board, tile)
+    end
     @hint_cache_value
   end
 

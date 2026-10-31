@@ -23,11 +23,7 @@ class OfferReplay
   # A move may be a hash with option/row/col/tile keys or [option,row,col].
   def apply(move, capture: false)
     option, row, col, tile_name = move_values(move)
-    tile = @board.options[option]
-    if tile_name && (!tile || tile.name != tile_name.to_sym)
-      raise ArgumentError, "move selects #{tile_name.inspect} but option #{option} differs"
-    end
-    raise ArgumentError, "move selects missing option #{option}" unless tile
+    check_tile!(option, tile_name)
 
     @history << [@board.copy, @next_offer]
     batch_exhausted = @board.options.size == 1
@@ -37,19 +33,7 @@ class OfferReplay
       raise ArgumentError, "move is not legal on the recorded board"
     end
 
-    if batch_exhausted
-      next_batch = @offers && @offers[@next_offer]
-      if next_batch
-        @board.replace_options(next_batch)
-        @next_offer += 1
-      elsif @strict_offers
-        raise ArgumentError, "offers end before the move sequence"
-      elsif @random_deal
-        @board.deal_if_needed
-      elsif !@strict_offers
-        # Partial lesson sequences may legitimately stop at a batch boundary.
-      end
-    end
+    feed_next_batch if batch_exhausted
     result
   end
 
@@ -77,6 +61,7 @@ class OfferReplay
     if @offers && @strict_offers && require_all_offers && @next_offer != @offers.size
       raise ArgumentError, "move sequence leaves unused offer batches"
     end
+
     @board
   end
 
@@ -88,17 +73,42 @@ class OfferReplay
 
   private
 
+  def check_tile!(option, tile_name)
+    tile = @board.options[option]
+    if tile_name && (!tile || tile.name != tile_name.to_sym)
+      raise ArgumentError, "move selects #{tile_name.inspect} but option #{option} differs"
+    end
+    raise ArgumentError, "move selects missing option #{option}" unless tile
+  end
+
+  # Without strict offers, partial lesson sequences may legitimately stop at a
+  # batch boundary, so a missing batch is not an error.
+  def feed_next_batch
+    next_batch = @offers && @offers[@next_offer]
+    if next_batch
+      @board.replace_options(next_batch)
+      @next_offer += 1
+    elsif @strict_offers
+      raise ArgumentError, "offers end before the move sequence"
+    elsif @random_deal
+      @board.deal_if_needed
+    end
+  end
+
   def move_values(move)
     if move.is_a?(Hash)
-      option = move.fetch(:option) { move.fetch("option") }
-      row = move.fetch(:row) { move.fetch("row") }
-      col = move.fetch(:col) { move.fetch("col") }
-      tile = move[:tile] || move["tile"]
+      option, row, col, tile = hash_move_values(move)
     elsif move.first == :move
       _type, tile, option, row, col = move
     else
       option, row, col = move
     end
     [Integer(option), Integer(row), Integer(col), tile]
+  end
+
+  # Moves from lessons have String keys; captured simulation moves have Symbols.
+  def hash_move_values(move)
+    field = ->(key) { move.fetch(key) { move.fetch(key.to_s) } }
+    [*%i[option row col].map(&field), move[:tile] || move["tile"]]
   end
 end

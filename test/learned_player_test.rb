@@ -204,29 +204,32 @@ class LearnedPlayerTest < Minitest::Test
     seen = Array.new(100, false)
     sizes = []
     100.times do |index|
-      next unless empty[index] && !seen[index]
-
-      queue = [index]
-      seen[index] = true
-      size = 0
-      cursor = 0
-      while cursor < queue.size
-        current = queue[cursor]
-        cursor += 1
-        size += 1
-        ActionFeatures::NEIGHBORS_4[current].each do |neighbor|
-          next unless empty[neighbor] && !seen[neighbor]
-
-          seen[neighbor] = true
-          queue << neighbor
-        end
-      end
-      sizes << size
+      sizes << reference_region_size(empty, seen, index) if empty[index] && !seen[index]
     end
-    isolated = (0...100).count do |index|
+    [sizes.max || 0, sizes.size, reference_isolated_count(empty)]
+  end
+
+  def reference_isolated_count(empty)
+    (0...100).count do |index|
       empty[index] && ActionFeatures::NEIGHBORS_8[index].none? {|neighbor| empty[neighbor] }
     end
-    [sizes.max || 0, sizes.size, isolated]
+  end
+
+  # Breadth-first size of the empty region containing `start`, marking it seen.
+  def reference_region_size(empty, seen, start)
+    queue = [start]
+    seen[start] = true
+    cursor = 0
+    while cursor < queue.size
+      ActionFeatures::NEIGHBORS_4[queue[cursor]].each do |neighbor|
+        next unless empty[neighbor] && !seen[neighbor]
+
+        seen[neighbor] = true
+        queue << neighbor
+      end
+      cursor += 1
+    end
+    queue.size
   end
 
   def empty_model

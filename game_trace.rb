@@ -84,7 +84,7 @@ class GameTrace
     board = trace.starting_board.copy
     replay = OfferReplay.new(board: board, offers: trace.deal_batches)
 
-    trace.events.each_with_index do |event, index|
+    trace.events.each_with_index do |event, _index|
       case event.first
       when :deal
         replay.feed_deal(event[1])
@@ -109,5 +109,4 @@ class GameTrace
     text.chars.each_slice(10).map {|row| row.map {|character| character.to_i(base) } }
   end
   private_class_method :decode_grid
-
 end

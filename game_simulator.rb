@@ -97,9 +97,6 @@ class GameSimulator
                option_batches: offers.size, moves: moves, offers: offers,
                final_board: board, decision_states: decision_states)
   end
-
-  private
-
 end
 
 # Paired-seed evaluation and distribution summaries for player strategies.

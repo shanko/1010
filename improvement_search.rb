@@ -158,7 +158,7 @@ class ImprovementSearch
   def each_legal_action(board)
     board.options.each_with_index do |tile, option_index|
       board.positions_for(tile).each do |row, col|
-          yield({tile: tile.name, option: option_index, row: row, col: col})
+        yield({tile: tile.name, option: option_index, row: row, col: col})
       end
     end
   end
@@ -184,7 +184,7 @@ class ImprovementSearch
           offer_exhausted = true
         end
       else
-          offers << board.options.map(&:name)
+        offers << board.options.map(&:name)
       end
     end
 

@@ -24,20 +24,20 @@ class Board1010
 
   # [row, col] steps to the 8 squares around a square.
   NEIGHBOUR_OFFSETS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].freeze
-  NEIGHBOUR_MASKS = Array.new(ROWS) do |row|
-    Array.new(COLS) do |col|
+  NEIGHBOUR_MASKS = Array.new(ROWS) {|row|
+    Array.new(COLS) {|col|
       NEIGHBOUR_OFFSETS.sum do |dr, dc|
         r = row + dr
         c = col + dc
-        r.between?(0, ROWS - 1) && c.between?(0, COLS - 1) ? (1 << (r * COLS + c)) : 0
+        r.between?(0, ROWS - 1) && c.between?(0, COLS - 1) ? (1 << ((r * COLS) + c)) : 0
       end
-    end.freeze
-  end.freeze
+    }.freeze
+  }.freeze
   FULL_BOARD_MASK = (1 << (ROWS * COLS)) - 1
   FULL_ROW_MASK = (1 << COLS) - 1
-  FULL_COLUMN_MASKS = Array.new(COLS) do |col|
-    ROWS.times.sum {|row| 1 << (row * COLS + col) }
-  end.freeze
+  FULL_COLUMN_MASKS = Array.new(COLS) {|col|
+    ROWS.times.sum {|row| 1 << ((row * COLS) + col) }
+  }.freeze
 
   # What a move did, so the window can animate it.
   #   placed:                [row, col, value] of each square the tile filled
@@ -143,15 +143,15 @@ class Board1010
     return false unless row.between?(0, ROWS - tile.height) && left.between?(0, COLS - tile.width)
 
     tile.row_masks.each_with_index.all? do |mask, row_offset|
-      (occupancy_mask(@cells[row + row_offset]) & (mask << left)).zero?
+      occupancy_mask(@cells[row + row_offset]).nobits?(mask << left)
     end
   end
 
   # The first [row, col] where the tile fits, or nil.
   def find_position(tile)
     occupied = occupancy_bitboard
-    placement = tile.placements.find {|_row, _col, mask| (occupied & mask).zero? }
-    placement && placement.first(2)
+    placement = tile.placements.find {|_row, _col, mask| occupied.nobits?(mask) }
+    placement&.first(2)
   end
 
   def fits_anywhere?(tile)
@@ -162,7 +162,7 @@ class Board1010
   def positions_for(tile)
     occupied = occupancy_bitboard
     tile.placements.filter_map do |row, col, mask|
-      [row, col] if (occupied & mask).zero?
+      [row, col] if occupied.nobits?(mask)
     end
   end
 
@@ -170,7 +170,7 @@ class Board1010
     tiles.each_with_index.sum do |tile, index|
       next 0 if index == exclude_index
 
-      tile.placements.count {|_row, _col, mask| (occupied_bits & mask).zero? }
+      tile.placements.count {|_row, _col, mask| occupied_bits.nobits?(mask) }
     end
   end
 
@@ -180,14 +180,14 @@ class Board1010
     clear_mask = 0
     ROWS.times do |index|
       row_mask = FULL_ROW_MASK << (index * COLS)
-      next unless (placed & row_mask) == row_mask
+      next unless placed.allbits?(row_mask)
 
       full_rows += 1
       clear_mask |= row_mask
     end
     full_cols = 0
     FULL_COLUMN_MASKS.each do |column_mask|
-      next unless (placed & column_mask) == column_mask
+      next unless placed.allbits?(column_mask)
 
       full_cols += 1
       clear_mask |= column_mask
@@ -225,7 +225,7 @@ class Board1010
     occupied_rows = Array.new(ROWS) {|row| occupancy_mask(@cells[row]) }
     occupied_cols = Array.new(COLS, 0)
     occupied_rows.each_with_index do |mask, row|
-      COLS.times {|col| occupied_cols[col] |= (1 << row) unless (mask & (1 << col)).zero? }
+      COLS.times {|col| occupied_cols[col] |= (1 << row) unless mask.nobits?(1 << col) }
     end
 
     positions.map do |row, col|

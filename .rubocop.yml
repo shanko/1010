@@ -1,3 +1,8 @@
+inherit_from: .rubocop_todo.yml
+inherit_mode:
+  merge:
+    - Exclude
+
 # Updated for RuboCop 1.x: many cops moved to the Layout and Naming
 # departments, and the Rails cops were removed (this isn't a Rails project).
 AllCops:

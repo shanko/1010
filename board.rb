@@ -24,6 +24,15 @@ class Board1010
 
   # [row, col] steps to the 8 squares around a square.
   NEIGHBOUR_OFFSETS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].freeze
+  NEIGHBOUR_MASKS = Array.new(ROWS) do |row|
+    Array.new(COLS) do |col|
+      NEIGHBOUR_OFFSETS.sum do |dr, dc|
+        r = row + dr
+        c = col + dc
+        r.between?(0, ROWS - 1) && c.between?(0, COLS - 1) ? (1 << (r * COLS + c)) : 0
+      end
+    end.freeze
+  end.freeze
 
   # What a move did, so the window can animate it.
   #   placed:                [row, col, value] of each square the tile filled
@@ -58,14 +67,14 @@ class Board1010
   # One whole move: puts option `index` with its anchor on (row, col), scores
   # 1 point per square, empties full rows and columns, and deals 3 new tiles
   # once all are used. Returns a Move, or nil if the tile doesn't fit there.
-  def play(index, row, col, deal: true)
+  def play(index, row, col, deal: true, capture: false)
     tile = @options[index]
     return nil unless tile && fits?(tile, row, col)
 
     placed = place(tile, row, col)
     @options.delete_at(index)
-    cells_before_clearing = @cells.map(&:dup)
-    tile_ids_before_clearing = @tile_ids.map(&:dup)
+    cells_before_clearing = @cells.map(&:dup) if capture
+    tile_ids_before_clearing = @tile_ids.map(&:dup) if capture
     rows, cols = full_lines
     clear_lines(rows, cols)
     deal_if_needed if deal
@@ -125,12 +134,19 @@ class Board1010
   end
 
   def fits?(tile, row, col)
-    cells_for(tile, row, col).all? {|r, c, _value| empty?(r, c) }
+    left = col - tile.anchor
+    return false unless row.between?(0, ROWS - tile.height) && left.between?(0, COLS - tile.width)
+
+    tile.row_masks.each_with_index.all? do |mask, row_offset|
+      (occupancy_mask(@cells[row + row_offset]) & (mask << left)).zero?
+    end
   end
 
   # The first [row, col] where the tile fits, or nil.
   def find_position(tile)
-    every_cell.find {|row, col| fits?(tile, row, col) }
+    occupied = occupancy_bitboard
+    placement = tile.placements.find {|_row, _col, mask| (occupied & mask).zero? }
+    placement && placement.first(2)
   end
 
   def fits_anywhere?(tile)
@@ -139,7 +155,10 @@ class Board1010
 
   # Every [row, col] where the tile fits, top-left first.
   def positions_for(tile)
-    every_cell.select {|row, col| fits?(tile, row, col) }
+    occupied = occupancy_bitboard
+    tile.placements.filter_map do |row, col, mask|
+      [row, col] if (occupied & mask).zero?
+    end
   end
 
   # Rows and columns that have no empty squares left.
@@ -165,9 +184,40 @@ class Board1010
 
   # How many rows and columns would be full after placing the tile there.
   def lines_completed_by(tile, row, col)
-    trial = copy
-    trial.place(tile, row, col)
-    trial.full_lines.sum(&:size)
+    line_completion_scores(tile, [[row, col]]).first
+  end
+
+  def line_completion_scores(tile, positions)
+    occupied_rows = Array.new(ROWS) {|row| occupancy_mask(@cells[row]) }
+    occupied_cols = Array.new(COLS, 0)
+    occupied_rows.each_with_index do |mask, row|
+      COLS.times {|col| occupied_cols[col] |= (1 << row) unless (mask & (1 << col)).zero? }
+    end
+
+    positions.map do |row, col|
+      left = col - tile.anchor
+      complete_rows = tile.row_masks.each_with_index.count do |mask, row_offset|
+        (occupied_rows[row + row_offset] | (mask << left)) == (1 << COLS) - 1
+      end
+      complete_cols = tile.col_masks.each_with_index.count do |mask, col_offset|
+        c = left + col_offset
+        (occupied_cols[c] | (mask << row)) == (1 << ROWS) - 1
+      end
+      complete_rows + complete_cols
+    end
+  end
+
+  def neighbour_scores(positions)
+    occupied = occupancy_bitboard
+    positions.map do |row, col|
+      bits = occupied & NEIGHBOUR_MASKS[row][col]
+      count = 0
+      until bits.zero?
+        bits &= bits - 1
+        count += 1
+      end
+      count
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -251,5 +301,17 @@ class Board1010
 
   def every_cell
     (0...ROWS).to_a.product((0...COLS).to_a)
+  end
+
+  def occupancy_mask(values)
+    mask = 0
+    values.each_with_index {|value, col| mask |= (1 << col) unless value == EMPTY }
+    mask
+  end
+
+  def occupancy_bitboard
+    @cells.each_with_index.sum do |values, row|
+      occupancy_mask(values) << (row * COLS)
+    end
   end
 end

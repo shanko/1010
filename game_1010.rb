@@ -244,7 +244,7 @@ class GameWindow < Gosu::Window
     if expected_tile_name && tile_name != expected_tile_name
       raise ArgumentError, "replay expected #{expected_tile_name.inspect} at option #{index}, found #{tile_name.inspect}"
     end
-    move = @board.play(index, row, col, deal: deal)
+    move = @board.play(index, row, col, deal: deal, capture: true)
     unless move
       @selected = nil
       return

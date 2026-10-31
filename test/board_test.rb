@@ -86,12 +86,40 @@ class BoardTest < Minitest::Test
     assert_equal [TILES[:hl3]], board.options
   end
 
+  def test_play_skips_animation_snapshots_by_default
+    board = Board1010.new(options: [TILES[:dot]])
+    move = board.play(0, 0, 0)
+
+    assert_nil move.cells_before_clearing
+    assert_nil move.tile_ids_before_clearing
+  end
+
+  def test_positions_for_matches_fits_with_bounded_candidates
+    Board1010::ALL_TILES.each do |tile|
+      board = Board1010.new
+      expected = (0...Board1010::ROWS).to_a.product((0...Board1010::COLS).to_a).select do |row, col|
+        board.fits?(tile, row, col)
+      end
+      assert_equal expected, board.positions_for(tile), tile.name.to_s
+    end
+  end
+
+  def test_lines_completed_by_matches_a_placed_copy
+    board = Board1010.new
+    Board1010::COLS.times {|col| board.cells[3][col] = 1 unless col == 8 }
+    tile = Tile.fetch(:dot)
+    trial = board.copy
+    trial.send(:place, tile, 3, 8)
+
+    assert_equal trial.full_lines.sum(&:size), board.lines_completed_by(tile, 3, 8)
+  end
+
   # --- Clearing lines -----------------------------------------------------------
 
   def test_full_row_is_cleared
     board = Board1010.new(options: [TILES[:dot], TILES[:dot]])
     fill_row(board, 3, except: [9])
-    move = board.play(0, 3, 9)
+    move = board.play(0, 3, 9, capture: true)
 
     assert_equal [3], move.cleared_rows
     assert_empty move.cleared_cols

@@ -2,7 +2,7 @@
 
 # Immutable, precomputed description of one 1010! tile shape.
 # Struct keeps this value object compatible with Ruby versions before Data.
-class Tile < Struct.new(:name, :id, :rows, :offsets, :anchor, :area, keyword_init: true)
+class Tile < Struct.new(:name, :id, :rows, :offsets, :row_masks, :col_masks, :placements, :anchor, :area, :height, :width, keyword_init: true)
   EMPTY = 0
 
   def initialize(name:, id:, rows:)
@@ -12,9 +12,21 @@ class Tile < Struct.new(:name, :id, :rows, :offsets, :anchor, :area, keyword_ini
         [row, col, value].freeze unless value == EMPTY
       end
     end.freeze
+    row_masks = rows.map do |values|
+      values.each_with_index.sum {|value, col| value == EMPTY ? 0 : (1 << col) }
+    end.freeze
+    col_masks = rows.first.size.times.map do |col|
+      rows.each_with_index.sum {|values, row| values[col] == EMPTY ? 0 : (1 << row) }
+    end.freeze
     anchor = rows.first.index {|value| value != EMPTY }
-    super(name: name.to_sym, id: Integer(id), rows: rows, offsets: offsets,
-          anchor: anchor, area: offsets.size)
+    placements = (0..(10 - rows.size)).flat_map do |board_row|
+      (anchor..[10 - rows.first.size + anchor, 9].min).map do |board_col|
+        mask = row_masks.each_with_index.sum {|bits, row_offset| bits << ((board_row + row_offset) * 10 + board_col - anchor) }
+        [board_row, board_col, mask].freeze
+      end
+    end.freeze
+    super(name: name.to_sym, id: Integer(id), rows: rows, offsets: offsets, row_masks: row_masks, col_masks: col_masks, placements: placements,
+          anchor: anchor, area: offsets.size, height: rows.size, width: rows.first.size)
     freeze
   end
 

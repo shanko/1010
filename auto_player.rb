@@ -93,9 +93,11 @@ class AutoPlayer
   # Suggested by Sam: the position that completely fills the most rows and
   # columns when the tile is placed. Falls back to jc's choice on a tie.
   def sam(board, tile, positions)
-    positions.max_by do |row, col|
-      [board.lines_completed_by(tile, row, col), board.filled_neighbours(row, col) + board.edges_touched(row, col)]
-    end
+    line_scores = board.line_completion_scores(tile, positions)
+    neighbour_scores = board.neighbour_scores(positions)
+    positions.each_with_index.max_by do |(row, col), index|
+      [line_scores[index], neighbour_scores[index] + board.edges_touched(row, col)]
+    end.first
   end
 
   # Suggested by Andy (not implemented yet): "the position which results into

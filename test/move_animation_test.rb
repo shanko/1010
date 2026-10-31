@@ -10,7 +10,7 @@ class MoveAnimationTest < Minitest::Test
   def setup
     @board = Board1010.new(options: [Board1010::TILES[:hl2], Board1010::TILES[:dot]])
     Board1010::COLS.times {|col| @board.cells[0][col] = 1 unless col >= 8 }
-    move = @board.play(0, 0, 8) # hl2 fills (0, 8) and (0, 9)
+    move = @board.play(0, 0, 8, capture: true) # hl2 fills (0, 8) and (0, 9)
     @animation = MoveAnimation.new(move, 1000)
   end
 

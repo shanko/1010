@@ -13,3 +13,7 @@ bundle exec ruby scripts/benchmark.rb --seeds 1..100 --output benchmarks/baselin
 
 Use a new filename for later benchmark versions so earlier comparisons remain
 available.
+
+`baseline-v2.json` records the same 100 seeds after the footprint scoring
+change in #24. It preserves v1 for historical comparisons and is the parity
+reference for subsequent behavior-preserving Phase 3 work.

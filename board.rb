@@ -216,6 +216,19 @@ class Board1010
     [row.zero? || row == ROWS - 1, col.zero? || col == COLS - 1].count(true)
   end
 
+  # Counts filled cells adjacent to any square in the tile's footprint. Each
+  # neighboring cell is counted once, and squares covered by the tile itself
+  # are excluded.
+  def footprint_neighbours(tile, row, col)
+    footprint_contact_count(tile, row, col, include_walls: false)
+  end
+
+  # As above, with each distinct off-board neighbor counted as occupied. This
+  # gives strategies that treat board edges as occupied a footprint-wide view.
+  def footprint_contact(tile, row, col)
+    footprint_contact_count(tile, row, col, include_walls: true)
+  end
+
   # How many rows and columns would be full after placing the tile there.
   def lines_completed_by(tile, row, col)
     line_completion_scores(tile, [[row, col]]).first
@@ -323,6 +336,27 @@ class Board1010
   end
 
   private
+
+  def footprint_contact_count(tile, row, col, include_walls:)
+    own = {}
+    tile.offsets.each do |row_offset, col_offset, _value|
+      own[[row + row_offset, col + col_offset - tile.anchor]] = true
+    end
+    touching = {}
+    own.each_key do |r, c|
+      NEIGHBOUR_OFFSETS.each do |dr, dc|
+        cell = [r + dr, c + dc]
+        next if own.key?(cell) || touching.key?(cell)
+
+        if inside?(*cell)
+          touching[cell] = true if filled?(*cell)
+        elsif include_walls
+          touching[cell] = true
+        end
+      end
+    end
+    touching.size
+  end
 
   def clear_lines(rows, cols)
     rows.each do |row|

@@ -80,23 +80,23 @@ class AutoPlayer
 
   # The position with the most neighbours occupied (in other words: the
   # fewest neighbouring cells empty).
-  def shanko(board, _tile, positions)
-    positions.max_by {|row, col| board.filled_neighbours(row, col) }
+  def shanko(board, tile, positions)
+    positions.max_by {|row, col| board.footprint_neighbours(tile, row, col) }
   end
 
   # Suggested by JC: like shanko, but treat the edge cells as if their
   # neighbours are always occupied.
-  def jc(board, _tile, positions)
-    positions.max_by {|row, col| board.filled_neighbours(row, col) + board.edges_touched(row, col) }
+  def jc(board, tile, positions)
+    positions.max_by {|row, col| board.footprint_contact(tile, row, col) }
   end
 
   # Suggested by Sam: the position that completely fills the most rows and
   # columns when the tile is placed. Falls back to jc's choice on a tie.
   def sam(board, tile, positions)
     line_scores = board.line_completion_scores(tile, positions)
-    neighbour_scores = board.neighbour_scores(positions)
-    best = positions.each_with_index.max_by do |(row, col), index|
-      [line_scores[index], neighbour_scores[index] + board.edges_touched(row, col)]
+    contact_scores = positions.map {|row, col| board.footprint_contact(tile, row, col) }
+    best = positions.each_with_index.max_by do |_position, index|
+      [line_scores[index], contact_scores[index]]
     end
     best.first
   end

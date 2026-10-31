@@ -8,7 +8,7 @@ require_relative "offer_replay"
 
 # Versioned, documented state/action features for legal placements.
 module ActionFeatures
-  VERSION = 1
+  VERSION = 2
   TILE_FEATURES = Board1010::TILE_NAMES.map {|name| "tile_#{name}" }.freeze
   NEIGHBORS_4 = Array.new(100) do |index|
     row, col = index.divmod(10)
@@ -81,8 +81,8 @@ module ActionFeatures
     features[FEATURE_INDEX.fetch("largest_empty_region")] = largest_region.to_f / 100.0
     features[FEATURE_INDEX.fetch("empty_region_count")] = region_count.to_f / 100.0
     features[FEATURE_INDEX.fetch("isolated_empty_cells")] = isolated.to_f / 100.0
-    features[FEATURE_INDEX.fetch("filled_neighbours")] = board.filled_neighbours(row, col).to_f / 8.0
-    features[FEATURE_INDEX.fetch("edge_cells")] = board.edges_touched(row, col).to_f / 2.0
+    features[FEATURE_INDEX.fetch("filled_neighbours")] = board.footprint_neighbours(tile, row, col).to_f / 32.0
+    features[FEATURE_INDEX.fetch("edge_cells")] = board.footprint_contact(tile, row, col).to_f / 32.0
     features[FEATURE_INDEX.fetch("occupied_fraction")] = occupied.to_f / 100.0
     features[FEATURE_INDEX.fetch("tile_#{tile_name}")] = 1.0
     features
@@ -152,7 +152,10 @@ class LearnedPlayer
   def initialize(model)
     model = JSON.parse(JSON.generate(model))
     raise ArgumentError, "unsupported learned policy model schema" unless model["schema_version"] == MODEL_SCHEMA_VERSION
-    raise ArgumentError, "unsupported action feature version" unless model["feature_version"] == ActionFeatures::VERSION
+    unless model["feature_version"] == ActionFeatures::VERSION
+      feature_version = model["feature_version"]
+      raise ArgumentError, "model uses action feature version #{feature_version.inspect}; this code requires version #{ActionFeatures::VERSION} (retrain the model)"
+    end
     raise ArgumentError, "model feature names do not match this code" unless model["feature_names"] == ActionFeatures::NAMES
     raise ArgumentError, "model weights are missing" unless model["weights"].is_a?(Hash)
 

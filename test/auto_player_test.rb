@@ -10,10 +10,23 @@ class AutoPlayerTest < Minitest::Test
     assert_equal [0, 0], AutoPlayer.new(:jc).best_position(Board1010.new, TILES[:dot])
   end
 
-  def test_jc_prefers_a_crowded_spot
+  def test_jc_prefers_the_larger_footprint_contact_at_a_board_corner
     board = Board1010.new
     [[4, 4], [4, 5], [4, 6], [5, 4], [5, 6]].each {|row, col| board.cells[row][col] = 1 }
-    assert_equal [5, 5], AutoPlayer.new(:jc).best_position(board, TILES[:dot])
+    assert_equal [0, 0], AutoPlayer.new(:jc).best_position(board, TILES[:dot])
+  end
+
+  def test_jc_uses_the_whole_tile_footprint_instead_of_its_anchor
+    board = footprint_disagreement_board
+    tile = TILES[:sq3]
+    anchor_choice = board.positions_for(tile).max_by do |row, col|
+      board.filled_neighbours(row, col) + board.edges_touched(row, col)
+    end
+    footprint_choice = AutoPlayer.new(:jc).best_position(board, tile)
+
+    refute_equal anchor_choice, footprint_choice
+    assert_operator board.footprint_contact(tile, *footprint_choice), :>,
+                    board.footprint_contact(tile, *anchor_choice)
   end
 
   def test_first_fit_and_last_fit
@@ -67,5 +80,15 @@ class AutoPlayerTest < Minitest::Test
       board.score
     end
     assert_equal scores.first, scores.last
+  end
+
+  private
+
+  def footprint_disagreement_board
+    cells = %w[
+      0000000000 0010000000 0000001000 1000000000 0000000000
+      0001001000 0000000101 0000000000 0000000000 0000000001
+    ].flat_map {|row| row.chars.map(&:to_i) }.each_slice(10).to_a
+    Board1010.new(cells: cells)
   end
 end

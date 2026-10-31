@@ -207,6 +207,15 @@ class BoardTest < Minitest::Test
     assert_equal 0, board.edges_touched(5, 5)
   end
 
+  def test_footprint_contact_counts_unique_filled_cells_and_board_walls
+    board = Board1010.new
+    board.cells[0][3] = 1
+    tile = TILES[:sq3]
+
+    assert_equal 1, board.footprint_neighbours(tile, 0, tile.anchor)
+    assert_equal 10, board.footprint_contact(tile, 0, tile.anchor)
+  end
+
   def test_lines_completed_by_does_not_change_the_board
     board = Board1010.new
     fill_row(board, 2, except: [8, 9])

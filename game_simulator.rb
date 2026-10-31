@@ -7,7 +7,7 @@ require "time"
 
 # Runs complete games without Gosu, sleeps, or other UI behavior.
 class GameSimulator
-  VERSION = 1
+  VERSION = 2
 
   Result = Struct.new(:seed, :strategy, :score, :placed_tiles, :cleared_lines,
                       :option_batches, :moves, :offers, :final_board, :decision_states,

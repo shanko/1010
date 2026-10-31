@@ -27,7 +27,7 @@ class LearnedPlayerTest < Minitest::Test
     assert_equal 0.01, features.fetch("empty_region_count")
     assert_equal 0.0, features.fetch("isolated_empty_cells")
     assert_equal 0.0, features.fetch("filled_neighbours")
-    assert_equal 1.0, features.fetch("edge_cells")
+    assert_equal 5.0 / 32.0, features.fetch("edge_cells")
     assert_equal 0.01, features.fetch("occupied_fraction")
     assert_equal 1.0, ActionFeatures::TILE_FEATURES.sum {|name| features.fetch(name) }
     assert features.values.all?(&:finite?)
@@ -93,6 +93,16 @@ class LearnedPlayerTest < Minitest::Test
     board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:sq2]])
 
     assert_equal 1, AutoPlayer.new(:learned, model: model, random: Random.new(5)).choose_move(board).first
+  end
+
+  def test_v1_learned_models_are_refused_with_a_retraining_message
+    model = empty_model
+    model["feature_version"] = 1
+
+    error = assert_raises(ArgumentError) { LearnedPlayer.new(model) }
+
+    assert_match "action feature version 1", error.message
+    assert_match "retrain", error.message
   end
 
   def test_imitation_training_is_deterministic_and_model_round_trips

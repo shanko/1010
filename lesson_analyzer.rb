@@ -4,6 +4,7 @@ require "digest"
 require_relative "game_trace"
 require_relative "improvement_search"
 require_relative "lesson_store"
+require_relative "offer_replay"
 
 # Converts a replayable completed trace into a search lesson.
 class LessonAnalyzer
@@ -67,31 +68,28 @@ class LessonAnalyzer
     board = trace.starting_board.copy
     sequence = []
     offers = [trace.deal_batches.first]
-    board.replace_options(offers.first.map {|name| Tile.fetch(name) })
+    replay = OfferReplay.new(board: board, offers: trace.deal_batches)
     undo_stack = []
 
     trace.events.each do |event|
       case event.first
       when :deal
+        replay.feed_deal(event[1])
         names = event[1].map(&:name)
         offers << names
-        board.replace_options(event[1])
       when :move
+        undo_stack << [sequence.dup, offers.dup]
+        replay.apply(event)
         _type, tile_name, option, row, col = event
-        undo_stack << [board.copy, sequence.dup, offers.dup]
-        actual = board.options[option]
-        unless actual && actual.name == tile_name
-          raise ArgumentError, "trace move selects #{tile_name.inspect} but option #{option} differs"
-        end
-        raise ArgumentError, "trace contains an illegal move" unless board.play(option, row, col, deal: false)
-
         sequence << {tile: tile_name, option: option, row: row, col: col}
       when :undo
         snapshot = undo_stack.pop || raise(ArgumentError, "trace undo has no corresponding move")
-        board, sequence, offers = snapshot
+        replay.undo
+        sequence, offers = snapshot
       end
     end
 
+    board = replay.board
     unless board.score == trace.final_score && board.game_over?
       raise ArgumentError, "trace does not replay to its declared Game Over state"
     end

@@ -3,6 +3,7 @@
 require "digest"
 require "fileutils"
 require "json"
+require_relative "offer_replay"
 
 # Versioned local storage for reproducible improvement-search lessons.
 class LessonStore
@@ -69,25 +70,9 @@ class LessonStore
                           options: initial.fetch("options").map {|name| Tile.fetch(name) })
     sequence_name = sequence_key.to_s.delete_suffix("_sequence")
     offers = lesson["#{sequence_name}_offers"] || lesson.fetch("offers")
-    next_offer = 1
-
-    lesson.fetch(sequence_key).each_with_index do |move, index|
-      option = Integer(move.fetch("option"))
-      tile_name = move.fetch("tile").to_sym
-      unless board.options[option] && board.options[option].name == tile_name
-        raise ArgumentError, "#{sequence_key} move #{index + 1} does not match its offered tile"
-      end
-
-      batch_exhausted = board.options.size == 1
-      unless board.play(option, Integer(move.fetch("row")), Integer(move.fetch("col")), deal: false)
-        raise ArgumentError, "#{sequence_key} move #{index + 1} is illegal"
-      end
-      if batch_exhausted && (batch = offers[next_offer])
-        board.replace_options(batch.map {|name| Tile.fetch(name) })
-        next_offer += 1
-      end
-    end
-    board
+    score_key = sequence_name == "actual" ? "actual_score" : "candidate_score"
+    OfferReplay.replay(board: board, moves: lesson.fetch(sequence_key), offers: offers,
+                       expected_score: lesson[score_key], strict_offers: false)
   end
 
   private

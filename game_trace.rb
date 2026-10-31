@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "board"
+require_relative "offer_replay"
 
 # Reads and replays v2 game traces without depending on Gosu or random dealing.
 class GameTrace
@@ -81,38 +82,27 @@ class GameTrace
 
   def self.replay(trace)
     board = trace.starting_board.copy
-    previous_board = nil
+    replay = OfferReplay.new(board: board, offers: trace.deal_batches)
 
     trace.events.each_with_index do |event, index|
       case event.first
       when :deal
-        board.replace_options(event[1])
+        replay.feed_deal(event[1])
       when :move
-        _type, tile_name, option, row, col = event
-        actual_tile = board.options[option]
-        unless actual_tile && actual_tile.name == tile_name
-          raise ArgumentError, "trace move #{index + 1} selects #{tile_name.inspect} but option #{option} differs"
-        end
-
-        previous_board = board.copy
-        unless board.play(option, row, col, deal: false)
-          raise ArgumentError, "trace move #{index + 1} is not legal on the recorded board"
-        end
+        replay.apply(event)
       when :undo
-        raise ArgumentError, "trace undo #{index + 1} has no move to undo" unless previous_board
-
-        board = previous_board
-        previous_board = nil
+        replay.undo
+        board = replay.board
       when :end
         reason, expected_score = event.drop(1)
-        raise ArgumentError, "trace final score mismatch: expected #{expected_score}, replayed #{board.score}" unless board.score == expected_score
+        replay.finish!(expected_score: expected_score, require_all_offers: false)
         if reason == "game_over" && !board.game_over?
           raise ArgumentError, "trace ends as Game Over while a current tile still fits"
         end
       end
     end
 
-    board
+    replay.board
   end
 
   def self.decode_grid(text, base)

@@ -4,6 +4,7 @@ require "json"
 require_relative "board"
 require_relative "learning_seed_sets"
 require_relative "lesson_store"
+require_relative "offer_replay"
 
 # Versioned, documented state/action features for legal placements.
 module ActionFeatures
@@ -336,7 +337,7 @@ class ImitationTrainer
                           score: initial.fetch("score"),
                           options: initial.fetch("options").map {|name| Tile.fetch(name) })
     offers = lesson["candidate_offers"] || lesson.fetch("offers")
-    next_offer = 1
+    replay = OfferReplay.new(board: board, offers: offers, strict_offers: false)
     confidence = [Math.log(1 + lesson.fetch("improvement_delta").to_f), 2.0].min
     episode = lesson.dig("source_episode", "seed")
     policy = LearnedPlayer.new(empty_model)
@@ -346,12 +347,7 @@ class ImitationTrainer
       match = legal.find {|action, _features| action == chosen }
       raise ArgumentError, "candidate contains an action outside the legal set" unless match
 
-      batch_exhausted = board.options.size == 1
-      board.play(chosen[0], chosen[1], chosen[2], deal: false)
-      if batch_exhausted && (batch = offers[next_offer])
-        board.replace_options(batch.map {|name| Tile.fetch(name) })
-        next_offer += 1
-      end
+      replay.apply({tile: move.fetch("tile"), option: chosen[0], row: chosen[1], col: chosen[2]})
       {legal: legal, chosen: match.last, weight: confidence, episode: episode}
     end
   end

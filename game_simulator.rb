@@ -2,6 +2,7 @@
 
 require_relative "board"
 require_relative "auto_player"
+require_relative "offer_replay"
 require "time"
 
 # Runs complete games without Gosu, sleeps, or other UI behavior.
@@ -40,32 +41,9 @@ class GameSimulator
   def self.replay(result)
     raise ArgumentError, "simulation result has no offers" if result.offers.empty?
 
-    board = Board1010.new(options: result.offers.first.map {|name| Tile.fetch(name) })
-    next_offer = 1
-    result.moves.each_with_index do |move, move_index|
-      tile = board.options[move.fetch(:option)]
-      actual_name = tile.name
-      unless actual_name == move.fetch(:tile)
-        raise ArgumentError, "captured move #{move_index + 1} does not match its offer"
-      end
-
-      batch_exhausted = board.options.size == 1
-      unless board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false)
-        raise ArgumentError, "captured move #{move_index + 1} is not legal"
-      end
-      if batch_exhausted
-        offered = result.offers[next_offer]
-        raise ArgumentError, "captured offers end before move #{move_index + 1}" unless offered
-
-        board.replace_options(offered.map {|name| Tile.fetch(name) })
-        next_offer += 1
-      end
-    end
-
-    raise ArgumentError, "captured result has unused offer batches" unless next_offer == result.offers.size
-    raise ArgumentError, "captured score does not match replay" unless board.score == result.score
-
-    board
+    board = Board1010.new
+    OfferReplay.replay(board: board, moves: result.moves, offers: result.offers,
+                       expected_score: result.score)
   end
 
   def run(seed:, strategy: AutoPlayer::DEFAULT_STRATEGY, max_moves: 100_000, model: nil,

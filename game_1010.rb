@@ -138,8 +138,6 @@ class GameWindow < Gosu::Window
   OPTION_KEYS = {Gosu::KB_1 => 0, Gosu::KB_2 => 1, Gosu::KB_3 => 2}.freeze
 
   # A recorded game: the seed that deals its tiles, and the moves and undos made.
-  Recording = Struct.new(:seed, :events)
-
   def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, replay_file: nil,
                  replay_delay: REPLAY_DELAY_SECONDS, model: nil)
     super(WIDTH, HEIGHT, fullscreen: false)
@@ -156,8 +154,9 @@ class GameWindow < Gosu::Window
     @closing = false
     @auto_runs   = 0
     @max_score   = 0
-    @recording   = nil # the game being recorded
-    @last_recording = nil
+    @recording   = false # visual marker; GameLog records every game to disk
+    @last_recording_path = nil
+    @offer_replay = nil
     @playback    = nil # events still to replay
     @replay_delay_ms = (Float(replay_delay) * 1000).round
     raise ArgumentError, "replay delay must be a finite non-negative number" unless
@@ -172,11 +171,13 @@ class GameWindow < Gosu::Window
         trace = GameTrace.read(replay_file)
         start(trace.starting_board, seed: trace.seed, mode: "replay")
         @playback = trace.events
+        @offer_replay = OfferReplay.new(board: @board, offers: trace.deal_batches)
       else
         replay_seed, replay_events = self.class.read_moves(replay_file)
         new_game(seed: replay_seed) if replay_seed
         @board ||= new_game(seed: seed)
         @playback = replay_events
+        @offer_replay = OfferReplay.new(board: @board, strict_offers: false, random_deal: true)
       end
     else
       load_game unless @auto
@@ -206,6 +207,7 @@ class GameWindow < Gosu::Window
     stop_recording
     if @game_log && @board
       @game_log.finish(reason: @game_over ? "game_over" : "new_game", score: @board.score)
+      @last_recording_path = @game_log.path
     end
     @game_log = GameLog.new(seed: seed, board: board, mode: mode)
     @board          = board
@@ -215,6 +217,8 @@ class GameWindow < Gosu::Window
     @dragging       = false
     @animation      = nil
     @playback_next_at = nil
+    @playback = nil
+    @offer_replay = nil
     @ended_at       = nil
     @game_over = false
     start_auto_run if @auto && @auto_run_tracker && !@auto_run_tracker.active?
@@ -238,20 +242,25 @@ class GameWindow < Gosu::Window
 
   # Plays option `index` with its anchor on (row, col), for the player, the
   # computer and playback alike. Does nothing if the tile doesn't fit there.
-  def try_place(index, row, col, deal: true, expected_tile_name: nil)
+  def try_place(index, row, col, deal: true, expected_tile_name: nil, replay: false)
     previous = @board.copy
     tile_name = previous.options[index].name
     if expected_tile_name && tile_name != expected_tile_name
       raise ArgumentError, "replay expected #{expected_tile_name.inspect} at option #{index}, found #{tile_name.inspect}"
     end
-    move = @board.play(index, row, col, deal: deal, capture: true)
+    move = if replay && @offer_replay
+             result = @offer_replay.apply({tile: expected_tile_name || tile_name, option: index, row: row, col: col}, capture: true)
+             @board = @offer_replay.board
+             result
+           else
+             @board.play(index, row, col, deal: deal, capture: true)
+           end
     unless move
       @selected = nil
       return
     end
 
     @previous_board = previous
-    @recording&.events&.push([:move, index, row, col])
     @game_log.move(tile_name, index, row, col)
     @game_log.deal(@board.options) if deal && previous.options.size == 1
     @selected  = nil
@@ -260,14 +269,13 @@ class GameWindow < Gosu::Window
     refresh_game_over
   end
 
-  def undo
+  def undo(replay: false)
     return show_message("Nothing to undo") unless @previous_board
 
-    @board          = @previous_board
+    @board          = replay && @offer_replay ? @offer_replay.undo : @previous_board
     @previous_board = nil
     @selected       = nil
     @animation      = nil
-    @recording&.events&.push([:undo])
     @game_log.undo
     refresh_game_over
   end
@@ -360,27 +368,33 @@ class GameWindow < Gosu::Window
     return stop_recording if @recording
 
     new_game
-    @recording = Recording.new(@seed, [])
+    @recording = true
     show_message("Recording a new game (R to stop)")
   end
 
   def stop_recording
     return unless @recording
 
-    @last_recording = @recording
-    @recording = nil
+    @last_recording_path = @game_log.path if @game_log
+    @recording = false
     show_message("Recording stopped (P to play it back)")
   end
 
-  # P plays the last recording: the same tiles (from its seed) and the same moves.
+  # P replays the last game's durable trace instead of keeping duplicate events in memory.
   def start_playback
     stop_recording
-    return show_message("Nothing recorded yet (R to record)") unless @last_recording
+    path = @last_recording_path || @game_log&.path
+    return show_message("Nothing recorded yet (R to record)") unless path
 
-    recording = @last_recording
-    new_game(seed: recording.seed)
+    if @game_log && @game_log.path == path && !@game_log.instance_variable_get(:@finished)
+      @game_log.finish(reason: @game_over ? "game_over" : "stopped", score: @board.score)
+    end
+
+    trace = GameTrace.read(path)
+    start(trace.starting_board.copy, seed: trace.seed, mode: "playback")
     @auto     = false
-    @playback = recording.events.dup
+    @playback = trace.events
+    @offer_replay = OfferReplay.new(board: @board, offers: trace.deal_batches)
     self.caption = "1010! (playback)"
   end
 
@@ -392,27 +406,28 @@ class GameWindow < Gosu::Window
     when :move
       if event.size == 5
         _type, tile_name, index, row, col = event
-        try_place(index, row, col, deal: false, expected_tile_name: tile_name)
+        try_place(index, row, col, deal: false, expected_tile_name: tile_name, replay: true)
         if @playback.first&.first == :deal
           _deal_type, tiles = @playback.shift
-          @board.replace_options(tiles)
+          @offer_replay.feed_deal(tiles)
           @game_log.deal(tiles)
           refresh_game_over
         end
       else
-        try_place(*event.drop(1))
+        @offer_replay ? try_place(*event.drop(1), replay: true) : try_place(*event.drop(1))
       end
       @playback_next_at = now + @replay_delay_ms
     when :deal
-      @board.replace_options(event[1])
+      @offer_replay ? @offer_replay.feed_deal(event[1]) : @board.replace_options(event[1])
       @game_log.deal(event[1])
       refresh_game_over
     when :undo
-      undo
+      undo(replay: !!@offer_replay)
       @playback_next_at = now + @replay_delay_ms
     when :end
       _type, reason, score = event
       raise ArgumentError, "replay score mismatch: expected #{score}, got #{@board.score}" unless score == @board.score
+      @offer_replay&.finish!(expected_score: score, require_all_offers: false)
       @game_log.finish(reason: reason, score: score)
       @playback = nil
       self.caption = "1010!"

@@ -4,3 +4,5 @@
 1010game.txt
 logs/*
 !logs/.gitkeep
+learning_data/*
+!learning_data/.gitkeep

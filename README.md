@@ -76,6 +76,17 @@ a reproducible JSON benchmark report:
 $ bundle exec ruby scripts/benchmark.rb --seeds 1..100 --output benchmarks/baseline-v1.json
 ```
 
+Analyze a completed, replayable `.moves` trace and save a search lesson locally:
+
+```sh
+$ bundle exec ruby scripts/learn.rb analyze logs/<game>.moves --budget 2 --beam-width 8
+```
+
+Lessons are stored under the ignored `learning_data/` directory by default.
+The command reports actual and candidate scores, the first action divergence,
+and whether the search found an improvement. Search results are best-found
+candidates, not proofs of an optimal sequence.
+
 Pass a `.moves` file as the command line argument to replay it. Moves are shown
 in order, with 0.5 seconds between successive moves by default. Set another
 interval in seconds with `--delay` (for example, `--delay 2`):
@@ -96,6 +107,7 @@ The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `
 * `game_log.rb` / `game_trace.rb`: write, validate and replay versioned game traces with initial state, exact offers, moves, undos and final score
 * `game_simulator.rb`: runs full games without Gosu for policy evaluation
 * `improvement_search.rb`: searches for better legal game sequences under explicit time, state, and beam limits
+* `lesson_analyzer.rb` / `lesson_store.rb`: analyze completed traces and persist reproducible, versioned lessons
 * `learning_seed_sets.rb` / `scripts/benchmark.rb`: define disjoint seed sets and generate reproducible strategy benchmarks
 * `game_1010.rb`: the Gosu window (drawing and input)
 * `terminal_game.rb`: the terminal version

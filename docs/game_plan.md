@@ -116,6 +116,8 @@ The current API is `ImprovementSearch.search` in `improvement_search.rb`. Its `t
 
 ## Milestone 4: persist and inspect learning lessons
 
+**Status: complete**
+
 ### Work
 
 1. Define a versioned lesson record containing: source episode/seed, initial state or decision state, actual action sequence and score, improved candidate sequence and score, improvement delta, search budget/status, and the exact offers or deal-stream state needed to reproduce the comparison.
@@ -124,11 +126,14 @@ The current API is `ImprovementSearch.search` in `improvement_search.rb`. Its `t
 4. Make analysis read-only with respect to the source `.moves` file.
 5. Deduplicate identical states and retain provenance so later training can exclude low-confidence or incomplete search results.
 
+The command is `bundle exec ruby scripts/learn.rb analyze GAME.moves`. It accepts `--budget`, `--beam-width`, `--max-states`, `--strategy`, and `--output`. The default `learning_data/` directory is ignored by Git; the schema example in `test/fixtures/lesson-v1.json` is tracked. Only completed v2 traces are accepted. Lesson records preserve exact initial board, active offer history, actual and candidate sequences/scores, search limits and outcome. Search status and candidate completeness remain explicit so incomplete best-found results can be filtered during training.
+
 ### Acceptance criteria
 
 - An analyzed episode can be reopened and both actual and candidate sequences replay to their recorded scores.
 - A lesson with no improvement is not mislabeled as a successful expert example.
 - Older/unreplayable logs are rejected with an explanation of missing fields.
+- `test/lesson_store_test.rb` covers fixture replay, source immutability, deduplication/provenance, CLI output, and rejection of non-Game-Over traces.
 
 ## Milestone 5: train an imitation-learning policy from search examples
 

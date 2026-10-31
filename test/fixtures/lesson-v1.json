@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source_episode": {
+    "path": "fixture.moves",
+    "sha256": "fixture",
+    "seed": 7,
+    "mode": "auto",
+    "final_reason": "game_over"
+  },
+  "initial_state": {
+    "cells": [
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    ],
+    "tile_ids": [
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    ],
+    "score": 0,
+    "options": ["dot"]
+  },
+  "offers": [["dot"]],
+  "actual_sequence": [{"tile": "dot", "option": 0, "row": 0, "col": 0}],
+  "actual_score": 1,
+  "candidate_sequence": [{"tile": "dot", "option": 0, "row": 0, "col": 0}],
+  "candidate_score": 1,
+  "improvement_delta": 0,
+  "search": {
+    "strategy": "first_fit",
+    "time_budget_seconds": 0.0,
+    "beam_width": 1,
+    "max_states": 1,
+    "elapsed_seconds": 0.0,
+    "explored_states": 0,
+    "transpositions_pruned": 0,
+    "status": "budget exhausted",
+    "candidate_complete": true
+  },
+  "outcome": "no_improvement",
+  "provenance": [{"path": "fixture.moves", "sha256": "fixture", "seed": 7}],
+  "state_fingerprint": "fixture"
+}

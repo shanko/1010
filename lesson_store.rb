@@ -1,0 +1,118 @@
+# frozen_string_literal: true
+
+require "digest"
+require "fileutils"
+require "json"
+
+# Versioned local storage for reproducible improvement-search lessons.
+class LessonStore
+  DIRECTORY = "learning_data"
+  SCHEMA_VERSION = 1
+
+  def initialize(directory: DIRECTORY)
+    @directory = directory
+  end
+
+  # Dedupe by initial decision state and exact offer history. Repeated sources
+  # are retained in provenance instead of silently producing duplicate lessons.
+  def save(lesson)
+    validate!(lesson)
+    FileUtils.mkdir_p(@directory)
+    identity = identity_for(lesson)
+    existing_path = Dir.glob(File.join(@directory, "*.json")).find do |path|
+      JSON.parse(File.read(path))["state_fingerprint"] == identity
+    rescue JSON::ParserError
+      false
+    end
+
+    if existing_path
+      existing = JSON.parse(File.read(existing_path))
+      provenance = existing.fetch("provenance")
+      lesson.fetch(:provenance).each do |source|
+        provenance << source unless provenance.include?(source)
+      end
+      write_atomically(existing_path, existing)
+      return {path: existing_path, deduplicated: true}
+    end
+
+    payload = lesson.transform_keys(&:to_s)
+    payload["state_fingerprint"] = identity
+    timestamp = Time.now.utc.strftime("%Y%m%dT%H%M%S%6NZ")
+    path = File.join(@directory, "lesson-#{timestamp}-#{Process.pid}.json")
+    suffix = 0
+    while File.exist?(path)
+      suffix += 1
+      path = File.join(@directory, "lesson-#{timestamp}-#{Process.pid}-#{suffix}.json")
+    end
+    write_atomically(path, payload)
+    {path: path, deduplicated: false}
+  end
+
+  def self.read(path)
+    lesson = JSON.parse(File.read(path))
+    raise ArgumentError, "unsupported lesson schema version" unless lesson["schema_version"] == SCHEMA_VERSION
+
+    lesson
+  rescue JSON::ParserError => error
+    raise ArgumentError, "invalid lesson JSON: #{error.message}"
+  end
+
+  # Reconstruct and validate a recorded sequence against the saved board and
+  # frozen offers. Returns the resulting board for score/state assertions.
+  def self.replay(lesson, sequence_key)
+    lesson = JSON.parse(JSON.generate(lesson)) # normalize nested symbol keys to JSON keys
+    initial = lesson.fetch("initial_state")
+    cells = initial.fetch("cells")
+    tile_ids = initial.fetch("tile_ids")
+    board = Board1010.new(cells: cells, tile_ids: tile_ids,
+                          score: initial.fetch("score"),
+                          options: tiles_for(initial.fetch("options")))
+    offers = lesson.fetch("offers")
+    next_offer = 1
+
+    lesson.fetch(sequence_key).each_with_index do |move, index|
+      option = Integer(move.fetch("option"))
+      tile_name = move.fetch("tile").to_sym
+      unless board.options[option] && Board1010::TILES.key(board.options[option]) == tile_name
+        raise ArgumentError, "#{sequence_key} move #{index + 1} does not match its offered tile"
+      end
+
+      batch_exhausted = board.options.size == 1
+      unless board.play(option, Integer(move.fetch("row")), Integer(move.fetch("col")), deal: false)
+        raise ArgumentError, "#{sequence_key} move #{index + 1} is illegal"
+      end
+      if batch_exhausted && (batch = offers[next_offer])
+        board.replace_options(tiles_for(batch))
+        next_offer += 1
+      end
+    end
+    board
+  end
+
+  def self.tiles_for(names)
+    names.map do |name|
+      Board1010::TILES[name.to_sym] || raise(ArgumentError, "unknown tile in lesson offer: #{name.inspect}")
+    end
+  end
+
+  private
+
+  def validate!(lesson)
+    raise ArgumentError, "lesson schema version must be #{SCHEMA_VERSION}" unless lesson.fetch(:schema_version) == SCHEMA_VERSION
+    %i[source_episode initial_state offers actual_sequence actual_score candidate_sequence candidate_score
+       improvement_delta search provenance].each {|key| lesson.fetch(key) }
+  end
+
+  def identity_for(lesson)
+    state = {initial_state: lesson.fetch(:initial_state), offers: lesson.fetch(:offers)}
+    Digest::SHA256.hexdigest(JSON.generate(state))
+  end
+
+  def write_atomically(path, payload)
+    temporary = "#{path}.tmp-#{Process.pid}"
+    File.write(temporary, JSON.pretty_generate(payload) + "\n")
+    File.rename(temporary, path)
+  ensure
+    File.delete(temporary) if temporary && File.exist?(temporary)
+  end
+end

@@ -18,7 +18,7 @@ The order of work is set by the pinned roadmap issue, **#27**
 2. Reproduce the problem on the current `master` using the issue's own steps.
 3. If it is **already fixed or no longer relevant**, don't change code. Close the
    issue with a comment showing the evidence (the commands you ran and their
-   output). Its box in #27 is then ticked automatically.
+   output), then tick its box in #27 yourself. GitHub does not tick it.
 
 ## 3. While changing code
 
@@ -34,10 +34,11 @@ The order of work is set by the pinned roadmap issue, **#27**
 
 ## 4. Check before committing
 
-Always run the full suite:
+Always run the full suite and the linter (CI runs both):
 
 ```sh
 bundle exec rake test
+bundle exec rake lint
 ```
 
 **Phases 1–3 of #27 must not change how the game plays.** After any change in
@@ -64,16 +65,25 @@ machine with the same command, and put those numbers in the issue comment.
 
 - **One issue per commit.** Start the commit message with a short summary and
   include `Fixes #N` in the body. GitHub then closes the issue when the commit
-  reaches `master`, and the box in #27 is ticked.
+  reaches `master`. Tick the issue's box in #27 yourself; GitHub does not.
 - If only part of an issue is done, use `Refs #N` instead, and comment on the
   issue saying what is done and what remains.
 - After pushing, comment on the issue: what changed, the commands you ran to
   verify it, and their results (test summary, parity output, timings or scores).
+- **Check that CI passes** after each push (`gh run list --limit 1`; use
+  `gh run watch` to wait). If it fails, fix it before starting the next issue.
 - Behavior you can only see in the game window can't be fully checked by you.
   Write the exact manual steps and the expected result in the issue comment so
   the maintainer can confirm.
 
-## 6. Problems found along the way
+## 6. If you have to stop partway
+
+If you run out of time or credits in the middle of an issue, commit what you
+have with `Refs #N` (not `Fixes`) and comment on the issue saying what is done,
+what is left, and which tests fail. The next agent continues from that commit
+instead of starting over.
+
+## 7. Problems found along the way
 
 - If you find a new bug or a needed change, open a new issue with steps to
   reproduce, the cause (with `file:line`), a suggested fix and acceptance

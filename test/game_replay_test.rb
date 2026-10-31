@@ -196,6 +196,20 @@ class GameReplayTest < Minitest::Test
     assert_nil window.update
   end
 
+  def test_auto_run_window_helpers_use_one_injected_clock
+    now = 1_000.0
+    window = GameWindow.allocate
+    window.instance_variable_set(:@auto_run_tracker, AutoRunTracker.new(clock: -> { now }))
+    window.define_singleton_method(:print_auto_run) {|line| line }
+
+    window.send(:start_auto_run)
+    now += 12_400
+    line = window.send(:finish_auto_run, score: 78)
+
+    assert_equal "Run 1   score 78   time 12.4s  new max", line
+    assert_match "Total time: 12.4s", window.instance_variable_get(:@auto_run_tracker).summary
+  end
+
   def test_invalid_game_command_line_has_plain_error_without_backtrace
     _stdout, stderr, status = Open3.capture3(RbConfig.ruby, "game_1010.rb", "--seed")
 

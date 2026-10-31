@@ -69,6 +69,18 @@ $ bundle exec ruby game_1010.rb auto jc --seed 42   # the same games every time
 $ bundle exec ruby game_1010.rb logs/20261030-123456-1234-567.moves # replay a logged game
 ```
 
+Auto mode prints one line when each game ends, then a run summary when you
+quit. Run time excludes the half-second restart pause; total time includes it.
+
+```text
+Run 1   score 78   time 12.4s  new max
+Run 2   score 66   time 9.8s
+Run 3   score 122   time 18.1s  new max
+Run 4   score 52   time 4.2s  unfinished
+Runs: 3 completed, 1 unfinished   Max score: 122 (run 3)
+Total time: 46.0s
+```
+
 Run all current auto strategies headlessly against the same seed list and save
 a reproducible JSON benchmark report:
 

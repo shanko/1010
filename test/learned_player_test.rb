@@ -125,6 +125,39 @@ class LearnedPlayerTest < Minitest::Test
     assert_match "training seeds", error.message
   end
 
+  def test_stride_one_corrections_and_mid_batch_lesson_replay
+    episode = GameSimulator.run(seed: 1_000_000, strategy: :learned, model: empty_model,
+                                capture_states: true)
+    corrector = PolicyCorrector.new
+    state = episode.decision_states.fetch(1)
+    offers = corrector.send(:fixed_offers_for, state, episode)
+    board = state.fetch(:board)
+    assert_equal 2, board.options.size, "decision 2 should be mid-batch"
+    assert_equal board.options.map {|tile| Board1010::TILES.key(tile) }, offers.first
+
+    lesson = {
+      "initial_state" => {"cells" => board.cells, "tile_ids" => board.tile_ids,
+                          "score" => board.score, "options" => offers.first},
+      "offers" => offers,
+      "actual_sequence" => episode.moves.drop(1),
+      "actual_score" => episode.score,
+      "candidate_sequence" => episode.moves.drop(1),
+      "candidate_score" => episode.score
+    }
+    replayed = LessonStore.replay(lesson, "actual_sequence")
+    candidate = LessonStore.replay(lesson, "candidate_sequence")
+    assert_equal episode.score, replayed.score
+    assert_equal episode.score, candidate.score
+
+    Dir.mktmpdir do |directory|
+      result = corrector.correct(seeds: [1_000_000], model: empty_model,
+                                 store: LessonStore.new(directory: directory),
+                                 time_budget_seconds: 0, max_states: 1, decision_stride: 1)
+      assert_equal 1, result.episodes
+      assert_operator result.states_searched, :>=, 3
+    end
+  end
+
   private
 
   def empty_model

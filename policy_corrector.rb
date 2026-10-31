@@ -27,7 +27,10 @@ class PolicyCorrector
       episode.decision_states.each_with_index do |state, index|
         next unless (index % stride).zero?
 
-        offers = episode.offers.drop(state.fetch(:offer_index))
+        # A captured decision can be halfway through a three-tile offer. The
+        # board holds only the remaining tiles, so make that the first fixed
+        # offer and append the later batches from the episode history.
+        offers = fixed_offers_for(state, episode)
         continuation = episode.moves.drop(index)
         result = ImprovementSearch.search(starting_board: state.fetch(:board),
                                           baseline_score: episode.score,
@@ -75,5 +78,16 @@ class PolicyCorrector
 
     Result.new(episodes: episodes, states_searched: states_searched,
                improvements_saved: improvements_saved)
+  end
+
+  private
+
+  def tile_names(tiles)
+    tiles.map {|tile| Board1010::TILES.key(tile) }
+  end
+
+  def fixed_offers_for(state, episode)
+    [tile_names(state.fetch(:board).options)] +
+      episode.offers.drop(state.fetch(:offer_index) + 1)
   end
 end

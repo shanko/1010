@@ -152,7 +152,7 @@ class GameWindow < Gosu::Window
     @strategy = strategy.to_sym
     @auto_player = AutoPlayer.new(strategy, random: Random.new(@seeds.rand(2**32)), model: model)
     @auto        = auto
-    @auto_run_tracker = AutoRunTracker.new
+    @auto_run_tracker = AutoRunTracker.new(clock: -> { Gosu.milliseconds })
     @closing = false
     @auto_runs   = 0
     @max_score   = 0
@@ -201,7 +201,7 @@ class GameWindow < Gosu::Window
   # Everything that is reset when a game starts (new, loaded or played back).
   def start(board, seed: nil, mode: "window")
     if @auto_run_tracker&.active?
-      print_auto_run(@auto_run_tracker.finish_run(score: @board.score, status: :stopped))
+      finish_auto_run(score: @board.score, status: :stopped)
     end
     stop_recording
     if @game_log && @board
@@ -217,7 +217,7 @@ class GameWindow < Gosu::Window
     @playback_next_at = nil
     @ended_at       = nil
     @game_over = false
-    @auto_run_tracker.start_run(at_ms: Gosu.milliseconds) if @auto && @auto_run_tracker && !@auto_run_tracker.active?
+    start_auto_run if @auto && @auto_run_tracker && !@auto_run_tracker.active?
     refresh_game_over
   end
 
@@ -228,7 +228,7 @@ class GameWindow < Gosu::Window
     @game_over = @board.game_over?
     @ended_at  = @game_over ? (@ended_at || Gosu.milliseconds) : nil
     if @auto && @game_over && !was_game_over && @auto_run_tracker&.active?
-      print_auto_run(@auto_run_tracker.finish_run(score: @board.score))
+      finish_auto_run(score: @board.score)
     end
   end
 
@@ -317,11 +317,11 @@ class GameWindow < Gosu::Window
 
   def toggle_auto
     if @auto
-      print_auto_run(@auto_run_tracker.finish_run(score: @board.score, status: :stopped)) if @auto_run_tracker.active?
+      finish_auto_run(score: @board.score, status: :stopped) if @auto_run_tracker.active?
       @auto = false
     else
       @auto = true
-      @auto_run_tracker.start_run(at_ms: Gosu.milliseconds) unless @game_over
+      start_auto_run unless @game_over
     end
     @selected = nil
     @dragging = false
@@ -333,6 +333,14 @@ class GameWindow < Gosu::Window
 
     puts line
     update_auto_caption
+  end
+
+  def start_auto_run
+    @auto_run_tracker.start_run
+  end
+
+  def finish_auto_run(score:, status: :completed)
+    print_auto_run(@auto_run_tracker.finish_run(score: score, status: status))
   end
 
   def update_auto_caption
@@ -464,7 +472,7 @@ class GameWindow < Gosu::Window
 
     @closing = true
     if @auto_run_tracker&.active?
-      print_auto_run(@auto_run_tracker.finish_run(score: @board.score, status: :unfinished))
+      finish_auto_run(score: @board.score, status: :unfinished)
     end
     @game_log&.finish(reason: @game_over ? "game_over" : "quit", score: @board.score)
     if @auto_run_tracker&.any_runs?

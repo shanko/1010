@@ -142,7 +142,10 @@ $ bundle exec ruby scripts/learn.rb correct --model learning_data/models/imitati
 Fine-tune an imitation model with REINFORCE on complete training-seed games.
 The default tuning sample uses the first 20 tuning seeds. Each evaluated
 checkpoint is retained; `selected.json` points to the candidate with the best
-tuning mean. Resume from a checkpoint to continue its training state:
+tuning mean. Checkpoints are evaluated every 10 episodes by default, and also
+after the final episode. REINFORCE uses raw board-area returns with a rolling
+baseline; the default learning rate is `0.01`, so lower it if updates are too
+large for a particular model. Resume from a checkpoint to continue its training state:
 
 ```sh
 $ bundle exec ruby scripts/learn.rb train-rl --model learning_data/models/imitation-v1.json --episodes 10 --seed 17

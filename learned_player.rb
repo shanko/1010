@@ -170,8 +170,12 @@ class LearnedPlayer
      chosen_features: features, expected_features: expected, probabilities: probabilities}
   end
 
-  def update_policy_gradient!(chosen_features:, expected_features:, advantage:, learning_rate:)
-    scale = Float(advantage) * Float(learning_rate)
+  def update_policy_gradient!(chosen_features:, expected_features:, advantage:, learning_rate:,
+                              temperature: 1.0)
+    temperature = Float(temperature)
+    raise ArgumentError, "temperature must be finite and positive" unless temperature.finite? && temperature.positive?
+
+    scale = Float(advantage) * Float(learning_rate) / temperature
     raise ArgumentError, "policy update scale must be finite" unless scale.finite?
 
     ActionFeatures::NAMES.each do |name|

@@ -247,7 +247,8 @@ elsif command == "select"
   end
 else
   options = {episodes: 1, random_seed: 1, learning_rate: 0.01, temperature: 1.0,
-             baseline_decay: 0.9, checkpoint_interval: 1,
+             baseline_decay: 0.9,
+             checkpoint_interval: ReinforcementTrainer::DEFAULT_CHECKPOINT_INTERVAL,
              checkpoints: File.join(LessonStore::DIRECTORY, "checkpoints")}
   parser = OptionParser.new do |opts|
     opts.banner = "Usage: bundle exec ruby scripts/learn.rb train-rl --model MODEL [options]"

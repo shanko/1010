@@ -25,6 +25,39 @@ class ReinforcementTrainerTest < Minitest::Test
     assert_operator policy.score(square_action_features) - policy.score(dot_action_features), :>, prior_difference
   end
 
+  def test_policy_gradient_matches_finite_difference_at_non_unit_temperatures
+    [0.5, 2.0].each do |temperature|
+      model = empty_model
+      model.fetch("weights")["tile_dot"] = 0.3
+      policy = LearnedPlayer.new(model)
+      chosen_value = 1.1
+      other_value = -0.4
+      weight = policy.weights.fetch("tile_dot")
+      chosen_probability = 1.0 / (1.0 + Math.exp(weight * (other_value - chosen_value) / temperature))
+      expected_value = chosen_probability * chosen_value + (1.0 - chosen_probability) * other_value
+      chosen = ActionFeatures::NAMES.to_h {|name| [name, 0.0] }
+      expected = chosen.dup
+      chosen["tile_dot"] = chosen_value
+      expected["tile_dot"] = expected_value
+
+      log_probability = lambda do |candidate_weight|
+        logits = [candidate_weight * chosen_value / temperature,
+                  candidate_weight * other_value / temperature]
+        maximum = logits.max
+        Math.log(Math.exp(logits.first - maximum) / logits.sum {|value| Math.exp(value - maximum) })
+      end
+      delta = 1e-5
+      finite_difference = (log_probability.call(weight + delta) - log_probability.call(weight - delta)) / (2.0 * delta)
+      learning_rate = 1e-5
+      policy.update_policy_gradient!(chosen_features: chosen, expected_features: expected,
+                                     advantage: 1.0, learning_rate: learning_rate,
+                                     temperature: temperature)
+      estimated_gradient = (policy.weights.fetch("tile_dot") - weight) / learning_rate
+
+      assert_in_delta finite_difference, estimated_gradient, 1e-5, "temperature #{temperature}"
+    end
+  end
+
   def test_training_writes_evaluated_versioned_checkpoints_and_selected_pointer
     Dir.mktmpdir do |directory|
       store = RLCheckpointStore.new(directory: directory)
@@ -50,6 +83,24 @@ class ReinforcementTrainerTest < Minitest::Test
       selected_checkpoint = JSON.parse(File.read(result.best_checkpoint))
       assert_equal selected_checkpoint.fetch("weights"), selected.model.fetch("weights")
       assert File.file?(result.selected_pointer)
+    end
+  end
+
+  def test_cli_default_checkpoint_interval_matches_trainer_default
+    assert_equal 10, ReinforcementTrainer::DEFAULT_CHECKPOINT_INTERVAL
+    Dir.mktmpdir do |directory|
+      model_path = File.join(directory, "model.json")
+      checkpoint_directory = File.join(directory, "checkpoints")
+      File.write(model_path, JSON.generate(empty_model))
+      stdout, stderr, status = Open3.capture3(
+        RbConfig.ruby, "scripts/learn.rb", "train-rl", "--model", model_path,
+        "--episodes", "2", "--seeds", "1000000,1000001",
+        "--tuning-seeds", "2000000", "--checkpoints", checkpoint_directory
+      )
+
+      assert status.success?, stderr
+      assert_equal 2, JSON.parse(stdout).fetch("checkpoints").size,
+                   "initial plus final checkpoint; no interval checkpoint before episode 10"
     end
   end
 

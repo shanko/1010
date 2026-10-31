@@ -72,6 +72,8 @@ end
 # REINFORCE with a rolling per-decision return baseline. Rewards are tile areas,
 # so the undiscounted return is exactly final game score from the decision.
 class ReinforcementTrainer
+  DEFAULT_CHECKPOINT_INTERVAL = 10
+
   Result = Struct.new(:model, :episodes, :global_step, :best_checkpoint,
                       :selected_pointer, :best_tuning_evaluation, :checkpoints,
                       :selection_changed, :previous_selected_checkpoint,
@@ -80,7 +82,7 @@ class ReinforcementTrainer
   def train(initial_model:, episode_count:, random_seed: 1, learning_rate: 0.01,
             temperature: 1.0, baseline_decay: 0.9, seeds: nil,
             tuning_seeds: LearningSeedSets.fetch(:tuning).first(20),
-            checkpoint_interval: 10, checkpoint_store: RLCheckpointStore.new,
+            checkpoint_interval: DEFAULT_CHECKPOINT_INTERVAL, checkpoint_store: RLCheckpointStore.new,
             resume: nil)
     episode_count = Integer(episode_count)
     learning_rate = Float(learning_rate)
@@ -165,7 +167,8 @@ class ReinforcementTrainer
         advantage = returns[index] - prior_baseline
         player.update_policy_gradient!(chosen_features: entry[:chosen_features],
                                        expected_features: entry[:expected_features],
-                                       advantage: advantage, learning_rate: learning_rate)
+                                       advantage: advantage, learning_rate: learning_rate,
+                                       temperature: temperature)
       end
       returns.each_with_index do |value, index|
         baseline[index] = baseline[index] ? baseline[index] * baseline_decay + value * (1.0 - baseline_decay) : value

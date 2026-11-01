@@ -17,4 +17,19 @@ class LearningSeedSetsTest < Minitest::Test
   def test_rejects_unknown_set
     assert_raises(ArgumentError) { LearningSeedSets.fetch(:validation) }
   end
+
+  def test_parses_ranges_and_lists_and_standardizes_bad_input
+    assert_equal [1, 2, 3], LearningSeedSets.parse_list("1..3")
+    assert_equal [1, 3, 5], LearningSeedSets.parse_list("1,3,5")
+    error = assert_raises(ArgumentError) { LearningSeedSets.parse_list("1..x") }
+    assert_match "invalid seed list", error.message
+  end
+
+  def test_validation_uses_a_consistent_seed_set_error
+    error = assert_raises(ArgumentError) do
+      LearningSeedSets.validate!([3_000_000], set: :training, purpose: "example")
+    end
+    assert_match "example seeds must belong to the training seed set", error.message
+    assert_match "invalid seeds: 3000000", error.message
+  end
 end

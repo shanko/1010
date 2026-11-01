@@ -47,7 +47,7 @@ class LessonCollectorTest < Minitest::Test
     error = assert_raises(ArgumentError) do
       LessonCollector.new.collect(seeds: [LearningSeedSets.fetch(:held_out).first])
     end
-    assert_match "training seeds", error.message
+    assert_match "lesson collection seeds must belong to the training seed set", error.message
   end
 
   private

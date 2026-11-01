@@ -134,15 +134,16 @@ class ReinforcementTrainerTest < Minitest::Test
                                       seeds: [LearningSeedSets.fetch(:held_out).first],
                                       tuning_seeds: [LearningSeedSets.fetch(:tuning).first])
     end
-    assert_match "training seeds", error.message
-    assert_match "held_out seed set", error.message
+    assert_match "RL training seeds must belong to the training seed set", error.message
+    assert_match "invalid seeds: #{LearningSeedSets.fetch(:held_out).first}", error.message
 
     error = assert_raises(ArgumentError) do
       ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 1,
                                       seeds: [LearningSeedSets.fetch(:training).first],
                                       tuning_seeds: [LearningSeedSets.fetch(:held_out).first])
     end
-    assert_match "held-out", error.message
+    assert_match "RL tuning seeds must belong to the tuning seed set", error.message
+    assert_match "invalid seeds: #{LearningSeedSets.fetch(:held_out).first}", error.message
   end
 
   def test_training_seed_count_error_names_both_counts

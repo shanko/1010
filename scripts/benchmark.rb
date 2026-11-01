@@ -14,13 +14,7 @@ parser = OptionParser.new do |parser|
   parser.on("--seeds LIST", "Comma-separated seeds or an inclusive range, e.g. 1,2,3 or 1..100") do |value|
     raise OptionParser::InvalidArgument, "use either --seeds or --seed-set" if options[:seed_set]
 
-    options[:seeds] = if value.include?("..")
-                        first, last = value.split("..", 2).map {|part| Integer(part) }
-                        raise OptionParser::InvalidArgument, "range end must be >= start" if last < first
-                        (first..last).to_a
-                      else
-                        value.split(",").map {|part| Integer(part) }
-                      end
+    options[:seeds] = LearningSeedSets.parse_list(value)
   end
   parser.on("--seed-set NAME", LearningSeedSets.names.map(&:to_s).join(", "), "Use a predefined disjoint seed set") do |value|
     raise OptionParser::InvalidArgument, "use either --seeds or --seed-set" if options[:seeds]

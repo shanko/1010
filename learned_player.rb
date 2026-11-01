@@ -265,22 +265,19 @@ class ImitationTrainer
     rate = Float(learning_rate)
     raise ArgumentError, "epochs must be positive" unless epochs.positive?
     raise ArgumentError, "learning rate must be finite and between 0 and 1" unless rate.finite? && rate.positive? && rate <= 1.0
-    raise ArgumentError, "imitation training must use the training seed set" unless seed_set.to_sym == :training
+    LearningSeedSets.validate_set!(seed_set, allowed: :training, purpose: "imitation training")
 
-    allowed_range = LearningSeedSets::DEFINITIONS.fetch(seed_set.to_sym) do
-      raise ArgumentError, "unknown training seed set #{seed_set.inspect}"
-    end
     examples = []
     excluded = Hash.new(0)
     lesson_paths = Dir.glob(File.join(directory, "*.json")).sort
     lesson_paths.each do |path|
       lesson = LessonStore.read(path)
       seed = lesson.dig("source_episode", "seed")
-      if seed && LearningSeedSets::DEFINITIONS.fetch(:held_out).cover?(Integer(seed))
+      if seed && LearningSeedSets.member?(seed, set: :held_out)
         excluded[:held_out] += 1
         next
       end
-      unless seed && allowed_range.cover?(Integer(seed))
+      unless seed && LearningSeedSets.member?(seed, set: seed_set)
         excluded[:outside_seed_set] += 1
         next
       end

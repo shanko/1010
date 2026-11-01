@@ -11,10 +11,8 @@ class LessonCollector
   def collect(seeds:, strategy: :sam, time_budget_seconds: 30.0, beam_width: 4,
               max_states: 2_000, max_rollouts: 8, rollouts_per_step: 2,
               store: LessonStore.new, clock: nil)
-    seeds = seeds.map {|seed| Integer(seed) }
-    raise ArgumentError, "provide at least one training seed" if seeds.empty?
-    training = LearningSeedSets::DEFINITIONS.fetch(:training)
-    raise ArgumentError, "lesson collection must use training seeds" unless seeds.uniq.size == seeds.size && seeds.all? {|seed| training.cover?(seed) }
+    seeds = LearningSeedSets.validate!(seeds, set: :training, purpose: "lesson collection")
+    raise ArgumentError, "lesson collection seeds must be unique" unless seeds.uniq.size == seeds.size
 
     improvements_found = complete_improvements = lessons_saved = 0
     seeds.each do |seed|

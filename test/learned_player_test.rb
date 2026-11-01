@@ -183,7 +183,7 @@ class LearnedPlayerTest < Minitest::Test
     error = assert_raises(ArgumentError) do
       PolicyCorrector.new.correct(seeds: [held_out_seed], model: empty_model)
     end
-    assert_match "training seeds", error.message
+    assert_match "policy correction seeds must belong to the training seed set", error.message
   end
 
   def test_stride_one_corrections_and_mid_batch_lesson_replay

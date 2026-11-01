@@ -12,14 +12,9 @@ class PolicyCorrector
   def correct(seeds:, model:, store: LessonStore.new, time_budget_seconds: 1.0,
               beam_width: 4, max_states: 2_000, max_rollouts: 1,
               rollouts_per_step: 2, decision_stride: 1, clock: nil)
-    seeds = seeds.map {|seed| Integer(seed) }
+    seeds = LearningSeedSets.validate!(seeds, set: :training, purpose: "policy correction")
     stride = Integer(decision_stride)
-    raise ArgumentError, "provide at least one correction seed" if seeds.empty?
     raise ArgumentError, "decision_stride must be positive" unless stride.positive?
-    training_range = LearningSeedSets::DEFINITIONS.fetch(:training)
-    unless seeds.all? {|seed| training_range.cover?(seed) }
-      raise ArgumentError, "policy corrections must use training seeds; tuning and held-out seeds are not allowed"
-    end
     episodes = states_searched = improvements_saved = 0
 
     seeds.each do |seed|

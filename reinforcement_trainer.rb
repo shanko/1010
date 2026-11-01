@@ -94,8 +94,6 @@ class ReinforcementTrainer
     raise ArgumentError, "temperature must be finite and positive" unless temperature.finite? && temperature.positive?
     raise ArgumentError, "baseline_decay must be in [0, 1)" unless baseline_decay.finite? && baseline_decay >= 0 && baseline_decay < 1
     raise ArgumentError, "checkpoint_interval must be positive" unless checkpoint_interval.positive?
-    raise ArgumentError, "RL cannot train on the held-out seed set" if tuning_seeds.any? {|seed| LearningSeedSets::DEFINITIONS.fetch(:held_out).cover?(Integer(seed)) }
-
     source_path = resolved_checkpoint_path(resume) if resume
     source = resume ? LearnedPlayer.load(resume).model : normalize_model(initial_model)
     rl_state = source.fetch("reinforcement_learning", {})
@@ -108,13 +106,8 @@ class ReinforcementTrainer
     unless training_seeds.size == episode_count
       raise ArgumentError, "--seeds has #{training_seeds.size} #{training_seeds.size == 1 ? 'seed' : 'seeds'} but --episodes is #{episode_count}"
     end
-    invalid_seed = training_seeds.find {|seed| !LearningSeedSets::DEFINITIONS.fetch(:training).cover?(seed) }
-    if invalid_seed
-      set_name = LearningSeedSets::DEFINITIONS.find {|_name, range| range.cover?(invalid_seed) }&.first || :known
-      raise ArgumentError, "seed #{invalid_seed} is in #{set_name} seed set; RL training must use training seeds (#{LearningSeedSets::DEFINITIONS.fetch(:training)})"
-    end
-    tuning_seeds = tuning_seeds.map {|seed| Integer(seed) }
-    raise ArgumentError, "tuning seeds must be non-empty and belong to the tuning set" if tuning_seeds.empty? || !tuning_seeds.all? {|seed| LearningSeedSets::DEFINITIONS.fetch(:tuning).cover?(seed) }
+    training_seeds = LearningSeedSets.validate!(training_seeds, set: :training, purpose: "RL training")
+    tuning_seeds = LearningSeedSets.validate!(tuning_seeds, set: :tuning, purpose: "RL tuning")
 
     model = JSON.parse(JSON.generate(source))
     model["reinforcement_learning"] = {

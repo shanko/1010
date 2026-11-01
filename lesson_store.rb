@@ -20,33 +20,10 @@ class LessonStore
     validate!(lesson)
     FileUtils.mkdir_p(@directory)
     identity = identity_for(lesson)
-    existing_path = Dir.glob(File.join(@directory, "*.json")).find do |path|
-      JSON.parse(File.read(path))["state_fingerprint"] == identity
-    rescue JSON::ParserError
-      false
-    end
+    existing_path = find_existing_path(identity)
+    return update_existing(existing_path, lesson) if existing_path
 
-    if existing_path
-      existing = JSON.parse(File.read(existing_path))
-      provenance = existing.fetch("provenance")
-      lesson.fetch(:provenance).each do |source|
-        provenance << source unless provenance.include?(source)
-      end
-      write_atomically(existing_path, existing)
-      return {path: existing_path, deduplicated: true}
-    end
-
-    payload = lesson.transform_keys(&:to_s)
-    payload["state_fingerprint"] = identity
-    timestamp = Time.now.utc.strftime("%Y%m%dT%H%M%S%6NZ")
-    path = File.join(@directory, "lesson-#{timestamp}-#{Process.pid}.json")
-    suffix = 0
-    while File.exist?(path)
-      suffix += 1
-      path = File.join(@directory, "lesson-#{timestamp}-#{Process.pid}-#{suffix}.json")
-    end
-    write_atomically(path, payload)
-    {path: path, deduplicated: false}
+    write_new(lesson, identity)
   end
 
   def self.read(path)
@@ -62,20 +39,60 @@ class LessonStore
   # frozen offers. Returns the resulting board for score/state assertions.
   def self.replay(lesson, sequence_key)
     lesson = JSON.parse(JSON.generate(lesson)) # normalize nested symbol keys to JSON keys
-    initial = lesson.fetch("initial_state")
-    cells = initial.fetch("cells")
-    tile_ids = initial.fetch("tile_ids")
-    board = Board1010.new(cells: cells, tile_ids: tile_ids,
-                          score: initial.fetch("score"),
-                          options: initial.fetch("options").map {|name| Tile.fetch(name) })
     sequence_name = sequence_key.to_s.delete_suffix("_sequence")
     offers = lesson["#{sequence_name}_offers"] || lesson.fetch("offers")
     score_key = sequence_name == "actual" ? "actual_score" : "candidate_score"
-    OfferReplay.replay(board: board, moves: lesson.fetch(sequence_key), offers: offers,
+    OfferReplay.replay(board: board_from_lesson(lesson), moves: lesson.fetch(sequence_key), offers: offers,
                        expected_score: lesson[score_key], strict_offers: false)
   end
 
+  def self.board_from_lesson(lesson)
+    initial = lesson.fetch("initial_state")
+    options = initial.fetch("options").map {|name| Tile.fetch(name) }
+    Board1010.new(cells: initial.fetch("cells"), tile_ids: initial.fetch("tile_ids"),
+                  score: initial.fetch("score"), options: options)
+  end
+  private_class_method :board_from_lesson
+
   private
+
+  def find_existing_path(identity)
+    Dir.glob(File.join(@directory, "*.json")).find do |path|
+      JSON.parse(File.read(path))["state_fingerprint"] == identity
+    rescue JSON::ParserError
+      false
+    end
+  end
+
+  def update_existing(path, lesson)
+    existing = JSON.parse(File.read(path))
+    provenance = existing.fetch("provenance")
+    lesson.fetch(:provenance).each do |source|
+      provenance << source unless provenance.include?(source)
+    end
+    write_atomically(path, existing)
+    {path: path, deduplicated: true}
+  end
+
+  def write_new(lesson, identity)
+    payload = lesson.transform_keys(&:to_s)
+    payload["state_fingerprint"] = identity
+    path = unique_path
+    write_atomically(path, payload)
+    {path: path, deduplicated: false}
+  end
+
+  def unique_path
+    timestamp = Time.now.utc.strftime("%Y%m%dT%H%M%S%6NZ")
+    base = File.join(@directory, "lesson-#{timestamp}-#{Process.pid}")
+    path = "#{base}.json"
+    suffix = 0
+    while File.exist?(path)
+      suffix += 1
+      path = "#{base}-#{suffix}.json"
+    end
+    path
+  end
 
   def validate!(lesson)
     unless lesson.fetch(:schema_version) == SCHEMA_VERSION

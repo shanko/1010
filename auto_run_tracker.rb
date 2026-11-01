@@ -33,30 +33,17 @@ class AutoRunTracker
 
   def finish_run(score:, status: :completed, at_ms: @clock.call)
     return nil unless active?
-    raise ArgumentError, "status must be completed, unfinished, or stopped" unless %i[completed unfinished
-                                                                                      stopped].include?(status.to_sym)
+
+    validate_status!(status)
 
     ended_at = Float(at_ms)
-    duration = [ended_at - @active_run.fetch(:started_at), 0.0].max / 1000.0
     number = @active_run.fetch(:number)
     score = Integer(score)
-    new_max = false
-    if status.to_sym == :completed
-      @completed_count += 1
-      if @max_score.nil? || score > @max_score
-        @max_score = score
-        @max_score_run = number
-        new_max = true
-      end
-    else
-      @unfinished_count += 1
-    end
-    @last_duration_seconds = duration
+    new_max = record_result(score, number, status.to_sym)
+    @last_duration_seconds = duration_seconds(ended_at)
     @last_ended_at = ended_at
     @active_run = nil
-    suffix = new_max ? "  new max" : ""
-    suffix += "  #{status}" unless status.to_sym == :completed
-    "Run #{number}   score #{score}   time #{'%.1f' % duration}s#{suffix}"
+    format_run_line(number, score, status.to_sym, new_max)
   end
 
   def summary(at_ms: nil)
@@ -67,5 +54,39 @@ class AutoRunTracker
     maximum = @max_score.nil? ? "none" : "#{@max_score} (run #{@max_score_run})"
     ["Runs: #{@completed_count} completed, #{@unfinished_count} unfinished   Max score: #{maximum}",
      "Total time: %.1fs" % total].join("\n")
+  end
+
+  private
+
+  def validate_status!(status)
+    return if %i[completed unfinished stopped].include?(status.to_sym)
+
+    raise ArgumentError, "status must be completed, unfinished, or stopped"
+  end
+
+  def duration_seconds(ended_at)
+    [ended_at - @active_run.fetch(:started_at), 0.0].max / 1000.0
+  end
+
+  def record_result(score, number, status)
+    return record_completed_result(score, number) if status == :completed
+
+    @unfinished_count += 1
+    false
+  end
+
+  def record_completed_result(score, number)
+    @completed_count += 1
+    return false unless @max_score.nil? || score > @max_score
+
+    @max_score = score
+    @max_score_run = number
+    true
+  end
+
+  def format_run_line(number, score, status, new_max)
+    suffix = new_max ? "  new max" : ""
+    suffix += "  #{status}" unless status == :completed
+    "Run #{number}   score #{score}   time #{'%.1f' % @last_duration_seconds}s#{suffix}"
   end
 end

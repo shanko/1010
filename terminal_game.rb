@@ -36,22 +36,30 @@ class TerminalGame
         offer_to_save
         break
       end
-      index, row, col = move
-      option_count = @board.options.size
-      tile_name = @board.options[index].name
-      if @board.play(index, row, col)
-        @game_log.move(tile_name, index, row, col)
-        @game_log.deal(@board.options) if option_count == 1
-      else
-        say(" Cannot place that tile at (#{row}, #{col})")
-      end
+      play_move(move)
     end
+    finish_run(started_at)
+  end
+
+  private
+
+  def play_move(move)
+    index, row, col = move
+    option_count = @board.options.size
+    tile_name = @board.options[index].name
+    if @board.play(index, row, col)
+      @game_log.move(tile_name, index, row, col)
+      @game_log.deal(@board.options) if option_count == 1
+    else
+      say(" Cannot place that tile at (#{row}, #{col})")
+    end
+  end
+
+  def finish_run(started_at)
     say("Total time elapsed = #{(Time.now - started_at).round} seconds")
     say("Score = #{@board.score}")
     @game_log.finish(reason: @board.game_over? ? "game_over" : "stopped", score: @board.score)
   end
-
-  private
 
   # [option index, row, col], or nil when the player wants to stop.
   def ask_move

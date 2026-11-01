@@ -24,7 +24,7 @@ puts "learned O hint for first option: %.2f ms (5 runs)" % average_ms(5) {
 }
 
 window = GameWindow.allocate
-window.instance_variable_set(:@board, board)
-window.instance_variable_set(:@auto_player, player)
+session = Struct.new(:board, :auto_player).new(board, player)
+window.instance_variable_set(:@session, session)
 window.instance_variable_set(:@selected, 0)
 puts "cached O hint frame: %.4f ms (1,000 frames)" % average_ms(1_000) { window.send(:hint_position) }

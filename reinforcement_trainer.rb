@@ -27,7 +27,8 @@ class RLCheckpointStore
 
   def select(path, tuning_evaluation:)
     FileUtils.mkdir_p(@directory)
-    relative_path = Pathname.new(File.expand_path(path)).relative_path_from(Pathname.new(File.expand_path(@directory))).to_s
+    directory = Pathname.new(File.expand_path(@directory))
+    relative_path = Pathname.new(File.expand_path(path)).relative_path_from(directory).to_s
     pointer = {"schema_version" => 1, "selected_checkpoint" => relative_path,
                "tuning_evaluation" => tuning_evaluation}
     temporary = File.join(@directory, "selected.json.tmp-#{Process.pid}")
@@ -50,11 +51,18 @@ class RLCheckpointStore
     if previous && !File.file?(previous_checkpoint)
       raise ArgumentError, "selected checkpoint does not exist: #{previous_checkpoint}"
     end
+
     previous_evaluation = previous && previous["tuning_evaluation"]
     rescored = false
     if previous && previous_evaluation&.fetch("seeds", nil) != tuning_evaluation.fetch("seeds")
-      raise ArgumentError, "selected checkpoint cannot be compared: tuning seed list differs and no evaluator was provided" unless block_given?
-      raise ArgumentError, "selected checkpoint does not exist: #{previous_checkpoint}" unless File.file?(previous_checkpoint)
+      unless block_given?
+        raise ArgumentError,
+              "selected checkpoint cannot be compared: tuning seed list differs and no evaluator was provided"
+      end
+      unless File.file?(previous_checkpoint)
+        raise ArgumentError,
+              "selected checkpoint does not exist: #{previous_checkpoint}"
+      end
 
       previous_evaluation = yield(previous_checkpoint)
       rescored = true
@@ -90,10 +98,19 @@ class ReinforcementTrainer
     baseline_decay = Float(baseline_decay)
     checkpoint_interval = Integer(checkpoint_interval)
     raise ArgumentError, "episode_count must be positive" unless episode_count.positive?
-    raise ArgumentError, "learning_rate must be finite and positive" unless learning_rate.finite? && learning_rate.positive?
+
+    unless learning_rate.finite? && learning_rate.positive?
+      raise ArgumentError,
+            "learning_rate must be finite and positive"
+    end
     raise ArgumentError, "temperature must be finite and positive" unless temperature.finite? && temperature.positive?
-    raise ArgumentError, "baseline_decay must be in [0, 1)" unless baseline_decay.finite? && baseline_decay >= 0 && baseline_decay < 1
+
+    unless baseline_decay.finite? && baseline_decay >= 0 && baseline_decay < 1
+      raise ArgumentError,
+            "baseline_decay must be in [0, 1)"
+    end
     raise ArgumentError, "checkpoint_interval must be positive" unless checkpoint_interval.positive?
+
     source_path = resolved_checkpoint_path(resume) if resume
     source = resume ? LearnedPlayer.load(resume).model : normalize_model(initial_model)
     rl_state = source.fetch("reinforcement_learning", {})
@@ -101,24 +118,28 @@ class ReinforcementTrainer
     if rl_state["random_seed"] && Integer(rl_state["random_seed"]) != Integer(random_seed)
       raise ArgumentError, "resume random_seed must match the checkpoint"
     end
+
     training_seeds = seeds ? seeds.map {|seed| Integer(seed) } :
       LearningSeedSets.fetch(:training).drop(global_step).first(episode_count)
     unless training_seeds.size == episode_count
-      raise ArgumentError, "--seeds has #{training_seeds.size} #{training_seeds.size == 1 ? 'seed' : 'seeds'} but --episodes is #{episode_count}"
+      seed_label = training_seeds.size == 1 ? "seed" : "seeds"
+      message = "--seeds has #{training_seeds.size} #{seed_label} but --episodes is #{episode_count}"
+      raise ArgumentError, message
     end
+
     training_seeds = LearningSeedSets.validate!(training_seeds, set: :training, purpose: "RL training")
     tuning_seeds = LearningSeedSets.validate!(tuning_seeds, set: :tuning, purpose: "RL tuning")
 
     model = JSON.parse(JSON.generate(source))
     model["reinforcement_learning"] = {
-      "algorithm" => "reinforce_with_rolling_return_baseline",
-      "optimizer" => {"name" => "sgd", "state" => "stateless"},
-      "global_step" => global_step,
-      "random_seed" => Integer(random_seed),
-      "baseline_decay" => baseline_decay,
+      "algorithm"            => "reinforce_with_rolling_return_baseline",
+      "optimizer"            => {"name" => "sgd", "state" => "stateless"},
+      "global_step"          => global_step,
+      "random_seed"          => Integer(random_seed),
+      "baseline_decay"       => baseline_decay,
       "baseline_by_decision" => rl_state.fetch("baseline_by_decision", []),
-      "episode_seeds" => Array(rl_state.fetch("episode_seeds", [])),
-      "training_rewards" => Array(rl_state.fetch("training_rewards", []))
+      "episode_seeds"        => Array(rl_state.fetch("episode_seeds", [])),
+      "training_rewards"     => Array(rl_state.fetch("training_rewards", []))
     }
     player = LearnedPlayer.new(model)
     baseline = model.dig("reinforcement_learning", "baseline_by_decision")
@@ -138,16 +159,16 @@ class ReinforcementTrainer
       checkpoints << {path: best_path, evaluation: current_eval, existing: true}
     else
       best_path = checkpoint_store.save(checkpoint_model(player.model, learning_rate, temperature,
-                                                          evaluated_seeds: tuning_seeds,
-                                                          tuning_evaluation: current_eval), step: global_step)
+                                                         evaluated_seeds:   tuning_seeds,
+                                                         tuning_evaluation: current_eval), step: global_step)
       checkpoints << {path: best_path, evaluation: current_eval}
     end
 
     episode_count.times do |episode_index|
       episode_seed = training_seeds.fetch(episode_index)
       trajectory, episode_score = run_episode(player, episode_seed,
-                                               random_seed: random_seed, step: global_step,
-                                               temperature: temperature)
+                                              random_seed: random_seed, step: global_step,
+                                              temperature: temperature)
       returns = Array.new(trajectory.size)
       cumulative = 0.0
       (trajectory.size - 1).downto(0) do |index|
@@ -180,8 +201,8 @@ class ReinforcementTrainer
 
       evaluation = evaluate(player.model, tuning_seeds)
       checkpoint_model = checkpoint_model(player.model, learning_rate, temperature,
-                                           evaluated_seeds: tuning_seeds,
-                                           tuning_evaluation: evaluation)
+                                          evaluated_seeds:   tuning_seeds,
+                                          tuning_evaluation: evaluation)
       path = checkpoint_store.save(checkpoint_model, step: global_step)
       checkpoints << {path: path, evaluation: evaluation}
       if evaluation.fetch("mean_score") > best_eval.fetch("mean_score")

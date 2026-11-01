@@ -5,7 +5,7 @@ module LearningSeedSets
   DEFINITIONS = {
     baseline: 1..100,
     training: 1_000_000..1_099_999,
-    tuning: 2_000_000..2_001_999,
+    tuning:   2_000_000..2_001_999,
     held_out: 3_000_000..3_001_999
   }.freeze
 

@@ -52,7 +52,7 @@ class Board1010
 
   # `random` deals the tiles. Pass Random.new(seed) to get the same tiles every time.
   def initialize(cells: nil, tile_ids: nil, options: [], score: 0, random: Random.new)
-    @cells   = cells || Array.new(ROWS) { Array.new(COLS, EMPTY) }
+    @cells = cells || Array.new(ROWS) { Array.new(COLS, EMPTY) }
     @tile_ids = tile_ids || @cells.map {|values| values.map {|value| value == EMPTY ? EMPTY : value } }
     @options = options.map {|tile| tile.is_a?(Tile) ? tile : Tile.fetch(tile) }
     @score   = score
@@ -62,7 +62,8 @@ class Board1010
   # A deep copy, used for undo and search branches. Copy the RNG state so
   # advancing one branch cannot change another branch's future offers.
   def copy
-    Board1010.new(cells: @cells.map(&:dup), tile_ids: @tile_ids.map(&:dup), options: @options.dup, score: @score, random: @random.dup)
+    Board1010.new(cells: @cells.map(&:dup), tile_ids: @tile_ids.map(&:dup), options: @options.dup, score: @score,
+                  random: @random.dup)
   end
 
   # ---------------------------------------------------------------------------
@@ -288,9 +289,13 @@ class Board1010
     fields = parse_save(text)
     rows = fields[:rows]
     return nil if fields[:score].nil? || rows.size != ROWS || rows.any? {|values| values.size != COLS }
+
     tile_ids = fields[:tile_ids]
-    if tile_ids && (tile_ids.size != ROWS || tile_ids.any? {|values| values.size != COLS || values.any? {|id| id.negative? || id > TILE_NAMES.size } })
-      return nil
+    if tile_ids
+      invalid_row = tile_ids.any? do |values|
+        values.size != COLS || values.any? {|id| id.negative? || id > TILE_NAMES.size }
+      end
+      return nil if tile_ids.size != ROWS || invalid_row
     end
 
     Board1010.new(cells: rows, tile_ids: tile_ids, options: fields[:options], score: fields[:score], random: random)

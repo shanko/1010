@@ -62,13 +62,13 @@ class ReinforcementTrainerTest < Minitest::Test
     Dir.mktmpdir do |directory|
       store = RLCheckpointStore.new(directory: directory)
       result = ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 1,
-                                               random_seed: 13, seeds: [1_000_000],
-                                               tuning_seeds: [2_000_000], checkpoint_interval: 1,
-                                               checkpoint_store: store)
+                                              random_seed: 13, seeds: [1_000_000],
+                                              tuning_seeds: [2_000_000], checkpoint_interval: 1,
+                                              checkpoint_store: store)
       repeated = ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 1,
-                                                 random_seed: 13, seeds: [1_000_000],
-                                                 tuning_seeds: [2_000_000], checkpoint_interval: 1,
-                                                 checkpoint_store: store)
+                                                random_seed: 13, seeds: [1_000_000],
+                                                tuning_seeds: [2_000_000], checkpoint_interval: 1,
+                                                checkpoint_store: store)
       selected = LearnedPlayer.load(result.selected_pointer)
       checkpoint = JSON.parse(File.read(result.checkpoints.last.fetch(:path)))
 
@@ -108,16 +108,17 @@ class ReinforcementTrainerTest < Minitest::Test
     Dir.mktmpdir do |directory|
       store = RLCheckpointStore.new(directory: directory)
       initial = ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 1,
-                                                random_seed: 23, seeds: [1_000_010],
-                                                tuning_seeds: [2_000_010], checkpoint_interval: 1,
-                                                checkpoint_store: store)
+                                               random_seed: 23, seeds: [1_000_010],
+                                               tuning_seeds: [2_000_010], checkpoint_interval: 1,
+                                               checkpoint_store: store)
       first_checkpoint = initial.checkpoints.last.fetch(:path)
       checkpoint_count_before_resume = Dir.glob(File.join(directory, "reinforce-step-*.json")).size
-      first_baseline_size = JSON.parse(File.read(first_checkpoint)).dig("reinforcement_learning", "baseline_by_decision").size
+      first_baseline_size = JSON.parse(File.read(first_checkpoint)).dig("reinforcement_learning",
+                                                                        "baseline_by_decision").size
       resumed = ReinforcementTrainer.new.train(initial_model: first_checkpoint, resume: first_checkpoint,
-                                                episode_count: 1, random_seed: 23, seeds: [1_000_011],
-                                                tuning_seeds: [2_000_010], checkpoint_interval: 1,
-                                                checkpoint_store: store)
+                                               episode_count: 1, random_seed: 23, seeds: [1_000_011],
+                                               tuning_seeds: [2_000_010], checkpoint_interval: 1,
+                                               checkpoint_store: store)
 
       assert_equal 2, resumed.global_step
       assert_equal [1_000_010, 1_000_011], resumed.model.dig("reinforcement_learning", "episode_seeds")
@@ -131,16 +132,16 @@ class ReinforcementTrainerTest < Minitest::Test
   def test_rejects_held_out_training_seeds_and_tuning_seeds
     error = assert_raises(ArgumentError) do
       ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 1,
-                                      seeds: [LearningSeedSets.fetch(:held_out).first],
-                                      tuning_seeds: [LearningSeedSets.fetch(:tuning).first])
+                                     seeds: [LearningSeedSets.fetch(:held_out).first],
+                                     tuning_seeds: [LearningSeedSets.fetch(:tuning).first])
     end
     assert_match "RL training seeds must belong to the training seed set", error.message
     assert_match "invalid seeds: #{LearningSeedSets.fetch(:held_out).first}", error.message
 
     error = assert_raises(ArgumentError) do
       ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 1,
-                                      seeds: [LearningSeedSets.fetch(:training).first],
-                                      tuning_seeds: [LearningSeedSets.fetch(:held_out).first])
+                                     seeds: [LearningSeedSets.fetch(:training).first],
+                                     tuning_seeds: [LearningSeedSets.fetch(:held_out).first])
     end
     assert_match "RL tuning seeds must belong to the tuning seed set", error.message
     assert_match "invalid seeds: #{LearningSeedSets.fetch(:held_out).first}", error.message
@@ -149,7 +150,7 @@ class ReinforcementTrainerTest < Minitest::Test
   def test_training_seed_count_error_names_both_counts
     error = assert_raises(ArgumentError) do
       ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 2,
-                                      seeds: [1_000_000], tuning_seeds: [2_000_000])
+                                     seeds: [1_000_000], tuning_seeds: [2_000_000])
     end
     assert_match "--seeds has 1 seed but --episodes is 2", error.message
   end
@@ -196,8 +197,8 @@ class ReinforcementTrainerTest < Minitest::Test
       checkpoint = File.join(directory, "checkpoint.json")
       File.write(checkpoint, JSON.pretty_generate(empty_model))
       stdout, stderr, status = Open3.capture3(RbConfig.ruby, "scripts/learn.rb", "select",
-                                               "--checkpoint", checkpoint,
-                                               "--tuning-seeds", "2000000")
+                                              "--checkpoint", checkpoint,
+                                              "--tuning-seeds", "2000000")
       assert status.success?, stderr
       summary = JSON.parse(stdout)
       assert_equal [2_000_000], summary.dig("tuning_evaluation", "seeds")
@@ -209,9 +210,9 @@ class ReinforcementTrainerTest < Minitest::Test
   private
 
   def empty_model
-    {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+    {"schema_version"  => LearnedPlayer::MODEL_SCHEMA_VERSION,
      "feature_version" => ActionFeatures::VERSION,
-     "feature_names" => ActionFeatures::NAMES,
-     "weights" => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
+     "feature_names"   => ActionFeatures::NAMES,
+     "weights"         => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
   end
 end

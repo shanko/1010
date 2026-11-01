@@ -67,6 +67,7 @@ class LessonCollector
              actual_board.game_over? && candidate_board.game_over?
         raise ArgumentError, "collected lesson failed complete-game replay validation for seed #{seed}"
       end
+
       store.save(lesson)
       lessons_saved += 1
     end

@@ -26,7 +26,7 @@ class LessonStoreTest < Minitest::Test
       path = write_completed_trace(directory)
       original = File.binread(path)
       lesson = LessonAnalyzer.new.analyze(path, time_budget_seconds: 0,
-                                          strategy: :first_fit)
+                                                strategy:            :first_fit)
 
       assert_equal original, File.binread(path)
       assert_equal "no_improvement", lesson.fetch(:outcome)
@@ -76,8 +76,8 @@ class LessonStoreTest < Minitest::Test
       path = write_completed_trace(directory)
       output_directory = File.join(directory, "lessons")
       stdout, stderr, status = Open3.capture3(RbConfig.ruby, "scripts/learn.rb", "analyze", path,
-                                               "--budget", "0", "--strategy", "first_fit",
-                                               "--output", output_directory)
+                                              "--budget", "0", "--strategy", "first_fit",
+                                              "--output", output_directory)
       assert status.success?, stderr
       summary = JSON.parse(stdout)
       assert_equal "no_improvement", summary.fetch("outcome")
@@ -107,7 +107,9 @@ class LessonStoreTest < Minitest::Test
     episode.moves.each do |move|
       batch_exhausted = board.options.size == 1
       log.move(move.fetch(:tile), move.fetch(:option), move.fetch(:row), move.fetch(:col))
-      raise "unexpected illegal fixture move" unless board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false)
+      raise "unexpected illegal fixture move" unless board.play(move.fetch(:option), move.fetch(:row),
+                                                                move.fetch(:col), deal: false)
+
       if batch_exhausted
         names = episode.offers.fetch(next_offer)
         board.replace_options(names.map {|name| Tile.fetch(name) })

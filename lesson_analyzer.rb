@@ -15,7 +15,13 @@ class LessonAnalyzer
 
     source_digest = Digest::SHA256.file(path).hexdigest
     trace = GameTrace.read(path)
-    raise ArgumentError, "#{path} ended with #{trace.final_reason.inspect}; only Game Over episodes can be analyzed" unless trace.final_reason == "game_over"
+    unless trace.final_reason == "game_over"
+      message = [
+        "#{path} ended with #{trace.final_reason.inspect};",
+        "only Game Over episodes can be analyzed"
+      ].join(" ")
+      raise ArgumentError, message
+    end
 
     baseline = extract_final_trajectory(trace)
     raise ArgumentError, "#{path} is missing a replayable initial offer" if baseline[:offers].empty?
@@ -58,9 +64,16 @@ class LessonAnalyzer
 
     actual_board = LessonStore.replay(record.transform_keys(&:to_s), "actual_sequence")
     candidate_board = LessonStore.replay(record.transform_keys(&:to_s), "candidate_sequence")
-    raise ArgumentError, "actual sequence score does not match the completed trace" unless actual_board.score == trace.final_score
+    unless actual_board.score == trace.final_score
+      raise ArgumentError,
+            "actual sequence score does not match the completed trace"
+    end
     raise ArgumentError, "candidate score does not match its replay" unless candidate_board.score == result.best_score
-    raise ArgumentError, "source trace changed during analysis" unless Digest::SHA256.file(path).hexdigest == source_digest
+
+    unless Digest::SHA256.file(path).hexdigest == source_digest
+      raise ArgumentError,
+            "source trace changed during analysis"
+    end
 
     record
   end
@@ -102,6 +115,7 @@ class LessonAnalyzer
     unless board.score == trace.final_score && board.game_over?
       raise ArgumentError, "trace does not replay to its declared Game Over state"
     end
+
     {board: board, sequence: sequence, offers: offers}
   end
 end

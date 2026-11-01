@@ -33,7 +33,8 @@ class AutoRunTracker
 
   def finish_run(score:, status: :completed, at_ms: @clock.call)
     return nil unless active?
-    raise ArgumentError, "status must be completed, unfinished, or stopped" unless %i[completed unfinished stopped].include?(status.to_sym)
+    raise ArgumentError, "status must be completed, unfinished, or stopped" unless %i[completed unfinished
+                                                                                      stopped].include?(status.to_sym)
 
     ended_at = Float(at_ms)
     duration = [ended_at - @active_run.fetch(:started_at), 0.0].max / 1000.0

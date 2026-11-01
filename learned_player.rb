@@ -47,6 +47,7 @@ module ActionFeatures
       return super(index, *defaults, &block) if index
 
       raise KeyError, "key not found: #{key.inspect}" if defaults.empty? && !block
+
       block ? block.call(key) : defaults.first
     end
 
@@ -69,7 +70,7 @@ module ActionFeatures
     )
     largest_region, region_count, isolated = empty_space_features(occupied_after)
     legal_placements = board.legal_placement_count(board.options, occupied_bits: occupied_after,
-                                                   exclude_index: option_index)
+                                                                  exclude_index: option_index)
     occupied = bit_count(occupied_after)
     tile_name = tile.name
     features = FeatureVector.new
@@ -151,12 +152,23 @@ class LearnedPlayer
 
   def initialize(model)
     model = JSON.parse(JSON.generate(model))
-    raise ArgumentError, "unsupported learned policy model schema" unless model["schema_version"] == MODEL_SCHEMA_VERSION
+    unless model["schema_version"] == MODEL_SCHEMA_VERSION
+      raise ArgumentError,
+            "unsupported learned policy model schema"
+    end
+
     unless model["feature_version"] == ActionFeatures::VERSION
       feature_version = model["feature_version"]
-      raise ArgumentError, "model uses action feature version #{feature_version.inspect}; this code requires version #{ActionFeatures::VERSION} (retrain the model)"
+      message = [
+        "model uses action feature version #{feature_version.inspect};",
+        "this code requires version #{ActionFeatures::VERSION} (retrain the model)"
+      ].join(" ")
+      raise ArgumentError, message
     end
-    raise ArgumentError, "model feature names do not match this code" unless model["feature_names"] == ActionFeatures::NAMES
+    unless model["feature_names"] == ActionFeatures::NAMES
+      raise ArgumentError,
+            "model feature names do not match this code"
+    end
     raise ArgumentError, "model weights are missing" unless model["weights"].is_a?(Hash)
 
     @model = model
@@ -190,6 +202,7 @@ class LearnedPlayer
   def sample_action(board, random:, temperature: 1.0)
     temperature = Float(temperature)
     raise ArgumentError, "temperature must be finite and positive" unless temperature.finite? && temperature.positive?
+
     actions = legal_actions(board)
     return nil if actions.empty?
 
@@ -243,7 +256,8 @@ class LearnedPlayer
 
     scored = actions.map {|action, features| [action, score(features)] }
     best_score = scored.map(&:last).max
-    scored.select {|_action, value| value == best_score }.map(&:first).map {|_index, row, col| [row, col] }.sample(random: random)
+    winners = scored.select {|_action, value| value == best_score }.map(&:first)
+    winners.map {|_index, row, col| [row, col] }.sample(random: random)
   end
 
   def legal_actions(board)
@@ -264,7 +278,12 @@ class ImitationTrainer
     epochs = Integer(epochs)
     rate = Float(learning_rate)
     raise ArgumentError, "epochs must be positive" unless epochs.positive?
-    raise ArgumentError, "learning rate must be finite and between 0 and 1" unless rate.finite? && rate.positive? && rate <= 1.0
+
+    unless rate.finite? && rate.positive? && rate <= 1.0
+      raise ArgumentError,
+            "learning rate must be finite and between 0 and 1"
+    end
+
     LearningSeedSets.validate_set!(seed_set, allowed: :training, purpose: "imitation training")
 
     examples = []
@@ -312,11 +331,11 @@ class ImitationTrainer
         examples_seen += 1
       end
     end
-    model = {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+    model = {"schema_version"  => LearnedPlayer::MODEL_SCHEMA_VERSION,
              "feature_version" => ActionFeatures::VERSION,
-             "feature_names" => ActionFeatures::NAMES,
-             "weights" => weights,
-             "training" => {"seed_set" => seed_set.to_s, "random_seed" => Integer(random_seed),
+             "feature_names"   => ActionFeatures::NAMES,
+             "weights"         => weights,
+             "training"        => {"seed_set" => seed_set.to_s, "random_seed" => Integer(random_seed),
                             "epochs" => epochs, "learning_rate" => rate,
                             "episodes_used" => examples.map {|example| example[:episode] }.uniq.size,
                             "examples_seen" => examples_seen}}
@@ -353,10 +372,10 @@ class ImitationTrainer
   end
 
   def empty_model
-    {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+    {"schema_version"  => LearnedPlayer::MODEL_SCHEMA_VERSION,
      "feature_version" => ActionFeatures::VERSION,
-     "feature_names" => ActionFeatures::NAMES,
-     "weights" => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
+     "feature_names"   => ActionFeatures::NAMES,
+     "weights"         => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
   end
 
   def update(weights, example, learning_rate)
@@ -366,7 +385,9 @@ class ImitationTrainer
     normalizer = probabilities.sum
     chosen_features = example[:chosen]
     expected = ActionFeatures::NAMES.to_h do |name|
-      value = scored.each_with_index.sum {|(features, _score), index| probabilities[index] * features.fetch(name) / normalizer }
+      value = scored.each_with_index.sum do |(features, _score), index|
+        probabilities[index] * features.fetch(name) / normalizer
+      end
       [name, value]
     end
     ActionFeatures::NAMES.each do |name|

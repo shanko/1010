@@ -78,14 +78,18 @@ class LessonStore
   private
 
   def validate!(lesson)
-    raise ArgumentError, "lesson schema version must be #{SCHEMA_VERSION}" unless lesson.fetch(:schema_version) == SCHEMA_VERSION
+    unless lesson.fetch(:schema_version) == SCHEMA_VERSION
+      raise ArgumentError,
+            "lesson schema version must be #{SCHEMA_VERSION}"
+    end
+
     %i[source_episode initial_state offers actual_sequence actual_score candidate_sequence candidate_score
        improvement_delta search provenance].each {|key| lesson.fetch(key) }
   end
 
   def identity_for(lesson)
-    state = {initial_state: lesson.fetch(:initial_state),
-             actual_offers: lesson.fetch(:actual_offers, lesson.fetch(:offers)),
+    state = {initial_state:    lesson.fetch(:initial_state),
+             actual_offers:    lesson.fetch(:actual_offers, lesson.fetch(:offers)),
              candidate_offers: lesson.fetch(:candidate_offers, lesson.fetch(:offers))}
     Digest::SHA256.hexdigest(JSON.generate(state))
   end

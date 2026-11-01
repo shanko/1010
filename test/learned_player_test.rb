@@ -58,13 +58,13 @@ class LearnedPlayerTest < Minitest::Test
         legal = after.legal_placement_count(after.options)
         occupied = after.cells.flatten.count {|value| value != Board1010::EMPTY }
         expected = {
-          "completed_rows" => move.cleared_rows.size.to_f,
-          "completed_cols" => move.cleared_cols.size.to_f,
+          "completed_rows"             => move.cleared_rows.size.to_f,
+          "completed_cols"             => move.cleared_cols.size.to_f,
           "remaining_legal_placements" => legal.to_f / 100.0,
-          "largest_empty_region" => largest.to_f / 100.0,
-          "empty_region_count" => regions.to_f / 100.0,
-          "isolated_empty_cells" => isolated.to_f / 100.0,
-          "occupied_fraction" => occupied.to_f / 100.0
+          "largest_empty_region"       => largest.to_f / 100.0,
+          "empty_region_count"         => regions.to_f / 100.0,
+          "isolated_empty_cells"       => isolated.to_f / 100.0,
+          "occupied_fraction"          => occupied.to_f / 100.0
         }
         actual = ActionFeatures.extract(board, option, row, col)
         expected.each {|name, value| assert_equal value, actual.fetch(name), name }
@@ -210,13 +210,13 @@ class LearnedPlayerTest < Minitest::Test
     assert_equal board.options.map(&:name), offers.first
 
     lesson = {
-      "initial_state" => {"cells" => board.cells, "tile_ids" => board.tile_ids,
+      "initial_state"      => {"cells" => board.cells, "tile_ids" => board.tile_ids,
                           "score" => board.score, "options" => offers.first},
-      "offers" => offers,
-      "actual_sequence" => episode.moves.drop(1),
-      "actual_score" => episode.score,
+      "offers"             => offers,
+      "actual_sequence"    => episode.moves.drop(1),
+      "actual_score"       => episode.score,
       "candidate_sequence" => episode.moves.drop(1),
-      "candidate_score" => episode.score
+      "candidate_score"    => episode.score
     }
     replayed = LessonStore.replay(lesson, "actual_sequence")
     candidate = LessonStore.replay(lesson, "candidate_sequence")
@@ -268,10 +268,10 @@ class LearnedPlayerTest < Minitest::Test
   end
 
   def empty_model
-    {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+    {"schema_version"  => LearnedPlayer::MODEL_SCHEMA_VERSION,
      "feature_version" => ActionFeatures::VERSION,
-     "feature_names" => ActionFeatures::NAMES,
-     "weights" => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
+     "feature_names"   => ActionFeatures::NAMES,
+     "weights"         => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
   end
 
   def improved_lesson

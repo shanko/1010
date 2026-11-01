@@ -14,11 +14,11 @@ class GameSimulator
                       keyword_init: true) do
     def summary
       {
-        seed: seed,
-        strategy: strategy,
-        score: score,
-        placed_tiles: placed_tiles,
-        cleared_lines: cleared_lines,
+        seed:           seed,
+        strategy:       strategy,
+        score:          score,
+        placed_tiles:   placed_tiles,
+        cleared_lines:  cleared_lines,
         option_batches: option_batches
       }
     end
@@ -74,7 +74,8 @@ class GameSimulator
 
       index, row, col = player.choose_move(board)
       tile = board.options[index]
-      raise RuntimeError, "#{strategy} returned an invalid move for seed #{seed}" unless tile && board.fits?(tile, row, col)
+      raise RuntimeError, "#{strategy} returned an invalid move for seed #{seed}" unless tile && board.fits?(tile, row,
+                                                                                                             col)
 
       option_count = board.options.size
       tile_name = tile.name
@@ -111,6 +112,7 @@ class GameBenchmark
 
     strategies = strategies.map(&:to_sym)
     raise ArgumentError, "provide at least one strategy" if strategies.empty?
+
     unknown = strategies - AutoPlayer::VALID_STRATEGIES
     raise ArgumentError, "unknown strategies: #{unknown.join(', ')}" unless unknown.empty?
     if strategies.include?(:learned) && !models.key?(:learned) && !models.key?("learned")
@@ -133,18 +135,18 @@ class GameBenchmark
         paired = results.fetch(candidate).zip(results.fetch(baseline_strategy)).map do |result, comparison|
           {seed: result.seed, score_delta: result.score - comparison.score}
         end
-        [baseline_strategy, {summary: summarize(paired.map {|entry| entry.fetch(:score_delta) }),
+        [baseline_strategy, {summary:  summarize(paired.map {|entry| entry.fetch(:score_delta) }),
                              per_seed: paired}]
       end]
     end
 
     {
-      schema_version: SCHEMA_VERSION,
-      simulator_version: GameSimulator::VERSION,
-      generated_at_utc: Time.now.utc.iso8601,
-      baseline_strategy: baseline,
-      seeds: seeds,
-      strategies: strategies.to_h do |strategy|
+      schema_version:        SCHEMA_VERSION,
+      simulator_version:     GameSimulator::VERSION,
+      generated_at_utc:      Time.now.utc.iso8601,
+      baseline_strategy:     baseline,
+      seeds:                 seeds,
+      strategies:            strategies.to_h do |strategy|
         episode_results = results.fetch(strategy)
         metrics = METRICS.to_h do |metric|
           [metric, summarize(episode_results.map {|result| result.public_send(metric) })]
@@ -153,9 +155,9 @@ class GameBenchmark
           {seed: result.seed, score_delta: result.score - base.score}
         end
         [strategy, {
-          metrics: metrics,
+          metrics:                        metrics,
           paired_score_delta_vs_baseline: summarize(deltas.map {|delta| delta[:score_delta] }),
-          per_seed: episode_results.map(&:summary)
+          per_seed:                       episode_results.map(&:summary)
         }]
       end,
       pairwise_score_deltas: pairwise
@@ -170,16 +172,16 @@ class GameBenchmark
     mean = values.sum.to_f / values.size
     variance = values.sum {|value| (value - mean)**2 }.to_f / values.size
     {
-      count: values.size,
-      mean: mean,
-      median: percentile(sorted, 0.5),
+      count:              values.size,
+      mean:               mean,
+      median:             percentile(sorted, 0.5),
       standard_deviation: Math.sqrt(variance),
-      minimum: sorted.first,
-      percentile_10: percentile(sorted, 0.1),
-      percentile_90: percentile(sorted, 0.9),
-      mean_ci_95: {lower: mean - 1.96 * Math.sqrt(variance / values.size),
-                   upper: mean + 1.96 * Math.sqrt(variance / values.size)},
-      maximum: sorted.last
+      minimum:            sorted.first,
+      percentile_10:      percentile(sorted, 0.1),
+      percentile_90:      percentile(sorted, 0.9),
+      mean_ci_95:         {lower: mean - 1.96 * Math.sqrt(variance / values.size),
+                           upper: mean + 1.96 * Math.sqrt(variance / values.size)},
+      maximum:            sorted.last
     }
   end
 

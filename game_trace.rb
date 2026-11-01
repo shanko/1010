@@ -18,19 +18,23 @@ class GameTrace
     lines = File.readlines(path, chomp: true)
     version = lines.shift
     raise ArgumentError, "#{path} is not a v2 or v3 1010 trace" unless [HEADER, LEGACY_HEADER].include?(version)
+
     compact = version == HEADER
 
     seed_line = lines.shift
     raise ArgumentError, "#{path} has an invalid seed header" unless seed_line&.match?(/\As(?:-|\d+)\z/)
+
     seed = Integer(seed_line[1..], exception: false)
 
     mode_line = lines.shift
     raise ArgumentError, "#{path} has an invalid mode header" unless mode_line&.match?(/\Amode=[a-z_]+\z/)
+
     mode = mode_line.delete_prefix("mode=")
 
     state_line = lines.shift
     board = state_line && BoardSnapshot.decode_state(state_line)
     raise ArgumentError, "#{path} has an invalid initial board snapshot" unless board
+
     deals = []
     events = []
     final_reason = nil
@@ -43,10 +47,12 @@ class GameTrace
       when /\Ad(.*)\z/
         tiles = compact ? BoardSnapshot.decode_offer(line) : decode_legacy_offer(line, path, index)
         raise ArgumentError, "#{path} has an invalid offer batch on line #{index + 5}" unless tiles
+
         names = tiles.map {|tile| tile.name.to_s }
         unless tiles.size.between?(1, Board1010::OPTIONS)
           raise ArgumentError, "#{path} has an invalid offer batch on line #{index + 5}"
         end
+
         deals << names
         if deals.size == 1
           board.replace_options(tiles)

@@ -19,7 +19,8 @@ class ImprovementSearchTest < Minitest::Test
     assert_equal 4, result.score_delta
     assert_equal "improved", result.status
     refute result.complete # the frozen offer sequence ends before actual Game Over
-    assert_equal before, [Marshal.dump(board.cells), Marshal.dump(board.options), Marshal.dump(board.random), board.score]
+    assert_equal before,
+                 [Marshal.dump(board.cells), Marshal.dump(board.options), Marshal.dump(board.random), board.score]
     assert_equal result.best_score, replay_fixed(board, result.candidate_sequence, [[:dot, :sq2]])
   end
 
@@ -109,7 +110,8 @@ class ImprovementSearchTest < Minitest::Test
     offer_index = 1
     sequence.each do |move|
       exhausted = copy.options.size == 1
-      assert copy.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false), "illegal candidate move: #{move}"
+      assert copy.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false),
+             "illegal candidate move: #{move}"
       if exhausted && (batch = offers[offer_index])
         copy.replace_options(batch.map {|name| Tile.fetch(name) })
         offer_index += 1
@@ -123,7 +125,8 @@ class ImprovementSearchTest < Minitest::Test
     offer_index = 1
     sequence.each do |move|
       exhausted = board.options.size == 1
-      assert board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false), "illegal candidate move: #{move}"
+      assert board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false),
+             "illegal candidate move: #{move}"
       if exhausted
         batch = offers.fetch(offer_index)
         board.replace_options(batch.map {|name| Tile.fetch(name) })

@@ -15,7 +15,8 @@ class GameBenchmarkTest < Minitest::Test
     assert_equal 3, baseline.fetch(:per_seed).size
     assert_equal 3, comparison.fetch(:paired_score_delta_vs_baseline).fetch(:count)
     assert_equal 0, baseline.fetch(:paired_score_delta_vs_baseline).fetch(:mean)
-    assert_equal 0, report.fetch(:pairwise_score_deltas).fetch(:first_fit).fetch(:first_fit).fetch(:summary).fetch(:mean)
+    assert_equal 0,
+                 report.fetch(:pairwise_score_deltas).fetch(:first_fit).fetch(:first_fit).fetch(:summary).fetch(:mean)
     %i[score placed_tiles cleared_lines option_batches].each do |metric|
       assert baseline.fetch(:metrics).fetch(metric).key?(:percentile_10)
       assert baseline.fetch(:metrics).fetch(metric).key?(:percentile_90)
@@ -39,10 +40,10 @@ class GameBenchmarkTest < Minitest::Test
   end
 
   def test_learned_benchmark_accepts_a_model_file_path
-    model = {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+    model = {"schema_version"  => LearnedPlayer::MODEL_SCHEMA_VERSION,
              "feature_version" => ActionFeatures::VERSION,
-             "feature_names" => ActionFeatures::NAMES,
-             "weights" => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
+             "feature_names"   => ActionFeatures::NAMES,
+             "weights"         => ActionFeatures::NAMES.to_h {|name| [name, 0.0] }}
     Tempfile.create(["learned-model", ".json"]) do |file|
       file.write(JSON.generate(model))
       file.flush

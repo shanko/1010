@@ -8,9 +8,9 @@ class LessonCollectorTest < Minitest::Test
   def test_collected_complete_seed_lesson_replays_actual_and_candidate
     Dir.mktmpdir do |directory|
       result = LessonCollector.new.collect(seeds: [1_000_000], strategy: :sam,
-                                            time_budget_seconds: 5, beam_width: 4,
-                                            max_states: 500, max_rollouts: 8,
-                                            store: LessonStore.new(directory: directory))
+                                           time_budget_seconds: 5, beam_width: 4,
+                                           max_states: 500, max_rollouts: 8,
+                                           store: LessonStore.new(directory: directory))
       path = Dir.glob(File.join(directory, "*.json")).fetch(0)
       lesson = LessonStore.read(path)
       actual = LessonStore.replay(lesson, "actual_sequence")
@@ -33,10 +33,10 @@ class LessonCollectorTest < Minitest::Test
     Dir.mktmpdir do |directory|
       ticks = 0.0
       result = LessonCollector.new.collect(seeds: [1_000_000], strategy: :sam,
-                                            time_budget_seconds: 0.01, max_states: 100,
-                                            max_rollouts: 10,
-                                            store: LessonStore.new(directory: directory),
-                                            clock: -> { ticks += 0.02 })
+                                           time_budget_seconds: 0.01, max_states: 100,
+                                           max_rollouts: 10,
+                                           store: LessonStore.new(directory: directory),
+                                           clock: -> { ticks += 0.02 })
 
       assert_equal 0, result.lessons_saved
       assert_empty Dir.glob(File.join(directory, "*.json"))

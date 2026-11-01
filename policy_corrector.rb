@@ -15,6 +15,7 @@ class PolicyCorrector
     seeds = LearningSeedSets.validate!(seeds, set: :training, purpose: "policy correction")
     stride = Integer(decision_stride)
     raise ArgumentError, "decision_stride must be positive" unless stride.positive?
+
     episodes = states_searched = improvements_saved = usable_lessons = 0
 
     seeds.each do |seed|
@@ -69,8 +70,14 @@ class PolicyCorrector
         }
         actual_board = LessonStore.replay(lesson, "actual_sequence")
         candidate_board = LessonStore.replay(lesson, "candidate_sequence")
-        raise ArgumentError, "learned baseline sequence score failed validation" unless actual_board.score == episode.score
-        raise ArgumentError, "corrected sequence score failed validation" unless candidate_board.score == result.best_score
+        unless actual_board.score == episode.score
+          raise ArgumentError,
+                "learned baseline sequence score failed validation"
+        end
+        unless candidate_board.score == result.best_score
+          raise ArgumentError,
+                "corrected sequence score failed validation"
+        end
 
         store.save(lesson)
         improvements_saved += 1

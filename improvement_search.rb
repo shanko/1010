@@ -30,6 +30,7 @@ class ImprovementSearch
              clock: nil)
     budget = Float(time_budget_seconds)
     raise ArgumentError, "time budget must be finite and non-negative" unless budget.finite? && budget >= 0
+
     beam_width = Integer(beam_width)
     max_states = Integer(max_states)
     max_rollouts = Integer(max_rollouts)
@@ -62,9 +63,10 @@ class ImprovementSearch
 
     fixed_offers = baseline_result.offers if fixed_offers == :baseline && baseline_result
     raise ArgumentError, "fixed_offers: :baseline requires a seeded search" if fixed_offers == :baseline
+
     fixed_offers = normalize_offers(fixed_offers) if fixed_offers
     offer_source = if fixed_offers
-                     RecordedOfferSource.new(recorded_offers: fixed_offers,
+                     RecordedOfferSource.new(recorded_offers:             fixed_offers,
                                              continue_with_seeded_dealer: continue_after_fixed_offers)
                    end
 
@@ -175,6 +177,7 @@ class ImprovementSearch
       end
 
       break if time_capped
+
       ranked = ranked.each_with_index.sort_by {|(node, index)| [-node.rank_score, index] }.map(&:first)
       rollout_capped = true if remaining_rollouts <= rollout_count && ranked.size > rollout_count
       break if rollout_capped || state_capped

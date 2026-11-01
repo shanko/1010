@@ -59,7 +59,7 @@ class GameWindow < Gosu::Window
 
   MESSAGE_MS      = 2000 # how long messages like "Game saved" stay up
   AUTO_RESTART_MS = GameSession::AUTO_RESTART_MS # auto mode pause before starting another game
-  BLINK_MS        = 250  # how fast the recording mark blinks
+  BLINK_MS        = 250 # how fast the recording mark blinks
   REPLAY_DELAY_SECONDS = GameSession::DEFAULT_REPLAY_DELAY_SECONDS
 
   # --- Colors -----------------------------------------------------------------
@@ -149,7 +149,7 @@ class GameWindow < Gosu::Window
                                replay_delay: replay_delay, model: model,
                                clock: -> { Gosu.milliseconds })
     @closing = false
-    @message     = nil
+    @message = nil
     case @session.initial_message
     when :loaded then show_message("Loaded the saved game (N: new game)")
     when :damaged then show_message("The save file is damaged")
@@ -298,7 +298,11 @@ class GameWindow < Gosu::Window
 
     last_time = tracker.last_duration_seconds
     timing = last_time ? "  Last: #{format('%.1fs', last_time)}" : ""
-    self.caption = "1010!  Auto: #{@strategy}  Runs: #{tracker.completed_count}  Max Score: #{tracker.max_score || 0}#{timing}"
+    self.caption = [
+      "1010!  Auto: #{@strategy}",
+      "Runs: #{tracker.completed_count}",
+      "Max Score: #{tracker.max_score || 0}#{timing}"
+    ].join("  ")
   end
 
   def flush_auto_run_line
@@ -337,7 +341,7 @@ class GameWindow < Gosu::Window
     @animation = nil
   end
 
-  def play_back_next(now = Gosu.milliseconds)
+  def play_back_next(now=Gosu.milliseconds)
     result = @session.playback_tick(now)
     animate_move(result) if result.is_a?(Board1010::Move)
     finish_playback if result == :finished
@@ -399,7 +403,9 @@ class GameWindow < Gosu::Window
   # Deletes the saved game too, so the next start is a new game.
   def quit_without_saving
     result = @session.quit(save: false)
-    puts "Could not delete #{Board1010::SAVE_FILE}: #{result.last.message}" if result.is_a?(Array) && result.first == :failed
+    if result.is_a?(Array) && result.first == :failed
+      puts "Could not delete #{Board1010::SAVE_FILE}: #{result.last.message}"
+    end
     close
   end
 
@@ -522,7 +528,12 @@ class GameWindow < Gosu::Window
     @session.board.cells.each_with_index do |values, row|
       values.each_with_index do |value, col|
         value = @animation.value_at(row, col, value, now) if @animation
-        tile_id = @animation ? @animation.tile_id_at(row, col, @session.board.tile_ids[row][col], now) : @session.board.tile_ids[row][col]
+        tile_id = if @animation
+                    @animation.tile_id_at(row, col, @session.board.tile_ids[row][col],
+                                          now)
+                  else
+                    @session.board.tile_ids[row][col]
+                  end
         draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value, tile_id))
       end
     end
@@ -605,7 +616,7 @@ class GameWindow < Gosu::Window
   # Drawing helpers
   # ---------------------------------------------------------------------------
 
-  def cell_color(value, tile_id = nil)
+  def cell_color(value, tile_id=nil)
     return COLORS[:empty] if value == Board1010::EMPTY
 
     TILE_COLORS.fetch(tile_id && tile_id.positive? ? tile_id : value)

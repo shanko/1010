@@ -76,9 +76,57 @@ Full local report: `learning_data/held-out-2000-v2.json`. Training summary: `lea
 | Resolved model SHA-256: learned | `3821ac4880a7a150aa439e1be5639fb797c1b95820b15d9d7278b8a5b1409cf1` |
 | Resolved model SHA-256: reinforcement | `70a1c8ca635d54b9a276c8b44ecb9d11909b773e4fd4b6bc8ab792ec56755785` |
 
-The larger experiment in [`scripts/phase6_evaluation.sh`](../scripts/phase6_evaluation.sh) collects lessons on training seeds `1000000..1000399`, trains imitation, then runs 200 RL episodes with 100 tuning seeds. It can also consume an existing lesson bundle. That separate experiment has no local completed results in this report; the results above describe the 15-lesson, 10-episode experiment. See [the training workflow](training_workflow.md) for continued sessions and model selection.
+## Larger experiment: 343 lessons, 200 RL episodes
 
-The benchmark was started before the later default-strategy update was integrated. The source revision/fingerprint fields were captured at report completion, rather than as a launch-time snapshot. Inspection of the intervening benchmark-source changes shows only default-strategy selection changes; all policies in this experiment were passed explicitly. The source hash is therefore completion-time provenance, not a claim that those exact on-disk files were loaded at launch.
+`scripts/phase6_evaluation.sh` repeated the protocol with more training data. It
+ran from `d94c0af` with a clean tree, Ruby 4.0.7 and 11 evaluation workers. Its
+source fingerprint is the same as above (`056489be…`), so the code is identical.
+
+- **Lessons:** 343 complete improved lessons from training seeds
+  `1000000..1000399`. A second machine collected the same seeds and scores.
+- **Imitation:** seed 17, 20 epochs, learning rate 0.1. That is 773,440 example
+  presentations, 25 times the first experiment's. Model SHA-256 `4fef8aaf…`.
+- **RL:** 200 REINFORCE episodes on `1000000..1000199`, with random seed 17,
+  learning rate 0.0001, temperature 1 and baseline decay 0.9. A checkpoint every
+  25 episodes was scored on tuning seeds `2000000..2000099`. Selection chose the
+  step-25 checkpoint (tuning mean 342.95, 95% CI 306.71 to 379.19) over step 0.
+  The resolved model SHA-256 is `9af8b3ef…`. The final step-200 checkpoint is
+  `55ce952c…`.
+
+All eight heuristics reproduced the first experiment's per-seed held-out scores
+exactly. The heuristic table above therefore applies unchanged.
+
+| Policy | Mean score | 95% CI for mean | Median | Mean placements |
+|---|---:|---|---:|---:|
+| `codex_sam` (default) | 328.57 | 321.72 to 335.42 | 296 | 85.41 |
+| imitation, 343 lessons | 332.44 | 325.31 to 339.57 | 294 | 86.45 |
+| RL step 25 (tuning-selected) | 335.87 | 328.75 to 343.00 | 296 | 87.36 |
+| RL step 200 (final) | 336.96 | 329.78 to 344.14 | 299 | 87.64 |
+
+| Paired difference | All 2,000 seeds | Seeds `3000100..3001999` |
+|---|---|---|
+| selected − `codex_sam` | +7.30 (−1.89 to +16.49); 943/149/908 | +5.33 (−4.13 to +14.80) |
+| imitation − `codex_sam` | +3.86 (−5.37 to +13.10); 923/150/927 | +2.59 (−6.95 to +12.14) |
+| RL step 200 − `codex_sam` | +8.39 (−0.78 to +17.55); 954/149/897 | +7.47 (−2.00 to +16.94) |
+| selected − imitation | +3.44 (−1.34 to +8.21); 261/1508/231 | +2.74 (−2.09 to +7.57) |
+| RL step 200 − imitation | +4.52 (−2.34 to +11.39); 603/844/553 | +4.87 (−2.14 to +11.88) |
+
+Intervals are 95% normal-approximation CIs. The win/tie/loss counts are for the
+first policy named.
+
+**Conclusion.** No learned policy from this run beats `codex_sam` with an
+interval above zero, on either seed range. Twenty-three times more lessons did
+not raise the imitation model above the 15-lesson model's 339.25. RL now edges
+imitation by a few points, but those intervals also include zero. Codex Sam
+stays the default, and learned mode stays opt-in. Further gains probably need
+changes to the features or the training method, not just more of the same data.
+Held-out results were not used to choose any model or setting.
+
+The models, checkpoints and full report are in the ignored
+`learning_data/run-20261101/`. Rerun the experiment with
+`scripts/phase6_evaluation.sh`; it collects its own lessons on a clean checkout.
+See [the training workflow](training_workflow.md) for continued sessions and
+model selection.
 
 ## Verification
 

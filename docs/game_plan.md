@@ -192,7 +192,7 @@ feature-version-2 imitation model and running 10 RL episodes. Selected imitation
 averaged 339.25 versus Codex Sam's 328.57, a paired +10.67 points (95% CI
 +1.01 to +20.34). On the 1,900 seeds beyond the old pilot, the gain was +8.60
 (95% CI -1.37 to +18.57), so learned mode remains opt-in and Codex Sam remains
-the default. RL did not improve on imitation. See
+the default. RL did not improve on imitation. A larger run (343 lessons, 200 RL episodes, step-25 checkpoint selected on 100 tuning seeds) scored +7.30 over Codex Sam (95% CI −1.89 to +16.49), so the default is unchanged. See
 [`learning_evaluation.md`](learning_evaluation.md) for distributions, provenance
 and limitations, and [`training_workflow.md`](training_workflow.md) for repeated
 training sessions and tuning-based selection.

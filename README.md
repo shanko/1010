@@ -113,8 +113,11 @@ candidates, not proofs of an optimal sequence.
 
 Improve a completed game while keeping its recorded tile sets in order. If the
 trace has a seed, the command continues dealing from that seed after the logged
-sets. It writes a replayable `.improved.moves` trace and a JSON report with the
-estimated cost of each original move. Seedless traces use only their recorded
+sets, so the extra sets are the ones the same game would have dealt. (A trace's
+seed is the board's dealer seed, as recorded by the window and terminal games;
+it is not a `benchmark.rb` session seed.) It writes a replayable
+`.improved.moves` trace and a JSON report with the estimated cost of each
+original move, listing the costliest first. Seedless traces use only their recorded
 sets and report that limitation. Traces that ended with `quit` are refused. The
 search uses a reproducible state budget; `--time` is an optional safety cap.
 

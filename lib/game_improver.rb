@@ -68,7 +68,7 @@ class GameImprover
   def validate_seed(trace)
     return {consistent: false, reason: "trace has no seed; improvement is limited to recorded offers"} unless trace.seed
 
-    initial = GameSimulator.initial_board(seed: trace.seed)
+    initial = seeded_dealer(trace.seed)
     expected_first = initial.options.map(&:name)
     actual_first = trace.deal_batches.first.map(&:to_sym)
     unless expected_first == actual_first
@@ -107,6 +107,17 @@ class GameImprover
 
   private
 
+  # A trace's `s` record is the board's own dealer seed: GameSession#new_game
+  # and the terminal game build `Board1010.new(random: Random.new(seed))`.
+  # This differs from GameSimulator.initial_board, whose seed is a session root
+  # that first reserves a player stream. Return a fresh board whose dealer has
+  # produced the initial offer, ready to deal the second one.
+  def seeded_dealer(seed)
+    board = Board1010.new(random: Random.new(Integer(seed)))
+    board.deal_if_needed
+    board
+  end
+
   def keep_complete_baseline(search, baseline)
     search.best_score = baseline[:board].score
     search.score_delta = 0
@@ -117,7 +128,7 @@ class GameImprover
   end
 
   def starting_board(trace, first_offer)
-    random = trace.seed ? GameSimulator.initial_board(seed: trace.seed).random : Random.new(0)
+    random = trace.seed ? seeded_dealer(trace.seed).random : Random.new(0)
     Board1010.new(cells: trace.starting_board.cells.map(&:dup),
                   tile_ids: trace.starting_board.tile_ids.map(&:dup),
                   score: trace.starting_board.score,
@@ -172,7 +183,7 @@ class GameImprover
     recorded_sets = [output.deal_batches.size, baseline[:offers].size].min
     move_costs, move_cost_rollouts = estimate_move_costs(source, baseline, rollout_budget: states_limit)
     costliest_moves = move_costs.select {|item| item[:estimated_cost]&.positive? }
-    costliest_moves.sort_by! {|item| -item.fetch(:move) }
+    costliest_moves.sort_by! {|item| [-item.fetch(:estimated_cost), item.fetch(:move)] }
     {
       schema_version:                 1,
       source:                         File.expand_path(source_path),

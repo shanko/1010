@@ -6,6 +6,7 @@ require "stringio"
 require_relative "../lib/learn_cli"
 require_relative "../lib/game_log"
 require_relative "../lib/offer_replay"
+require_relative "../lib/game_session"
 
 # rubocop:disable Metrics/BlockLength, Metrics/MethodLength
 
@@ -113,7 +114,9 @@ class LearnCLITest < Minitest::Test
       assert_equal true, report.fetch("seed_consistent")
       assert_operator report.fetch("seeded_offer_sets_used"), :>, 0
       assert_equal source.events.count {|event| event.first == :move }, report.fetch("per_move_estimates").size
-      assert_operator report.fetch("costliest_moves").size, :>, 0
+      costs = report.fetch("costliest_moves").map {|entry| entry.fetch("estimated_cost") }
+      assert_operator costs.size, :>, 0
+      assert_equal costs.sort.reverse, costs, "costliest moves are listed most expensive first"
 
       trace_before = File.binread(output_path)
       report_before = File.binread(report_path)
@@ -229,20 +232,17 @@ class LearnCLITest < Minitest::Test
     path
   end
 
+  # Records a game the way auto mode does: GameSession deals from
+  # Random.new(seed) and writes that board seed into the trace.
   def write_completed_trace(directory, seed: 11)
-    episode = GameSimulator.run(seed: seed, strategy: :first_fit)
-    board = GameSimulator.initial_board(seed: seed)
-    log = GameLog.new(seed: seed, board: board, mode: "auto", directory: directory)
-    replay = OfferReplay.new(board: board, offers: episode.offers)
-    episode.moves.each do |move|
-      batch_exhausted = replay.board.options.size == 1
-      log.move(move.fetch(:tile), move.fetch(:option), move.fetch(:row), move.fetch(:col))
-      replay.apply(move)
-      log.deal(replay.board.options) if batch_exhausted
-    end
-    board = replay.finish!(expected_score: episode.score)
-    log.finish(reason: "game_over", score: board.score)
-    log.path
+    session = GameSession.new(auto: true, strategy: :first_fit, seed: 0, log_directory: directory,
+                              save_store: GameSession::SaveStore.new(path: File.join(directory, "save.txt")),
+                              clock: -> { 0 })
+    session.new_game(seed: seed)
+    session.auto_move until session.game_over
+    path = session.game_log.path
+    session.finish
+    path
   end
 
   def write_undo_across_deal_trace(directory)

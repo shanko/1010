@@ -92,7 +92,7 @@ class GameTrace
   private_class_method :parse_deal_record
 
   def self.valid_offer?(tiles)
-    tiles && tiles.size.between?(1, Board1010::OPTIONS)
+    tiles&.size&.between?(1, Board1010::OPTIONS)
   end
   private_class_method :valid_offer?
 

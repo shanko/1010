@@ -54,7 +54,8 @@ class GameSimulator
     seed = Integer(seed)
     strategy = strategy.to_sym
     state, player = new_run(seed, strategy, model)
-    play_until_over(state, player, seed, strategy, max_moves, capture_states)
+    play_until_over(state, player, seed: seed, strategy: strategy,
+                    max_moves: max_moves, capture_states: capture_states)
     result_for(state, seed, strategy)
   end
 
@@ -71,16 +72,16 @@ class GameSimulator
     [state, AutoPlayer.new(strategy, random: player_random, model: model)]
   end
 
-  def play_until_over(state, player, seed, strategy, max_moves, capture_states)
+  def play_until_over(state, player, seed:, strategy:, max_moves:, capture_states:)
     until state.board.game_over?
       raise "simulation exceeded #{max_moves} moves (seed #{seed})" if state.moves.size >= max_moves
 
       capture_decision_state(state) if capture_states
       play_next_move(state, player, seed, strategy)
     end
-    unless state.board.score == state.placed_area
-      raise "score invariant failed for seed #{seed}: #{state.board.score} != #{state.placed_area}"
-    end
+    return if state.board.score == state.placed_area
+
+    raise "score invariant failed for seed #{seed}: #{state.board.score} != #{state.placed_area}"
   end
 
   def capture_decision_state(state)
@@ -89,22 +90,24 @@ class GameSimulator
 
   def play_next_move(state, player, seed, strategy)
     index, row, col = player.choose_move(state.board)
-    tile = valid_tile!(state.board, index, row, col, seed, strategy)
+    tile = valid_tile!(state.board, [index, row, col], seed: seed, strategy: strategy)
     option_count = state.board.options.size
     move = state.board.play(index, row, col)
     raise "legal move rejected for seed #{seed}" unless move
 
-    record_move(state, move, tile, index, row, col, option_count)
+    record_move(state, move, tile, action: [index, row, col], option_count: option_count)
   end
 
-  def valid_tile!(board, index, row, col, seed, strategy)
+  def valid_tile!(board, action, seed:, strategy:)
+    index, row, col = action
     tile = board.options[index]
     return tile if tile && board.fits?(tile, row, col)
 
     raise "#{strategy} returned an invalid move for seed #{seed}"
   end
 
-  def record_move(state, move, tile, index, row, col, option_count)
+  def record_move(state, move, tile, action:, option_count:)
+    index, row, col = action
     state.moves << {tile: tile.name, option: index, row: row, col: col}
     state.placed_tiles += 1
     state.placed_area += move.placed.size
@@ -151,8 +154,10 @@ class GameBenchmark
     seeds = seeds.map {|seed| Integer(seed) }
     raise ArgumentError, "provide at least one seed" if seeds.empty?
     raise ArgumentError, "seed list must not contain duplicates" unless seeds.uniq.size == seeds.size
+
     strategies = strategies.map(&:to_sym)
     raise ArgumentError, "provide at least one strategy" if strategies.empty?
+
     validate_strategies!(strategies)
     require_learned_model!(strategies, models)
     [seeds, strategies]
@@ -190,7 +195,9 @@ class GameBenchmark
 
   def self.pairwise_summaries(results, strategies)
     strategies.to_h do |candidate|
-      [candidate, strategies.to_h do |comparison| pairwise_summary(results, candidate, comparison) end]
+      [candidate, strategies.to_h do |comparison|
+        pairwise_summary(results, candidate, comparison)
+      end]
     end
   end
   private_class_method :pairwise_summaries
@@ -206,10 +213,12 @@ class GameBenchmark
   def self.strategy_summaries(results, strategies, baseline)
     strategies.to_h do |strategy|
       episodes = results.fetch(strategy)
-      deltas = episodes.zip(results.fetch(baseline)).map {|result, base| {seed: result.seed, score_delta: result.score - base.score} }
-      [strategy, {metrics: metric_summaries(episodes),
+      deltas = episodes.zip(results.fetch(baseline)).map {|result, base|
+        {seed: result.seed, score_delta: result.score - base.score}
+      }
+      [strategy, {metrics:                        metric_summaries(episodes),
                   paired_score_delta_vs_baseline: summarize(deltas.map {|entry| entry[:score_delta] }),
-                  per_seed: episodes.map(&:summary)}]
+                  per_seed:                       episodes.map(&:summary)}]
     end
   end
   private_class_method :strategy_summaries

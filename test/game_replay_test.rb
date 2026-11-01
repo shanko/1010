@@ -19,6 +19,8 @@ class GameReplayTest < Minitest::Test
     end
   end
 
+  # This test reads as one ordered end-to-end trace setup and assertion sequence.
+  # rubocop:disable Metrics/MethodLength
   def test_v2_trace_replays_initial_board_deals_moves_and_undo_exactly
     Dir.mktmpdir do |directory|
       board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:dot)], random: Random.new(51))
@@ -50,6 +52,7 @@ class GameReplayTest < Minitest::Test
       assert_equal board.score, replayed_board.score
     end
   end
+  # rubocop:enable Metrics/MethodLength
 
   def test_v2_trace_replays_an_undone_move_that_emptied_its_batch_and_its_new_deal
     Dir.mktmpdir do |directory|

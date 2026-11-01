@@ -46,6 +46,8 @@ class LearnedPlayerTest < Minitest::Test
     end
   end
 
+  # Straight comparison over legal placements is easier to audit end to end.
+  # rubocop:disable Metrics/MethodLength
   def test_incremental_action_features_match_board_copy_features
     board = GameSimulator.initial_board(seed: 86_753_099)
     board.options.each_with_index do |tile, option|
@@ -71,6 +73,7 @@ class LearnedPlayerTest < Minitest::Test
       end
     end
   end
+  # rubocop:enable Metrics/MethodLength
 
   def test_completed_row_and_column_features_count_the_lines_cleared
     cells = Array.new(10) { Array.new(10, 9) }
@@ -199,6 +202,8 @@ class LearnedPlayerTest < Minitest::Test
     assert_match "policy correction seeds must belong to the training seed set", error.message
   end
 
+  # This integration test keeps replay setup and assertions in execution order.
+  # rubocop:disable Metrics/MethodLength
   def test_stride_one_corrections_and_mid_batch_lesson_replay
     episode = GameSimulator.run(seed: 1_000_000, strategy: :learned, model: empty_model,
                                 capture_states: true)
@@ -231,6 +236,7 @@ class LearnedPlayerTest < Minitest::Test
       assert_operator result.states_searched, :>=, 3
     end
   end
+  # rubocop:enable Metrics/MethodLength
 
   private
 

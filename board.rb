@@ -231,11 +231,29 @@ class Board1010
     line_completion_scores(tile, [[row, col]]).first
   end
 
+  # Keep this bit-mask loop inline because feature extraction calls it for every
+  # legal action; extra dispatches make the O-hint path measurably slower.
+  # rubocop:disable Metrics/AbcSize
   def line_completion_scores(tile, positions)
     occupied_rows = Array.new(ROWS) {|row| occupancy_mask(@cells[row]) }
-    occupied_cols = column_masks(occupied_rows)
-    positions.map {|row, col| completed_line_count(tile, row, col, occupied_rows, occupied_cols) }
+    occupied_cols = Array.new(COLS, 0)
+    occupied_rows.each_with_index do |mask, row|
+      COLS.times {|col| occupied_cols[col] |= (1 << row) unless mask.nobits?(1 << col) }
+    end
+
+    positions.map do |row, col|
+      left = col - tile.anchor
+      complete_rows = tile.row_masks.each_with_index.count do |mask, row_offset|
+        (occupied_rows[row + row_offset] | (mask << left)) == (1 << COLS) - 1
+      end
+      complete_cols = tile.col_masks.each_with_index.count do |mask, col_offset|
+        c = left + col_offset
+        (occupied_cols[c] | (mask << row)) == (1 << ROWS) - 1
+      end
+      complete_rows + complete_cols
+    end
   end
+  # rubocop:enable Metrics/AbcSize
 
   def neighbour_scores(positions)
     occupied = occupancy_bitboard
@@ -357,60 +375,30 @@ class Board1010
     [@cells.map(&:dup), @tile_ids.map(&:dup)]
   end
 
+  # This single pass serves each candidate placement in learned feature
+  # extraction. Keeping the neighbor traversal inline avoids hot-loop dispatch.
+  # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
   def footprint_contact_count(tile, row, col, include_walls:)
-    own = footprint_cells(tile, row, col)
-    contact_cells(own, include_walls).size
-  end
-
-  def footprint_cells(tile, row, col)
-    tile.offsets.to_h do |row_offset, col_offset, _value|
-      [[row + row_offset, col + col_offset - tile.anchor], true]
+    own = {}
+    tile.offsets.each do |row_offset, col_offset, _value|
+      own[[row + row_offset, col + col_offset - tile.anchor]] = true
     end
-  end
-
-  def contact_cells(own, include_walls)
-    own.each_key.each_with_object({}) do |(row, col), touching|
+    touching = {}
+    own.each_key do |r, c|
       NEIGHBOUR_OFFSETS.each do |dr, dc|
-        cell = [row + dr, col + dc]
+        cell = [r + dr, c + dc]
         next if own.key?(cell) || touching.key?(cell)
 
-        add_contact(touching, cell, include_walls)
+        if inside?(*cell)
+          touching[cell] = true if filled?(*cell)
+        elsif include_walls
+          touching[cell] = true
+        end
       end
     end
+    touching.size
   end
-
-  def add_contact(touching, cell, include_walls)
-    if inside?(*cell)
-      touching[cell] = true if filled?(*cell)
-    elsif include_walls
-      touching[cell] = true
-    end
-  end
-
-  def column_masks(occupied_rows)
-    occupied_cols = Array.new(COLS, 0)
-    occupied_rows.each_with_index do |mask, row|
-      COLS.times {|col| occupied_cols[col] |= (1 << row) unless mask.nobits?(1 << col) }
-    end
-    occupied_cols
-  end
-
-  def completed_line_count(tile, row, col, occupied_rows, occupied_cols)
-    left = col - tile.anchor
-    completed_rows(tile, row, left, occupied_rows) + completed_cols(tile, row, left, occupied_cols)
-  end
-
-  def completed_rows(tile, row, left, occupied_rows)
-    tile.row_masks.each_with_index.count do |mask, offset|
-      (occupied_rows[row + offset] | (mask << left)) == (1 << COLS) - 1
-    end
-  end
-
-  def completed_cols(tile, row, left, occupied_cols)
-    tile.col_masks.each_with_index.count do |mask, offset|
-      (occupied_cols[left + offset] | (mask << row)) == (1 << ROWS) - 1
-    end
-  end
+  # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
   def clear_lines(rows, cols)
     rows.each do |row|

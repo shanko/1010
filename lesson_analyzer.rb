@@ -17,7 +17,8 @@ class LessonAnalyzer
                rollouts_per_step: rollouts_per_step, strategy: strategy,
                rollout_strategy: strategy, clock: clock}
     result = search(trace, baseline, options)
-    record = build_record(path, source_digest, trace, baseline, result, options)
+    record = build_record(path: path, source_digest: source_digest, trace: trace,
+                          baseline: baseline, result: result, options: options)
     validate_record!(path, record, trace, result)
     verify_source_unchanged!(path, source_digest)
     record
@@ -35,7 +36,8 @@ class LessonAnalyzer
     source_digest = Digest::SHA256.file(path).hexdigest
     trace = GameTrace.read(path)
     unless trace.final_reason == "game_over"
-      message = ["#{path} ended with #{trace.final_reason.inspect};", "only Game Over episodes can be analyzed"].join(" ")
+      message = ["#{path} ended with #{trace.final_reason.inspect};",
+                 "only Game Over episodes can be analyzed"].join(" ")
       raise ArgumentError, message
     end
     baseline = extract_final_trajectory(trace)
@@ -53,11 +55,11 @@ class LessonAnalyzer
                              **options)
   end
 
-  def build_record(path, source_digest, trace, baseline, result, options)
+  def build_record(path:, source_digest:, trace:, baseline:, result:, options:)
     record_header(path, source_digest, trace, baseline).merge(
       trajectory_record(baseline, result),
-      search: search_record(result, options),
-      outcome: result.score_delta.positive? ? "improved" : "no_improvement",
+      search:     search_record(result, options),
+      outcome:    result.score_delta.positive? ? "improved" : "no_improvement",
       provenance: [provenance_record(path, source_digest, trace, baseline, result)]
     )
   end
@@ -66,7 +68,7 @@ class LessonAnalyzer
     {schema_version: LessonStore::SCHEMA_VERSION,
      source_episode: {path: File.expand_path(path), sha256: source_digest,
                       seed: trace.seed, mode: trace.mode, final_reason: trace.final_reason},
-     initial_state: {cells: trace.starting_board.cells, tile_ids: trace.starting_board.tile_ids,
+     initial_state:  {cells: trace.starting_board.cells, tile_ids: trace.starting_board.tile_ids,
                      score: trace.starting_board.score, options: baseline[:offers].first}}
   end
 
@@ -77,8 +79,8 @@ class LessonAnalyzer
   end
 
   def search_record(result, options)
-    search_limits(options).merge(search_result(result), version: ImprovementSearch::VERSION,
-                                strategy: options.fetch(:strategy).to_sym)
+    search_limits(options).merge(search_result(result), version:  ImprovementSearch::VERSION,
+                                                        strategy: options.fetch(:strategy).to_sym)
   end
 
   def search_limits(options)
@@ -101,7 +103,7 @@ class LessonAnalyzer
      candidate_complete: result.complete}
   end
 
-  def validate_record!(path, record, trace, result)
+  def validate_record!(_path, record, trace, result)
     actual_board = LessonStore.replay(record.transform_keys(&:to_s), "actual_sequence")
     candidate_board = LessonStore.replay(record.transform_keys(&:to_s), "candidate_sequence")
     unless actual_board.score == trace.final_score
@@ -112,10 +114,10 @@ class LessonAnalyzer
   end
 
   def verify_source_unchanged!(path, source_digest)
-    unless Digest::SHA256.file(path).hexdigest == source_digest
-      raise ArgumentError,
-            "source trace changed during analysis"
-    end
+    return if Digest::SHA256.file(path).hexdigest == source_digest
+
+    raise ArgumentError,
+          "source trace changed during analysis"
   end
 
   # Undo events remove the corresponding action and any offer batch that was
@@ -139,12 +141,12 @@ class LessonAnalyzer
 
   def replay_trajectory_event(event, replay, undo_stack, sequence, offers)
     case event.first
-      when :deal
-        replay_deal_event(event[1], replay, offers)
-      when :move
-        replay_move_event(event, replay, undo_stack, sequence, offers)
-      when :undo
-        replay_undo_event(replay, undo_stack, sequence, offers)
+    when :deal
+      replay_deal_event(event[1], replay, offers)
+    when :move
+      replay_move_event(event, replay, undo_stack, sequence, offers)
+    when :undo
+      replay_undo_event(replay, undo_stack, sequence, offers)
     end
   end
 

@@ -25,6 +25,8 @@ class ReinforcementTrainerTest < Minitest::Test
     assert_operator policy.score(square_action_features) - policy.score(dot_action_features), :>, prior_difference
   end
 
+  # The finite-difference calculation is one cohesive mathematical check.
+  # rubocop:disable Metrics/MethodLength, Metrics/BlockLength
   def test_policy_gradient_matches_finite_difference_at_non_unit_temperatures
     [0.5, 2.0].each do |temperature|
       model = empty_model
@@ -57,7 +59,10 @@ class ReinforcementTrainerTest < Minitest::Test
       assert_in_delta finite_difference, estimated_gradient, 1e-5, "temperature #{temperature}"
     end
   end
+  # rubocop:enable Metrics/MethodLength, Metrics/BlockLength
 
+  # This integration test follows a checkpoint from training through loading.
+  # rubocop:disable Metrics/MethodLength
   def test_training_writes_evaluated_versioned_checkpoints_and_selected_pointer
     Dir.mktmpdir do |directory|
       store = RLCheckpointStore.new(directory: directory)
@@ -85,6 +90,7 @@ class ReinforcementTrainerTest < Minitest::Test
       assert File.file?(result.selected_pointer)
     end
   end
+  # rubocop:enable Metrics/MethodLength
 
   def test_cli_default_checkpoint_interval_matches_trainer_default
     assert_equal 10, ReinforcementTrainer::DEFAULT_CHECKPOINT_INTERVAL
@@ -104,6 +110,8 @@ class ReinforcementTrainerTest < Minitest::Test
     end
   end
 
+  # The resume assertions depend on the ordered state produced by two runs.
+  # rubocop:disable Metrics/MethodLength
   def test_resume_preserves_baseline_and_advances_step_without_overwriting_checkpoint
     Dir.mktmpdir do |directory|
       store = RLCheckpointStore.new(directory: directory)
@@ -128,6 +136,7 @@ class ReinforcementTrainerTest < Minitest::Test
       assert_equal true, resumed.checkpoints.first.fetch(:existing)
     end
   end
+  # rubocop:enable Metrics/MethodLength
 
   def test_rejects_held_out_training_seeds_and_tuning_seeds
     error = assert_raises(ArgumentError) do
@@ -155,6 +164,8 @@ class ReinforcementTrainerTest < Minitest::Test
     assert_match "--seeds has 1 seed but --episodes is 2", error.message
   end
 
+  # All selection cases share one temporary store and selected pointer.
+  # rubocop:disable Metrics/MethodLength, Metrics/BlockLength
   def test_automatic_selection_keeps_better_checkpoint_and_rescores_different_seed_lists
     Dir.mktmpdir do |directory|
       store = RLCheckpointStore.new(directory: directory)
@@ -191,6 +202,7 @@ class ReinforcementTrainerTest < Minitest::Test
       assert_equal false, unchanged.fetch(:selection_changed)
     end
   end
+  # rubocop:enable Metrics/MethodLength, Metrics/BlockLength
 
   def test_selection_command_evaluates_only_tuning_seeds_and_writes_pointer
     Dir.mktmpdir do |directory|

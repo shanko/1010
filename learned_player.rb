@@ -62,6 +62,9 @@ module ActionFeatures
     end
   end
 
+  # Keep this schema-ordered feature assignment list together: it is the hot
+  # extraction path and is easier to audit against BASE_FEATURES as one sequence.
+  # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
   def self.extract(board, option_index, row, col)
     tile = board.options.fetch(option_index)
     raise ArgumentError, "feature action is not legal" unless board.fits?(tile, row, col)
@@ -90,9 +93,13 @@ module ActionFeatures
     features[FEATURE_INDEX.fetch("tile_#{tile_name}")] = 1.0
     features
   end
+  # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
   # Empty regions use four-neighbor connectivity. Isolated cells use the
   # game's eight-neighbor geometry because diagonal gaps also affect fit.
+  # Keep the bitboard traversal inline: it runs for every candidate action and
+  # splitting its inner loops into methods measurably slows the O-hint path.
+  # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
   def self.empty_space_features(board_or_bits)
     occupied = board_or_bits.is_a?(Board1010) ? board_or_bits.occupied_bits : board_or_bits
     empty = Board1010::FULL_BOARD_MASK ^ occupied
@@ -124,6 +131,7 @@ module ActionFeatures
                 ((empty & ~right_edge) << (Board1010::COLS + 1))
     [largest, regions, bit_count(empty & ~neighbors)]
   end
+  # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
   private_class_method :empty_space_features
 
   def self.bit_count(bits)
@@ -154,33 +162,42 @@ class LearnedPlayer
 
   def initialize(model)
     model = JSON.parse(JSON.generate(model))
+    validate_model!(model)
+    @model = model
+    @weights = read_weights(model)
+    @weight_values = ActionFeatures::NAMES.map {|name| @weights.fetch(name) }
+  end
+
+  def validate_model!(model)
     unless model["schema_version"] == MODEL_SCHEMA_VERSION
       raise ArgumentError,
             "unsupported learned policy model schema"
     end
 
-    unless model["feature_version"] == ActionFeatures::VERSION
-      feature_version = model["feature_version"]
-      message = [
-        "model uses action feature version #{feature_version.inspect};",
-        "this code requires version #{ActionFeatures::VERSION} (retrain the model)"
-      ].join(" ")
-      raise ArgumentError, message
-    end
+    validate_feature_version!(model)
     unless model["feature_names"] == ActionFeatures::NAMES
       raise ArgumentError,
             "model feature names do not match this code"
     end
     raise ArgumentError, "model weights are missing" unless model["weights"].is_a?(Hash)
+  end
 
-    @model = model
-    @weights = ActionFeatures::NAMES.to_h do |name|
+  def validate_feature_version!(model)
+    return if model["feature_version"] == ActionFeatures::VERSION
+
+    feature_version = model["feature_version"]
+    message = ["model uses action feature version #{feature_version.inspect};",
+               "this code requires version #{ActionFeatures::VERSION} (retrain the model)"].join(" ")
+    raise ArgumentError, message
+  end
+
+  def read_weights(model)
+    ActionFeatures::NAMES.to_h do |name|
       weight = Float(model["weights"].fetch(name, 0.0))
       raise ArgumentError, "model weights must be finite" unless weight.finite?
 
       [name, weight]
     end
-    @weight_values = ActionFeatures::NAMES.map {|name| @weights.fetch(name) }
   end
 
   def score(features)
@@ -202,48 +219,77 @@ class LearnedPlayer
   # Draws a stochastic action for policy-gradient training and returns the
   # sufficient statistics for grad(log pi): chosen features minus expectation.
   def sample_action(board, random:, temperature: 1.0)
-    temperature = Float(temperature)
-    raise ArgumentError, "temperature must be finite and positive" unless temperature.finite? && temperature.positive?
+    temperature = validated_temperature(temperature)
 
     actions = legal_actions(board)
     return nil if actions.empty?
 
-    scores = actions.map {|_action, features| score(features) / temperature }
-    maximum = scores.max
-    masses = scores.map {|value| Math.exp((value - maximum).clamp(-40.0, 0.0)) }
-    total = masses.sum
-    probabilities = masses.map {|mass| mass / total }
-    draw = random.rand
-    selected_index = probabilities.each_index.find do |index|
-      draw -= probabilities[index]
-      draw.negative?
-    end || (probabilities.size - 1)
-    expected = ActionFeatures::FeatureVector.new
-    ActionFeatures::NAMES.each_index do |feature_index|
-      expected[feature_index] = actions.each_with_index.sum do |(_action, features), index|
-        probabilities[index] * features[feature_index]
-      end
-    end
+    probabilities = action_probabilities(actions, temperature)
+    selected_index = sample_index(probabilities, random)
+    expected = expected_action_features(actions, probabilities)
     action, features = actions.fetch(selected_index)
     {action: action, log_probability: Math.log(probabilities.fetch(selected_index)),
      chosen_features: features, expected_features: expected, probabilities: probabilities}
   end
 
+  def validated_temperature(value)
+    temperature = Float(value)
+    raise ArgumentError, "temperature must be finite and positive" unless temperature.finite? && temperature.positive?
+
+    temperature
+  end
+
+  def action_probabilities(actions, temperature)
+    scores = actions.map {|_action, features| score(features) / temperature }
+    maximum = scores.max
+    masses = scores.map {|value| Math.exp((value - maximum).clamp(-40.0, 0.0)) }
+    total = masses.sum
+    masses.map {|mass| mass / total }
+  end
+
+  def sample_index(probabilities, random)
+    draw = random.rand
+    probabilities.each_index.find do |index|
+      draw -= probabilities[index]
+      draw.negative?
+    end || (probabilities.size - 1)
+  end
+
+  def expected_action_features(actions, probabilities)
+    ActionFeatures::FeatureVector.new.tap do |expected|
+      ActionFeatures::NAMES.each_index do |feature_index|
+        expected[feature_index] = expected_feature_value(actions, probabilities, feature_index)
+      end
+    end
+  end
+
+  def expected_feature_value(actions, probabilities, feature_index)
+    actions.each_with_index.sum do |(_action, features), index|
+      probabilities[index] * features[feature_index]
+    end
+  end
+
   def update_policy_gradient!(chosen_features:, expected_features:, advantage:, learning_rate:,
                               temperature: 1.0)
-    temperature = Float(temperature)
-    raise ArgumentError, "temperature must be finite and positive" unless temperature.finite? && temperature.positive?
+    temperature = validated_temperature(temperature)
 
     scale = Float(advantage) * Float(learning_rate) / temperature
     raise ArgumentError, "policy update scale must be finite" unless scale.finite?
 
-    ActionFeatures::NAMES.each_with_index do |name, index|
-      chosen = chosen_features.is_a?(Array) ? chosen_features[index] : chosen_features.fetch(name)
-      expected = expected_features.is_a?(Array) ? expected_features[index] : expected_features.fetch(name)
-      @weights[name] += scale * (chosen - expected)
-    end
+    update_weights(chosen_features, expected_features, scale)
     @weight_values = ActionFeatures::NAMES.map {|name| @weights.fetch(name) }
     @model["weights"] = @weights
+  end
+
+  def update_weights(chosen_features, expected_features, scale)
+    ActionFeatures::NAMES.each_with_index do |name, index|
+      @weights[name] += scale * (feature_at(chosen_features, name, index) -
+                                 feature_at(expected_features, name, index))
+    end
+  end
+
+  def feature_at(features, name, index)
+    features.is_a?(Array) ? features[index] : features.fetch(name)
   end
 
   def best_position(board, tile, random: Random.new)
@@ -256,10 +302,14 @@ class LearnedPlayer
     end
     return nil if actions.empty?
 
+    winners = best_actions(actions)
+    winners.map {|_index, row, col| [row, col] }.sample(random: random)
+  end
+
+  def best_actions(actions)
     scored = actions.map {|action, features| [action, score(features)] }
     best_score = scored.map(&:last).max
-    winners = scored.select {|_action, value| value == best_score }.map(&:first)
-    winners.map {|_index, row, col| [row, col] }.sample(random: random)
+    scored.select {|_action, value| value == best_score }.map(&:first)
   end
 
   def legal_actions(board)
@@ -277,6 +327,21 @@ class ImitationTrainer
   Result = Struct.new(:model, :episodes_used, :examples_seen, :excluded, keyword_init: true)
 
   def train(directory:, seed_set: :training, random_seed: 1, epochs: 10, learning_rate: 0.1)
+    epochs, rate = validate_training_options(epochs, learning_rate)
+    LearningSeedSets.validate_set!(seed_set, allowed: :training, purpose: "imitation training")
+    excluded = Hash.new(0)
+    examples = collect_examples(directory, seed_set, excluded)
+    raise ArgumentError, "no eligible improved lessons found in #{directory} (seed set #{seed_set})" if examples.empty?
+
+    random_seed = Integer(random_seed)
+    weights, examples_seen = train_weights(examples, random_seed, epochs, rate)
+    model = training_model(weights: weights, examples: examples, seed_set: seed_set,
+                           random_seed: random_seed, epochs: epochs, rate: rate, seen: examples_seen)
+    Result.new(model: model, episodes_used: episode_count(examples),
+               examples_seen: examples_seen, excluded: excluded)
+  end
+
+  def validate_training_options(epochs, learning_rate)
     epochs = Integer(epochs)
     rate = Float(learning_rate)
     raise ArgumentError, "epochs must be positive" unless epochs.positive?
@@ -286,63 +351,88 @@ class ImitationTrainer
             "learning rate must be finite and between 0 and 1"
     end
 
-    LearningSeedSets.validate_set!(seed_set, allowed: :training, purpose: "imitation training")
+    [epochs, rate]
+  end
 
-    examples = []
-    excluded = Hash.new(0)
-    lesson_paths = Dir.glob(File.join(directory, "*.json"))
-    lesson_paths.each do |path|
-      lesson = LessonStore.read(path)
-      seed = lesson.dig("source_episode", "seed")
-      if seed && LearningSeedSets.member?(seed, set: :held_out)
-        excluded[:held_out] += 1
-        next
-      end
-      unless seed && LearningSeedSets.member?(seed, set: seed_set)
-        excluded[:outside_seed_set] += 1
-        next
-      end
-      unless lesson["outcome"] == "improved" && lesson["improvement_delta"].to_i.positive? &&
-             lesson.dig("search", "candidate_complete") == true && lesson.dig("search", "status") == "improved"
-        excluded[:low_confidence_or_no_improvement] += 1
-        next
-      end
-
-      begin
-        actual = LessonStore.replay(lesson, "actual_sequence")
-        candidate = LessonStore.replay(lesson, "candidate_sequence")
-        unless actual.score == lesson.fetch("actual_score") && candidate.score == lesson.fetch("candidate_score") &&
-               candidate.score - actual.score == lesson.fetch("improvement_delta") &&
-               actual.game_over? && candidate.game_over? && !candidate.options.empty?
-          excluded[:invalid_replay] += 1
-          next
-        end
-        examples.concat(examples_for(lesson))
-      rescue ArgumentError, KeyError
-        excluded[:invalid_replay] += 1
-      end
+  def collect_examples(directory, seed_set, excluded)
+    Dir.glob(File.join(directory, "*.json")).flat_map do |path|
+      examples_from_path(path, seed_set, excluded)
     end
-    raise ArgumentError, "no eligible improved lessons found in #{directory} (seed set #{seed_set})" if examples.empty?
+  end
 
+  def examples_from_path(path, seed_set, excluded)
+    lesson = LessonStore.read(path)
+    return [] unless eligible_seed?(lesson, seed_set, excluded)
+    return reject_lesson(excluded, :low_confidence_or_no_improvement) unless complete_improvement?(lesson)
+
+    validated_examples(lesson, excluded)
+  end
+
+  def eligible_seed?(lesson, seed_set, excluded)
+    seed = lesson.dig("source_episode", "seed")
+    return true if seed && LearningSeedSets.member?(seed, set: seed_set)
+
+    excluded[seed && LearningSeedSets.member?(seed, set: :held_out) ? :held_out : :outside_seed_set] += 1
+    false
+  end
+
+  def reject_lesson(excluded, reason)
+    excluded[reason] += 1
+    []
+  end
+
+  def complete_improvement?(lesson)
+    lesson["outcome"] == "improved" && lesson["improvement_delta"].to_i.positive? &&
+      lesson.dig("search", "candidate_complete") == true && lesson.dig("search", "status") == "improved"
+  end
+
+  def validated_examples(lesson, excluded)
+    return reject_lesson(excluded, :invalid_replay) unless valid_complete_replay?(lesson)
+
+    examples_for(lesson)
+  rescue ArgumentError, KeyError
+    reject_lesson(excluded, :invalid_replay)
+  end
+
+  def valid_complete_replay?(lesson)
+    actual = LessonStore.replay(lesson, "actual_sequence")
+    candidate = LessonStore.replay(lesson, "candidate_sequence")
+    replay_scores_match?(lesson, actual, candidate) && actual.game_over? && complete_board?(candidate)
+  end
+
+  def replay_scores_match?(lesson, actual, candidate)
+    actual.score == lesson.fetch("actual_score") && candidate.score == lesson.fetch("candidate_score") &&
+      candidate.score - actual.score == lesson.fetch("improvement_delta")
+  end
+
+  def complete_board?(board)
+    board.game_over? && !board.options.empty?
+  end
+
+  def train_weights(examples, random_seed, epochs, rate)
     weights = ActionFeatures::NAMES.to_h {|name| [name, 0.0] }
-    random = Random.new(Integer(random_seed))
-    examples_seen = 0
+    random = Random.new(random_seed)
+    seen = 0
     epochs.times do
       examples.shuffle(random: random).each do |example|
         update(weights, example, rate)
-        examples_seen += 1
+        seen += 1
       end
     end
-    model = {"schema_version"  => LearnedPlayer::MODEL_SCHEMA_VERSION,
-             "feature_version" => ActionFeatures::VERSION,
-             "feature_names"   => ActionFeatures::NAMES,
-             "weights"         => weights,
-             "training"        => {"seed_set" => seed_set.to_s, "random_seed" => Integer(random_seed),
-                            "epochs" => epochs, "learning_rate" => rate,
-                            "episodes_used" => examples.map {|example| example[:episode] }.uniq.size,
-                            "examples_seen" => examples_seen}}
-    Result.new(model: model, episodes_used: examples.map {|example| example[:episode] }.uniq.size,
-               examples_seen: examples_seen, excluded: excluded)
+    [weights, seen]
+  end
+
+  def training_model(weights:, examples:, seed_set:, random_seed:, epochs:, rate:, seen:)
+    {"schema_version" => LearnedPlayer::MODEL_SCHEMA_VERSION,
+     "feature_version" => ActionFeatures::VERSION, "feature_names" => ActionFeatures::NAMES,
+     "weights" => weights,
+     "training" => {"seed_set" => seed_set.to_s, "random_seed" => random_seed,
+                    "epochs" => epochs, "learning_rate" => rate,
+                    "episodes_used" => episode_count(examples), "examples_seen" => seen}}
+  end
+
+  def episode_count(examples)
+    examples.map {|example| example[:episode] }.uniq.size
   end
 
   def save(model, path)
@@ -353,24 +443,31 @@ class ImitationTrainer
   private
 
   def examples_for(lesson)
-    initial = lesson.fetch("initial_state")
-    board = Board1010.new(cells: initial.fetch("cells"), tile_ids: initial.fetch("tile_ids"),
-                          score: initial.fetch("score"),
-                          options: initial.fetch("options").map {|name| Tile.fetch(name) })
+    board = lesson_initial_board(lesson)
     offers = lesson["candidate_offers"] || lesson.fetch("offers")
     replay = OfferReplay.new(board: board, offers: offers, strict_offers: false)
     confidence = [Math.log(1 + lesson.fetch("improvement_delta").to_f), 2.0].min
     episode = lesson.dig("source_episode", "seed")
     policy = LearnedPlayer.new(empty_model)
     lesson.fetch("candidate_sequence").map do |move|
-      legal = policy.legal_actions(board)
-      chosen = [Integer(move.fetch("option")), Integer(move.fetch("row")), Integer(move.fetch("col"))]
-      match = legal.find {|action, _features| action == chosen }
-      raise ArgumentError, "candidate contains an action outside the legal set" unless match
-
-      replay.apply({tile: move.fetch("tile"), option: chosen[0], row: chosen[1], col: chosen[2]})
-      {legal: legal, chosen: match.last, weight: confidence, episode: episode}
+      example_for_move(move, policy, replay, confidence, episode)
     end
+  end
+
+  def lesson_initial_board(lesson)
+    initial = lesson.fetch("initial_state")
+    Board1010.new(cells: initial.fetch("cells"), tile_ids: initial.fetch("tile_ids"),
+                  score: initial.fetch("score"), options: initial.fetch("options").map {|name| Tile.fetch(name) })
+  end
+
+  def example_for_move(move, policy, replay, confidence, episode)
+    legal = policy.legal_actions(replay.board)
+    chosen = [Integer(move.fetch("option")), Integer(move.fetch("row")), Integer(move.fetch("col"))]
+    match = legal.find {|action, _features| action == chosen }
+    raise ArgumentError, "candidate contains an action outside the legal set" unless match
+
+    replay.apply({tile: move.fetch("tile"), option: chosen[0], row: chosen[1], col: chosen[2]})
+    {legal: legal, chosen: match.last, weight: confidence, episode: episode}
   end
 
   def empty_model
@@ -381,20 +478,25 @@ class ImitationTrainer
   end
 
   def update(weights, example, learning_rate)
-    scored = example[:legal].map {|_action, features| [features, dot(weights, features)] }
-    maximum = scored.map(&:last).max
-    probabilities = scored.map {|_features, value| Math.exp((value - maximum).clamp(-40.0, 0.0)) }
-    normalizer = probabilities.sum
+    expected = expected_features(weights, example[:legal])
     chosen_features = example[:chosen]
-    expected = ActionFeatures::NAMES.to_h do |name|
-      value = scored.each_with_index.sum do |(features, _score), index|
-        probabilities[index] * features.fetch(name) / normalizer
-      end
-      [name, value]
-    end
     ActionFeatures::NAMES.each do |name|
       weights[name] += learning_rate * example[:weight] * (chosen_features.fetch(name) - expected.fetch(name))
     end
+  end
+
+  def expected_features(weights, legal)
+    scored = legal.map {|_action, features| [features, dot(weights, features)] }
+    maximum = scored.map(&:last).max
+    masses = scored.map {|_features, value| Math.exp((value - maximum).clamp(-40.0, 0.0)) }
+    total = masses.sum
+    ActionFeatures::NAMES.to_h do |name|
+      [name, expected_feature(name, scored, masses, total)]
+    end
+  end
+
+  def expected_feature(name, scored, masses, total)
+    scored.each_with_index.sum {|(features, _score), index| masses[index] * features.fetch(name) / total }
   end
 
   def dot(weights, features)

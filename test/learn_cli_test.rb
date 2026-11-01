@@ -6,6 +6,8 @@ require "stringio"
 require_relative "../learn_cli"
 require_relative "../game_log"
 
+# rubocop:disable Metrics/BlockLength, Metrics/MethodLength
+
 class LearnCLITest < Minitest::Test
   def test_shared_seed_lists_accept_ranges_and_comma_lists
     assert_equal [1_000_000, 1_000_001], LearningSeedSets.parse_list("1000000..1000001")
@@ -40,7 +42,7 @@ class LearnCLITest < Minitest::Test
 
   def test_collect_and_imitation_training_commands_success_paths_run_in_process
     Dir.mktmpdir do |directory|
-      lesson_directory = File.join(directory, "lessons")
+      lesson_directory = File.join(directory, LessonStore::DIRECTORY)
       collected = run_success("collect-training", "--seeds", "1000000..1000000",
                               "--budget", "5", "--max-states", "500", "--max-rollouts", "8",
                               "--output", lesson_directory)
@@ -83,6 +85,113 @@ class LearnCLITest < Minitest::Test
     end
   end
 
+  def test_improve_command_writes_a_deterministic_replayable_trace_and_cost_report
+    Dir.mktmpdir do |directory|
+      source_path = write_completed_trace(directory, seed: 1_000_000)
+      output_path = File.join(directory, "improved.moves")
+      report_path = File.join(directory, "improved.json")
+      lesson_directory = File.join(directory, LessonStore::DIRECTORY)
+      arguments = ["improve", "--states", "500", "--time", "30", "--output", output_path,
+                   "--report", report_path, "--save-lesson", source_path]
+
+      output = StringIO.new
+      error = StringIO.new
+      status = Dir.chdir(directory) { LearnCLI.run(arguments, out: output, err: error) }
+      assert_equal 0, status, error.string
+      assert_match "Improved:", output.string
+      assert_match "Costliest moves:", output.string
+
+      source = GameTrace.read(source_path)
+      improved = GameTrace.read(output_path)
+      replayed = GameTrace.replay(improved)
+      report = JSON.parse(File.read(report_path))
+      assert_operator replayed.score, :>, source.final_score
+      assert_equal source.deal_batches, improved.deal_batches.first(source.deal_batches.size)
+      assert_equal true, report.fetch("seed_consistent")
+      assert_operator report.fetch("seeded_offer_sets_used"), :>, 0
+      assert_equal source.events.count {|event| event.first == :move }, report.fetch("per_move_estimates").size
+      assert_operator report.fetch("costliest_moves").size, :>, 0
+
+      trace_before = File.binread(output_path)
+      report_before = File.binread(report_path)
+      status = Dir.chdir(directory) { LearnCLI.run(arguments, out: StringIO.new, err: error) }
+      assert_equal 0, status, error.string
+      assert_equal trace_before, File.binread(output_path)
+      assert_equal report_before, File.binread(report_path)
+      assert_equal 1, Dir.glob(File.join(lesson_directory, "*.json")).size
+    end
+  end
+
+  def test_improve_reports_seed_validation_failures_and_rejects_quit_traces
+    Dir.mktmpdir do |directory|
+      source_path = write_completed_trace(directory, seed: 1_000_000)
+      lines = File.readlines(source_path)
+      offer_names = lines[4].delete_prefix("d").strip.split(",")
+      offer_names[0] = (Tile::NAMES - offer_names).first
+      lines[4] = "d#{offer_names.join(',')}\n"
+      File.write(source_path, lines.join)
+
+      result = GameImprover.new.validate_seed(GameTrace.read(source_path))
+      assert_equal false, result.fetch(:consistent)
+      assert_match "initial offer differs", result.fetch(:reason)
+
+      quit_path = File.join(directory, "quit.moves")
+      File.write(quit_path, lines.join.sub(/zgame_over\|\d+/, "zquit|0"))
+      error = assert_raises(ArgumentError) do
+        GameImprover.new.improve(quit_path, states: 10, output_path: File.join(directory, "quit-improved.moves"))
+      end
+      assert_match "only Game Over traces can be improved", error.message
+    end
+  end
+
+  def test_improve_uses_the_final_trajectory_after_an_undo_crossing_a_deal
+    Dir.mktmpdir do |directory|
+      source_path = write_undo_across_deal_trace(directory)
+      source = GameTrace.read(source_path)
+      baseline = LessonAnalyzer.new.final_trajectory(source)
+      assert_equal source.deal_batches.size - 1, baseline.fetch(:offers).size
+
+      output_path = File.join(directory, "undo-improved.moves")
+      report_path = File.join(directory, "undo-report.json")
+      result = GameImprover.new.improve(source_path, states: 25, time_budget_seconds: 15,
+                                        output_path: output_path, report_path: report_path)
+      improved = GameTrace.read(result.trace_path)
+      replayed = GameTrace.replay(improved)
+      report = JSON.parse(File.read(report_path))
+
+      assert_operator replayed.score, :>=, source.final_score
+      assert_equal baseline.fetch(:offers).map {|batch| batch.map(&:to_s) },
+                   improved.deal_batches.first(baseline.fetch(:offers).size)
+      assert_equal 0, report.fetch("seeded_offer_sets_used")
+      assert_equal false, report.fetch("seed_consistent")
+      assert_match "no seed", report.fetch("seed_consistency_reason")
+    end
+  end
+
+  def test_seed_validation_restores_dealer_state_when_a_deal_is_undone
+    Dir.mktmpdir do |directory|
+      source_path = write_completed_trace(directory, seed: 1_000_000)
+      lines = File.readlines(source_path)
+      move_indexes = lines.each_index.select {|index| lines[index].match?(/\Am[a-z0-9]+,/) }
+      deal_indexes = lines.each_index.select {|index| lines[index].start_with?("d") }
+      last_move = lines.fetch(move_indexes.fetch(2))
+      deal_line = lines.fetch(deal_indexes.fetch(1))
+      lines.insert(deal_indexes.fetch(1) + 1, "u\n", last_move, deal_line)
+      undone_path = File.join(directory, "undone.moves")
+      File.write(undone_path, lines.join)
+      trace = GameTrace.read(undone_path)
+      baseline = LessonAnalyzer.new.final_trajectory(trace)
+
+      assert_equal true, GameImprover.new.validate_seed(trace).fetch(:consistent)
+      assert_equal trace.deal_batches.size - 1, baseline.fetch(:offers).size
+
+      result = GameImprover.new.improve(undone_path, states: 100, time_budget_seconds: 30,
+                                        output_path: File.join(directory, "undone-improved.moves"))
+      assert_equal true, result.report.fetch(:seed_consistent)
+      assert_operator GameTrace.replay(GameTrace.read(result.trace_path)).score, :>=, trace.final_score
+    end
+  end
+
   def test_seed_set_errors_are_reported_without_a_parser_crash
     Dir.mktmpdir do |directory|
       model_path = write_empty_model(directory)
@@ -117,10 +226,10 @@ class LearnCLITest < Minitest::Test
     path
   end
 
-  def write_completed_trace(directory)
-    episode = GameSimulator.run(seed: 11, strategy: :first_fit)
-    board = GameSimulator.initial_board(seed: 11)
-    log = GameLog.new(seed: 11, board: board, mode: "auto", directory: directory)
+  def write_completed_trace(directory, seed: 11)
+    episode = GameSimulator.run(seed: seed, strategy: :first_fit)
+    board = GameSimulator.initial_board(seed: seed)
+    log = GameLog.new(seed: seed, board: board, mode: "auto", directory: directory)
     next_offer = 1
     episode.moves.each do |move|
       batch_exhausted = board.options.size == 1
@@ -138,4 +247,34 @@ class LearnCLITest < Minitest::Test
     log.finish(reason: "game_over", score: board.score)
     log.path
   end
+
+  def write_undo_across_deal_trace(directory)
+    board = Board1010.new(options: [Tile.fetch(:dot)], random: Random.new(9))
+    log = GameLog.new(seed: nil, board: board, mode: "test", directory: directory)
+    player = AutoPlayer.new(:first_fit)
+
+    previous = board.copy
+    play_and_log(board, log, 0, 0, 0)
+    log.deal(board.options)
+    board = previous
+    log.undo
+
+    loop do
+      break if board.game_over?
+
+      option, row, col = player.choose_move(board)
+      last_tile = board.options.size == 1
+      play_and_log(board, log, option, row, col)
+      log.deal(board.options) if last_tile
+    end
+    log.finish(reason: "game_over", score: board.score)
+    log.path
+  end
+
+  def play_and_log(board, log, option, row, col)
+    tile = board.options.fetch(option).name
+    log.move(tile, option, row, col)
+    raise "illegal test move" unless board.play(option, row, col)
+  end
 end
+# rubocop:enable Metrics/BlockLength, Metrics/MethodLength

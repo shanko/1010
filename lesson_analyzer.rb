@@ -65,6 +65,10 @@ class LessonAnalyzer
     record
   end
 
+  def final_trajectory(trace)
+    extract_final_trajectory(trace)
+  end
+
   private
 
   # Undo events remove the corresponding action and any offer batch that was

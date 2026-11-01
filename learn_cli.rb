@@ -12,6 +12,7 @@ require_relative "learned_player"
 require_relative "policy_corrector"
 require_relative "reinforcement_trainer"
 require_relative "lesson_collector"
+require_relative "game_improver"
 
 # In-process command implementations for scripts/learn.rb.
 module LearnCLI
@@ -352,9 +353,91 @@ module LearnCLI
     end
   end
 
+  class Improve < Command
+    FAILURE_LABEL = "Game improvement failed"
+
+    def parse(argv)
+      options = {states: GameImprover::DEFAULT_STATES, time: 86_400.0, beam_width: 4}
+      @parser = OptionParser.new do |opts|
+        opts.banner = "Usage: scripts/learn.rb improve GAME.moves [options]"
+        opts.on("--states N", Integer, "Maximum search states (default: #{options[:states]})") do |value|
+          options[:states] = value
+        end
+        opts.on("--time SECONDS", Float, "Optional wall-clock safety cap") {|value| options[:time] = value }
+        opts.on("--beam-width N", Integer) {|value| options[:beam_width] = value }
+        opts.on("--output FILE", "Improved trace (default: GAME.improved.moves)") {|value| options[:output] = value }
+        opts.on("--report FILE", "JSON report (default: sibling .report.json)") {|value| options[:report] = value }
+        opts.on("--save-lesson", "Also save a lesson from the improved trace") { options[:save_lesson] = true }
+      end
+      @parser.parse!(argv)
+      @trace_path = argv.shift
+      raise OptionParser::MissingArgument, "GAME.moves" unless @trace_path
+      raise OptionParser::InvalidArgument, "unexpected arguments: #{argv.join(' ')}" unless argv.empty?
+
+      options
+    end
+
+    def execute(options, out:, **)
+      result = GameImprover.new.improve(@trace_path, states: options[:states],
+                                        time_budget_seconds: options[:time],
+                                        beam_width: options[:beam_width],
+                                        output_path: options[:output], report_path: options[:report],
+                                        save_lesson: options.fetch(:save_lesson, false))
+      report = result.report
+      puts_to(out, "Original:  #{report.dig(:original, :score)} points, #{report.dig(:original, :moves)} moves")
+      delta = report.dig(:search, :score_delta)
+      sign = delta.positive? ? "+" : ""
+      improved = report.fetch(:improved)
+      puts_to(out, "Improved: #{improved.fetch(:score)} points, #{improved.fetch(:moves)} moves (#{sign}#{delta})")
+      puts_to(out, "Same tiles: #{report[:recorded_offer_sets_used]} recorded offer sets; " \
+                   "#{report[:seeded_offer_sets_used]} seeded sets")
+      print_first_change(out, report[:first_change])
+      print_costliest_moves(out, report[:costliest_moves])
+      consistency = report[:seed_consistency_reason] ? ": #{report[:seed_consistency_reason]}" : ""
+      puts_to(out, "Seed consistent: #{report[:seed_consistent]}#{consistency}")
+      puts_to(out, "Wrote #{result.trace_path}")
+      puts_to(out, "Report: #{result.report_path}")
+      puts_to(out, "Lesson: #{result.lesson_path}") if result.lesson_path
+    end
+
+    private
+
+    def puts_to(output, message)
+      output.puts(message)
+    end
+
+    def print_first_change(output, change)
+      return unless change
+
+      original = change.fetch(:original)
+      improved = change.fetch(:improved)
+      puts_to(output, "First change: move #{change.fetch(:move)} (#{original.fetch(:tile)} " \
+                      "at (#{original.fetch(:row)},#{original.fetch(:col)}) → " \
+                      "#{improved.fetch(:tile)} at (#{improved.fetch(:row)},#{improved.fetch(:col)}))")
+    end
+
+    def print_costliest_moves(output, moves)
+      puts_to(output, "Costliest moves:")
+      if moves.empty?
+        puts_to(output, "  No better placement estimates found.")
+        return
+      end
+
+      moves.each do |entry|
+        original = entry.fetch(:original)
+        better = entry.fetch(:better)
+        move = entry.fetch(:move).to_s.rjust(3)
+        tile = entry.fetch(:tile).ljust(4)
+        puts_to(output, "  move #{move}  #{tile} at (#{original.fetch(:row)},#{original.fetch(:col)}) " \
+                        "≈ -#{entry.fetch(:estimated_cost)} points  " \
+                        "better: (#{better.fetch(:row)},#{better.fetch(:col)})")
+      end
+    end
+  end
+
   COMMANDS = {"analyze" => Analyze, "train-imitation" => TrainImitation,
               "collect-training" => CollectTraining, "correct" => Correct,
-              "select" => Select, "train-rl" => TrainRL}.freeze
+              "select" => Select, "train-rl" => TrainRL, "improve" => Improve}.freeze
 
   def self.run(argv=ARGV, out: $stdout, err: $stderr)
     args = argv.dup

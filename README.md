@@ -101,6 +101,21 @@ The command reports actual and candidate scores, the first action divergence,
 and whether the search found an improvement. Search results are best-found
 candidates, not proofs of an optimal sequence.
 
+Improve a completed game while keeping its recorded tile sets in order. If the
+trace has a seed, the command continues dealing from that seed after the logged
+sets. It writes a replayable `.improved.moves` trace and a JSON report with the
+estimated cost of each original move. Seedless traces use only their recorded
+sets and report that limitation. Traces that ended with `quit` are refused. The
+search uses a reproducible state budget; `--time` is an optional safety cap.
+
+```sh
+$ bundle exec ruby scripts/learn.rb improve logs/<game>.moves --states 50000
+$ bundle exec ruby game_1010.rb --delay 0.5 logs/<game>.improved.moves
+```
+
+Add `--save-lesson` to store a lesson from the improved trace under
+`learning_data/`.
+
 Train a deterministic imitation model from completed, improved lessons whose
 source seeds are in the training range. The trainer rejects held-out lessons,
 and ignores incomplete or non-improving search results:

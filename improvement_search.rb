@@ -2,6 +2,7 @@
 
 require "time"
 require_relative "game_simulator"
+require_relative "recorded_offer_source"
 
 # Bounded, anytime beam search. State and rollout counts are the reproducible
 # work budgets; elapsed time is only a safety cap.
@@ -22,6 +23,7 @@ class ImprovementSearch
 
   def search(seed: nil, strategy: AutoPlayer::DEFAULT_STRATEGY, starting_board: nil,
              baseline_score: nil, baseline_sequence: nil, fixed_offers: nil,
+             continue_after_fixed_offers: false,
              time_budget_seconds: 30.0, beam_width: 4, max_states: 10_000,
              max_rollouts: 100, rollouts_per_step: 2,
              rollout_strategy: strategy, baseline_model: nil, rollout_model: baseline_model,
@@ -61,20 +63,30 @@ class ImprovementSearch
     fixed_offers = baseline_result.offers if fixed_offers == :baseline && baseline_result
     raise ArgumentError, "fixed_offers: :baseline requires a seeded search" if fixed_offers == :baseline
     fixed_offers = normalize_offers(fixed_offers) if fixed_offers
+    offer_source = if fixed_offers
+                     RecordedOfferSource.new(recorded_offers: fixed_offers,
+                                             continue_with_seeded_dealer: continue_after_fixed_offers)
+                   end
 
     initial_names = root_board.options.map(&:name).freeze
     if fixed_offers && fixed_offers.first != initial_names
       raise ArgumentError, "first fixed offer must match the starting board's current options"
     end
 
-    mode = fixed_offers ? :fixed_offers : :seeded
+    mode = if continue_after_fixed_offers
+             :recorded_then_seeded
+           elsif fixed_offers
+             :fixed_offers
+           else
+             :seeded
+           end
     root_history = OfferNode.new(parent: nil, batch: initial_names, batch_count: 1)
     root = Node.new(board: root_board, path: nil, offer_history: root_history,
                     next_offer_index: 1, depth: 0, offer_exhausted: false,
                     rank_score: cheap_rank(root_board), rng_position: fixed_offers ? 0 : Board1010::OPTIONS)
     best_score = baseline_score
     best_node = nil
-    best_offers = baseline_result ? baseline_result.offers : [initial_names]
+    best_offers = baseline_result ? baseline_result.offers : (fixed_offers || [initial_names])
     best_complete = true # the baseline is a complete trajectory
     started_at = monotonic_time
     deadline = started_at + budget
@@ -100,7 +112,7 @@ class ImprovementSearch
             break
           end
 
-          child = advance(node, action, fixed_offers)
+          child = advance(node, action, fixed_offers, offer_source)
           key = state_key(child, fixed_offers)
           if visited.key?(key)
             transpositions_pruned += 1
@@ -145,7 +157,7 @@ class ImprovementSearch
         end
 
         explored_rollouts += 1
-        rollout = rollout_from(child, fixed_offers: fixed_offers,
+        rollout = rollout_from(child, fixed_offers: fixed_offers, offer_source: offer_source,
                                 strategy: rollout_strategy, model: rollout_model,
                                 seed: rollout_seed(seed, explored_rollouts), deadline: deadline)
         if rollout[:timed_out]
@@ -209,10 +221,10 @@ class ImprovementSearch
     end
   end
 
-  def advance(node, action, fixed_offers)
+  def advance(node, action, fixed_offers, offer_source)
     board = node.board.copy
     option_count = board.options.size
-    move = board.play(action.fetch(:option), action.fetch(:row), action.fetch(:col), deal: fixed_offers.nil?)
+    move = board.play(action.fetch(:option), action.fetch(:row), action.fetch(:col), deal: false)
     raise RuntimeError, "search generated an illegal move #{action.inspect}" unless move
 
     offer_history = node.offer_history
@@ -221,15 +233,18 @@ class ImprovementSearch
     rng_position = node.rng_position
     if option_count == 1
       if fixed_offers
-        next_names = fixed_offers[next_offer_index]
-        if next_names
-          board.replace_options(next_names.map {|name| Tile.fetch(name) })
+        batch = offer_source.next_batch(board, next_offer_index)
+        if batch
+          next_names = batch.names
           offer_history = append_offer(offer_history, next_names)
           next_offer_index += 1
+          rng_position += Board1010::OPTIONS if batch.origin == :seeded
         else
           offer_exhausted = true
         end
       else
+        next_names = board.generate_options.map(&:name)
+        board.replace_options(next_names.map {|name| Tile.fetch(name) })
         offer_history = append_offer(offer_history, board.options.map(&:name))
         # Seeded branches consume the same number of tile samples per deal;
         # this logical cursor avoids marshaling Random's large internal state.
@@ -243,7 +258,7 @@ class ImprovementSearch
              rank_score: board.score, rng_position: rng_position)
   end
 
-  def rollout_from(node, fixed_offers:, strategy:, model:, seed:, deadline:)
+  def rollout_from(node, fixed_offers:, offer_source:, strategy:, model:, seed:, deadline:)
     player = AutoPlayer.new(strategy, random: Random.new(seed), model: model)
     current = node
 
@@ -254,7 +269,7 @@ class ImprovementSearch
 
       index, row, col = player.choose_move(current.board)
       action = {tile: current.board.options[index].name, option: index, row: row, col: col}.freeze
-      current = advance(current, action, fixed_offers)
+      current = advance(current, action, fixed_offers, offer_source)
     end
   end
 

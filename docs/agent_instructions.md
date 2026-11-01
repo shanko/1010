@@ -92,3 +92,31 @@ instead of starting over.
   reproduce, the cause (with `file:line`), a suggested fix and acceptance
   criteria. Then add it to the right phase in #27.
 - Don't widen the current issue's scope to fix unrelated problems.
+
+## 8. Long-running jobs go on the Mac mini
+
+Run anything that takes more than a few minutes on the maintainer's Mac mini,
+not on the laptop: lesson collection at scale, imitation or RL training,
+held-out or other large benchmarks. Tests, lint, the parity check and small
+benchmarks are fine wherever you are.
+
+- **Access:** `ssh macmini`. The host alias lives in your machine's
+  `~/.ssh/config` and is never committed. Ask the maintainer for the host
+  details if the alias isn't set up. The repo is at `~/code/1010` on the mini.
+  If you can't connect, ask the maintainer. Don't run the job locally instead.
+- **Shell:** wrap commands in `zsh -lic "..."`. A non-interactive SSH session
+  doesn't have mise's Ruby or Homebrew (`/opt/homebrew`) on its PATH.
+  gosu and SDL2 are already installed there.
+- **Start detached** so the job survives the SSH session and the Mac doesn't
+  sleep:
+  `nohup caffeinate -dims <command> > <log> 2>&1 < /dev/null & disown`.
+  Follow it with `tail -F <log>`.
+- **Don't `git pull` on the mini while a repo script is running.** Bash reads a
+  script as it executes it, so updating the file can break the run. Check with
+  `pgrep -fl "learn.rb|benchmark.rb|phase6"` first.
+- **Results stay in the ignored `learning_data/`.** Copy what you need back with
+  `scp`, and record the commands, seeds and results in the docs or the issue.
+  As everywhere: never commit `learning_data/`, and never use held-out seeds to
+  choose models or settings.
+- **Never commit host names, IP addresses, user names or other machine
+  details.** This repository is public.

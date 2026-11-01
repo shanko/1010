@@ -49,9 +49,9 @@ class Board1010
 
   # `random` deals the tiles. Pass Random.new(seed) to get the same tiles every time.
   def initialize(cells: nil, tile_ids: nil, options: [], score: 0, random: Random.new)
-    @cells = cells || Array.new(ROWS) { Array.new(COLS, EMPTY) }
-    @tile_ids = tile_ids || @cells.map {|values| values.map {|value| value == EMPTY ? EMPTY : value } }
-    @options = options.map {|tile| tile.is_a?(Tile) ? tile : Tile.fetch(tile) }
+    @cells = cells || empty_grid
+    @tile_ids = tile_ids || tile_id_grid(@cells)
+    @options = normalize_options(options)
     @score   = score
     @random  = random
   end
@@ -76,8 +76,7 @@ class Board1010
 
     placed = place(tile, row, col)
     @options.delete_at(index)
-    cells_before_clearing = @cells.map(&:dup) if capture
-    tile_ids_before_clearing = @tile_ids.map(&:dup) if capture
+    cells_before_clearing, tile_ids_before_clearing = capture_state if capture
     rows, cols = full_lines
     clear_lines(rows, cols)
     deal_if_needed if deal
@@ -234,22 +233,8 @@ class Board1010
 
   def line_completion_scores(tile, positions)
     occupied_rows = Array.new(ROWS) {|row| occupancy_mask(@cells[row]) }
-    occupied_cols = Array.new(COLS, 0)
-    occupied_rows.each_with_index do |mask, row|
-      COLS.times {|col| occupied_cols[col] |= (1 << row) unless mask.nobits?(1 << col) }
-    end
-
-    positions.map do |row, col|
-      left = col - tile.anchor
-      complete_rows = tile.row_masks.each_with_index.count do |mask, row_offset|
-        (occupied_rows[row + row_offset] | (mask << left)) == (1 << COLS) - 1
-      end
-      complete_cols = tile.col_masks.each_with_index.count do |mask, col_offset|
-        c = left + col_offset
-        (occupied_cols[c] | (mask << row)) == (1 << ROWS) - 1
-      end
-      complete_rows + complete_cols
-    end
+    occupied_cols = column_masks(occupied_rows)
+    positions.map {|row, col| completed_line_count(tile, row, col, occupied_rows, occupied_cols) }
   end
 
   def neighbour_scores(positions)
@@ -284,19 +269,31 @@ class Board1010
     return BoardSnapshot.read_save(text, random: random) if text.start_with?("#{BoardSnapshot::SAVE_HEADER}\n")
 
     fields = parse_save(text)
-    rows = fields[:rows]
-    return nil if fields[:score].nil? || rows.size != ROWS || rows.any? {|values| values.size != COLS }
-
-    tile_ids = fields[:tile_ids]
-    if tile_ids
-      invalid_row = tile_ids.any? do |values|
-        values.size != COLS || values.any? {|id| id.negative? || id > TILE_NAMES.size }
-      end
-      return nil if tile_ids.size != ROWS || invalid_row
-    end
-
-    Board1010.new(cells: rows, tile_ids: tile_ids, options: fields[:options], score: fields[:score], random: random)
+    board_from_legacy_fields(fields, random)
   end
+
+  def self.board_from_legacy_fields(fields, random)
+    return nil unless valid_legacy_rows?(fields)
+    return nil unless valid_legacy_ids?(fields[:tile_ids])
+
+    Board1010.new(cells: fields[:rows], tile_ids: fields[:tile_ids], options: fields[:options],
+                  score: fields[:score], random: random)
+  end
+
+  def self.valid_legacy_rows?(fields)
+    rows = fields[:rows]
+    !fields[:score].nil? && rows.size == ROWS && rows.all? {|values| values.size == COLS }
+  end
+
+  def self.valid_legacy_ids?(tile_ids)
+    return true unless tile_ids
+    return false unless tile_ids.size == ROWS
+
+    tile_ids.all? do |values|
+      values.size == COLS && values.all? {|id| id.between?(0, TILE_NAMES.size) }
+    end
+  end
+  private_class_method :board_from_legacy_fields, :valid_legacy_rows?, :valid_legacy_ids?
 
   def self.parse_save(text)
     fields = {score: nil, options: [], rows: [], tile_ids: nil}
@@ -307,13 +304,25 @@ class Board1010
   # A line without "=" (or an empty one) has no key or value, and is ignored.
   def self.parse_save_line(fields, key=nil, value=nil)
     case key
-    when "score"   then fields[:score] = Integer(value, exception: false)
-    when "options" then fields[:options] = value.to_s.split(",").filter_map {|name| Tile::BY_NAME[name.to_sym] }
+    when "score"   then parse_score(fields, value)
+    when "options" then parse_options(fields, value)
     when "row"     then fields[:rows] << value.to_s.chars.map(&:to_i)
-    when "type"    then (fields[:tile_ids] ||= []) << value.to_s.chars.map {|id| id.to_i(36) }
+    when "type"    then parse_tile_ids(fields, value)
     end
   end
-  private_class_method :parse_save, :parse_save_line
+
+  def self.parse_score(fields, value)
+    fields[:score] = Integer(value, exception: false)
+  end
+
+  def self.parse_options(fields, value)
+    fields[:options] = value.to_s.split(",").filter_map {|name| Tile::BY_NAME[name.to_sym] }
+  end
+
+  def self.parse_tile_ids(fields, value)
+    (fields[:tile_ids] ||= []) << value.to_s.chars.map {|id| id.to_i(36) }
+  end
+  private_class_method :parse_save, :parse_save_line, :parse_score, :parse_options, :parse_tile_ids
 
   protected
 
@@ -332,25 +341,75 @@ class Board1010
 
   private
 
+  def empty_grid
+    Array.new(ROWS) { Array.new(COLS, EMPTY) }
+  end
+
+  def tile_id_grid(cells)
+    cells.map {|values| values.map {|value| value == EMPTY ? EMPTY : value } }
+  end
+
+  def normalize_options(options)
+    options.map {|tile| tile.is_a?(Tile) ? tile : Tile.fetch(tile) }
+  end
+
+  def capture_state
+    [@cells.map(&:dup), @tile_ids.map(&:dup)]
+  end
+
   def footprint_contact_count(tile, row, col, include_walls:)
-    own = {}
-    tile.offsets.each do |row_offset, col_offset, _value|
-      own[[row + row_offset, col + col_offset - tile.anchor]] = true
+    own = footprint_cells(tile, row, col)
+    contact_cells(own, include_walls).size
+  end
+
+  def footprint_cells(tile, row, col)
+    tile.offsets.to_h do |row_offset, col_offset, _value|
+      [[row + row_offset, col + col_offset - tile.anchor], true]
     end
-    touching = {}
-    own.each_key do |r, c|
+  end
+
+  def contact_cells(own, include_walls)
+    own.each_key.each_with_object({}) do |(row, col), touching|
       NEIGHBOUR_OFFSETS.each do |dr, dc|
-        cell = [r + dr, c + dc]
+        cell = [row + dr, col + dc]
         next if own.key?(cell) || touching.key?(cell)
 
-        if inside?(*cell)
-          touching[cell] = true if filled?(*cell)
-        elsif include_walls
-          touching[cell] = true
-        end
+        add_contact(touching, cell, include_walls)
       end
     end
-    touching.size
+  end
+
+  def add_contact(touching, cell, include_walls)
+    if inside?(*cell)
+      touching[cell] = true if filled?(*cell)
+    elsif include_walls
+      touching[cell] = true
+    end
+  end
+
+  def column_masks(occupied_rows)
+    occupied_cols = Array.new(COLS, 0)
+    occupied_rows.each_with_index do |mask, row|
+      COLS.times {|col| occupied_cols[col] |= (1 << row) unless mask.nobits?(1 << col) }
+    end
+    occupied_cols
+  end
+
+  def completed_line_count(tile, row, col, occupied_rows, occupied_cols)
+    left = col - tile.anchor
+    completed_rows(tile, row, left, occupied_rows) + completed_cols(tile, row, left, occupied_cols)
+  end
+
+  def completed_rows(tile, row, left, occupied_rows)
+    tile.row_masks.each_with_index.count do |mask, offset|
+      (occupied_rows[row + offset] | (mask << left)) == (1 << COLS) - 1
+    end
+  end
+
+  def completed_cols(tile, row, left, occupied_cols)
+    tile.col_masks.each_with_index.count do |mask, offset|
+      (occupied_cols[left + offset] | (mask << row)) == (1 << ROWS) - 1
+    end
   end
 
   def clear_lines(rows, cols)

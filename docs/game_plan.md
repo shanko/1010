@@ -228,14 +228,17 @@ Keep simulation, search, and training independent of Gosu so all long-running wo
 - `scripts/benchmark.rb`: paired-seed strategy evaluation and learned-model reports.
 - Add focused tests under `test/` for each component; do not require GUI initialization in those tests.
 
-Use a consistent CLI contract (exact flags can follow existing Ruby style, but keep these operations available):
+Use a consistent CLI contract. The operations below are the implemented commands; evaluation lives in `scripts/benchmark.rb` rather than a `learn.rb evaluate` subcommand, and seed lists are given as ranges, comma lists or named seed sets:
 
 ```sh
-bundle exec ruby scripts/learn.rb analyze logs/<game>.moves --budget-seconds 10
-bundle exec ruby scripts/learn.rb evaluate --strategies first_fit,jc,sam,learned --seeds-file seeds.txt
-bundle exec ruby scripts/learn.rb train-imitation --lessons learning_data/lessons.jsonl --output models/imitation.json
-bundle exec ruby scripts/learn.rb train-rl --model models/imitation.json --steps 100000 --output-dir models/rl
-./1010 auto learned --model models/rl/best.json --seed 42
+bundle exec ruby scripts/learn.rb analyze logs/<game>.moves --budget 10
+bundle exec ruby scripts/learn.rb improve logs/<game>.moves --states 50000
+bundle exec ruby scripts/learn.rb collect-training --seeds 1000000..1000099
+bundle exec ruby scripts/learn.rb train-imitation --lessons learning_data --output learning_data/models/imitation-v2.json
+bundle exec ruby scripts/learn.rb train-rl --model learning_data/models/imitation-v2.json --episodes 100
+bundle exec ruby scripts/learn.rb select --checkpoint learning_data/checkpoints/<checkpoint>.json
+bundle exec ruby scripts/benchmark.rb --seed-set held_out --workers 4 --strategies first_fit,jc,sam,codex_sam,learned --model learning_data/checkpoints/selected.json --output learning_data/held-out.json
+./1010 auto learned --model learning_data/checkpoints/selected.json --seed 42
 ```
 
 Learning artifacts should be self-describing and versioned. A trace needs a header (schema version, seed or initial state, rule version), ordered offer/deal records, accepted actions and undos, and an ending score. A lesson needs a reference to its source trace, the actual score/path, the candidate score/path, search budget and status, and the source/training schema versions. Reject mismatched versions instead of silently training on misread data.

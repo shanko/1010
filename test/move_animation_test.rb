@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../move_animation"
+require_relative "../lib/move_animation"
 
 class MoveAnimationTest < Minitest::Test
   EMPTY = Board1010::EMPTY

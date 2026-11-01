@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../recorded_offer_source"
-require_relative "../game_simulator"
+require_relative "../lib/recorded_offer_source"
+require_relative "../lib/game_simulator"
 
 class RecordedOfferSourceTest < Minitest::Test
   def test_recorded_batches_handoff_to_the_seeded_dealer_at_the_matching_rng_position

@@ -5,8 +5,8 @@ require "optparse"
 require "open3"
 require "digest"
 require "time"
-require_relative "../game_simulator"
-require_relative "../learning_seed_sets"
+require_relative "../lib/game_simulator"
+require_relative "../lib/learning_seed_sets"
 
 options = {strategies: AutoPlayer::STRATEGIES, max_moves: 100_000, models: {}}
 parser = OptionParser.new do |parser|
@@ -65,8 +65,8 @@ begin
   report[:source_revision] = revision.strip
   report[:working_tree_dirty] = dirty
   report[:seed_set] = options[:seed_set] if options[:seed_set]
-  source_files = %w[board.rb auto_player.rb learned_player.rb game_simulator.rb learning_seed_sets.rb
-                    scripts/benchmark.rb]
+  source_files = %w[lib/board.rb lib/auto_player.rb lib/learned_player.rb lib/game_simulator.rb
+                    lib/learning_seed_sets.rb scripts/benchmark.rb]
   source_digest_parts = source_files.map do |path|
     absolute_path = File.expand_path("../#{path}", __dir__)
     "#{path}\0#{File.binread(absolute_path)}"

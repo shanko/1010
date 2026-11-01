@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../game_1010"
+require_relative "../scripts/game_1010"
 
 class GameWindowTest < Minitest::Test
   def test_global_input_keys_map_only_to_session_commands

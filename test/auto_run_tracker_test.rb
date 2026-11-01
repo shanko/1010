@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../auto_run_tracker"
+require_relative "../lib/auto_run_tracker"
 
 class AutoRunTrackerTest < Minitest::Test
   def setup

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../auto_player"
+require_relative "../lib/auto_player"
 
 class AutoPlayerTest < Minitest::Test
   def test_sam_is_the_default_strategy

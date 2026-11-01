@@ -2,20 +2,20 @@
 
 # game_1010.rb: the Gosu window for 1010! (drawing and input).
 #
-#   ruby game_1010.rb                     you play (continues a saved game if there is one)
-#   ruby game_1010.rb auto                the computer plays, game after game
-#   ruby game_1010.rb auto sam --seed 42  pick the computer's strategy, and repeat the same games
-#   ruby game_1010.rb auto learned --model learning_data/checkpoints/selected.json
+#   ./1010                     you play (continues a saved game if there is one)
+#   ./1010 auto                the computer plays, game after game
+#   ./1010 auto sam --seed 42  pick the computer's strategy, and repeat the same games
+#   ./1010 auto learned --model learning_data/checkpoints/selected.json
 #
-# The rules live in board.rb, the computer player in auto_player.rb and the
-# move animation in move_animation.rb. This file only reads input, updates
-# what is on screen and draws.
+# The rules live in lib/board.rb, the computer player in lib/auto_player.rb,
+# and the move animation in lib/move_animation.rb. This file only reads input,
+# updates state and draws.
 require "gosu"
-require_relative "board"
-require_relative "auto_player"
-require_relative "move_animation"
-require_relative "game_session"
-require_relative "game_options"
+require_relative "../lib/board"
+require_relative "../lib/auto_player"
+require_relative "../lib/move_animation"
+require_relative "../lib/game_session"
+require_relative "../lib/game_options"
 
 class GameWindow < Gosu::Window
   # --- Layout (pixels) --------------------------------------------------------
@@ -677,7 +677,7 @@ if __FILE__ == $PROGRAM_NAME
     window = GameWindow.new(**GameWindow.options_from(ARGV))
   rescue ArgumentError, SystemCallError => e
     warn "1010: #{e.message}"
-    warn "Usage: ruby game_1010.rb [auto [strategy]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]"
+    warn "Usage: ./1010 [auto [strategy]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]"
     exit 2
   end
   window.show

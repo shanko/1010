@@ -2,10 +2,10 @@
 
 require "minitest/autorun"
 require "tmpdir"
-require_relative "../learned_player"
-require_relative "../auto_player"
-require_relative "../game_simulator"
-require_relative "../policy_corrector"
+require_relative "../lib/learned_player"
+require_relative "../lib/auto_player"
+require_relative "../lib/game_simulator"
+require_relative "../lib/policy_corrector"
 
 class LearnedPlayerTest < Minitest::Test
   def test_feature_schema_is_stable_and_features_cover_documented_state_and_action_data

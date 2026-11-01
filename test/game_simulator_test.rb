@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../game_simulator"
+require_relative "../lib/game_simulator"
 
 class GameSimulatorTest < Minitest::Test
   def test_same_seed_and_strategy_produce_identical_complete_episodes

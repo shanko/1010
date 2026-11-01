@@ -4,9 +4,9 @@ require "minitest/autorun"
 require "tmpdir"
 require "open3"
 require "rbconfig"
-require_relative "../lesson_analyzer"
-require_relative "../game_log"
-require_relative "../offer_replay"
+require_relative "../lib/lesson_analyzer"
+require_relative "../lib/game_log"
+require_relative "../lib/offer_replay"
 
 class LessonStoreTest < Minitest::Test
   FIXTURE = File.expand_path("fixtures/lesson-v1.json", __dir__)

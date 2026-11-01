@@ -3,8 +3,8 @@
 require "minitest/autorun"
 require "stringio"
 require "tmpdir"
-require_relative "../terminal_game"
-require_relative "../game_trace"
+require_relative "../scripts/terminal_game"
+require_relative "../lib/game_trace"
 
 class TerminalGameTest < Minitest::Test
   def play(typed, board)

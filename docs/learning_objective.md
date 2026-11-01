@@ -36,6 +36,6 @@ Use the repository's disjoint seed sets for learning and comparisons:
 - Tuning: `2_000_000..2_001_999`
 - Held-out evaluation: `3_000_000..3_001_999`
 
-Use tuning seeds to choose settings and checkpoints. Do not inspect held-out scores until a policy/checkpoint is selected. The held-out set is for the final comparison only. The exact seed lists are exposed by `learning_seed_sets.rb` and can be selected by the benchmark runner.
+Use tuning seeds to choose settings and checkpoints. Do not inspect held-out scores until a policy/checkpoint is selected. The held-out set is for the final comparison only. The exact seed lists are exposed by `lib/learning_seed_sets.rb` and can be selected by the benchmark runner.
 
 Do not treat failure to find a higher score within a search budget as proof that no higher-scoring sequence exists. Report the best score found, the baseline score, the search budget, and whether an improvement was found.

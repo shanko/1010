@@ -200,7 +200,7 @@ class Board1010
   end
 
   # ---------------------------------------------------------------------------
-  # Measures used by the computer player (see auto_player.rb)
+  # Measures used by the computer player (see lib/auto_player.rb)
   # ---------------------------------------------------------------------------
 
   # How many of the 8 squares around (row, col) are filled.

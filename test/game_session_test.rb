@@ -5,7 +5,7 @@ require "tmpdir"
 require "stringio"
 require "open3"
 require "rbconfig"
-require_relative "../game_session"
+require_relative "../lib/game_session"
 
 class GameSessionTest < Minitest::Test
   def with_session(**options)
@@ -23,7 +23,7 @@ class GameSessionTest < Minitest::Test
   def test_game_session_loads_without_gosu
     stdout, stderr, status = Open3.capture3(
       RbConfig.ruby, "-I.", "-e",
-      'require "./game_session"; abort "Gosu loaded" if defined?(Gosu)'
+      'require "./lib/game_session"; abort "Gosu loaded" if defined?(Gosu)'
     )
 
     assert status.success?, [stdout, stderr].join

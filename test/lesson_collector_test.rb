@@ -2,7 +2,7 @@
 
 require "minitest/autorun"
 require "tmpdir"
-require_relative "../lesson_collector"
+require_relative "../lib/lesson_collector"
 
 class LessonCollectorTest < Minitest::Test
   def test_collected_complete_seed_lesson_replays_actual_and_candidate

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../learning_seed_sets"
+require_relative "../lib/learning_seed_sets"
 
 class LearningSeedSetsTest < Minitest::Test
   def test_sets_are_stable_and_non_overlapping

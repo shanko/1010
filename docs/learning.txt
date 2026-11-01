@@ -4,7 +4,7 @@ I want to investigate if this game can be made to learn from its "mistakes". A m
 RESPONSE:
 I’ll examine the scoring rules, tile dealing, move logs, and auto-player strategies to ground the feasibility answer in this codebase. One key distinction I’ll check is whether a higher score is possible when every tile from the same batches is placed.
 
-• Ran sed -n '1,125p' auto_player.rb && sed -n '100,150p' board.rb && sed -n '250,310…
+• Ran sed -n '1,125p' lib/auto_player.rb && sed -n '100,150p' lib/board.rb && sed -n '250,310…
   └  M test/game_log_test.rb
      M test/game_replay_test.rb
      M test/move_animation_test.rb
@@ -13,12 +13,12 @@ I’ll examine the scoring rules, tile dealing, move logs, and auto-player strat
 • Browsing the web
 • Searched the web for site:incompleteideas.net book reinforcement learning reward le…
 
-Yes, this is possible. There’s one important scoring detail in this game: placing a tile earns one point per square, and clearing rows or columns earns no extra points (board.rb (board.rb:258)). That means placements affect the score by determining which tiles can be placed before the board gets stuck.
+Yes, this is possible. There’s one important scoring detail in this game: placing a tile earns one point per square, and clearing rows or columns earns no extra points (lib/board.rb:258). That means placements affect the score by determining which tiles can be placed before the board gets stuck.
 
 1. Can another sequence score higher on the same five batches?
    If the original game placed every tile in all five batches, a different sequence cannot raise that score: the same tiles always contain the same total number of squares. If the game ended with tiles still unplaced, a different sequence may fit more tiles and score higher.
 2. Can we find the max sequence?
-   In principle, yes. A search can try legal tile orders and positions across the five batches, then report the best sequence it finds. To call it the maximum rather than the best found, the search must prove no better sequence exists. That may be expensive, so we’d start with five-batch searches and use pruning and duplicate-state detection. The current auto-player uses local placement rules such as neighbor count and line completion, rather than searching whole sequences (auto_player.rb (auto_player.rb:28)).
+   In principle, yes. A search can try legal tile orders and positions across the five batches, then report the best sequence it finds. To call it the maximum rather than the best found, the search must prove no better sequence exists. That may be expensive, so we’d start with five-batch searches and use pruning and duplicate-state detection. The current auto-player uses local placement rules such as neighbor count and line completion, rather than searching whole sequences (lib/auto_player.rb:28).
 3. Can the game learn from the difference?
    Yes. We can save the actual sequence, the better sequence, and their score difference as a lesson. Training on the searcher’s recommended moves is imitation learning; training directly from the score reward is reinforcement learning. Neither is unsupervised learning, because the comparison supplies a target action or reward. Reinforcement learning is specifically framed around choosing actions to maximize reward, while imitation learning trains from expert action examples (Sutton and Barto, Ross et al.).
 

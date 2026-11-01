@@ -29,20 +29,26 @@ $ gem install gosu -v 1.4.6 -- --with-ldflags="-L/usr/local/lib -lSDL2 -framewor
 ## To play the game: 
 
 ```sh
-$ bundle exec ruby game_1010.rb
+$ ./1010
 ```
+
+The `1010` launcher runs `bundle exec ruby scripts/game_1010.rb` and forwards
+all command-line arguments. For example, `./1010 auto codex_sam --seed 42`
+starts an auto game with the `codex_sam` strategy. Run it from the repository
+directory, or put the repository directory on your `PATH` to use `1010` as a
+command name.
 
 Click on one of the tiles presented on the right side of the 10x10 grid (or press 1, 2 or 3). The tile will turn yellow indicating selection. Then click on one of the empty cells in the grid where you want to place the tile, or drag the tile there. Keep on adding tiles to the grid till one or more rows or columns fill up. Filled up rows and columns get emptied again making space for more tiles to be placed. The idea is to try and keep as many tiles as possible to increase the score. 
 
 # Hints:
 
 * Press and hold the H key to see help.
-* Press and hold O to see where the computer would put the selected tile.
+* Press and hold O to see Sam's suggested position for the selected tile.
 
 | Key | Action |
 |---|---|
 | 1 / 2 / 3 | select a tile |
-| O (hold) | show the best position for the selected tile |
+| O (hold) | show Sam's suggested position for the selected tile |
 | U | undo the last move |
 | N | new game |
 | A | auto mode on/off |
@@ -61,16 +67,16 @@ with tile names and older verbose save files are still accepted.
 ## To play in the terminal:
 
 ```sh
-$ ruby terminal_game.rb
+$ bundle exec ruby scripts/terminal_game.rb
 ```
 
 ## To let the computer play the game:
 
 ```sh
-$ bundle exec ruby game_1010.rb auto
-$ bundle exec ruby game_1010.rb auto sam            # choose the strategy
-$ bundle exec ruby game_1010.rb auto jc --seed 42   # the same games every time
-$ bundle exec ruby game_1010.rb logs/20261030-123456-1234-567.moves # replay a logged game
+$ ./1010 auto
+$ ./1010 auto sam            # choose the strategy
+$ ./1010 auto jc --seed 42   # the same games every time
+$ ./1010 logs/20261030-123456-1234-567.moves # replay a logged game
 ```
 
 Auto mode prints one line when each game ends, then a run summary when you
@@ -114,7 +120,7 @@ search uses a reproducible state budget; `--time` is an optional safety cap.
 
 ```sh
 $ bundle exec ruby scripts/learn.rb improve logs/<game>.moves --states 50000
-$ bundle exec ruby game_1010.rb --delay 0.5 logs/<game>.improved.moves
+$ ./1010 --delay 0.5 logs/<game>.improved.moves
 ```
 
 Add `--save-lesson` to store a lesson from the improved trace under
@@ -139,7 +145,7 @@ $ bundle exec ruby scripts/learn.rb collect-training --seeds 1000000..1000019 --
 Evaluate a learned policy headlessly (a model is required):
 
 ```sh
-$ bundle exec ruby scripts/benchmark.rb --seed-set held_out --strategies first_fit,last_fit,random_fit,shanko,jc,sam,learned --model learning_data/models/imitation-v1.json --output learning_data/held-out.json
+$ bundle exec ruby scripts/benchmark.rb --seed-set held_out --strategies first_fit,last_fit,random_fit,shanko,jc,sam,codex_1,codex_sam,learned --model learning_data/models/imitation-v1.json --output learning_data/held-out.json
 ```
 
 For a full learned-versus-heuristics report, include all six heuristic strategies
@@ -150,7 +156,7 @@ seed set is for final reporting only; choose models with tuning seeds.
 Start the graphical learned auto-player with the tuning-selected checkpoint:
 
 ```sh
-$ bundle exec ruby game_1010.rb auto learned --model learning_data/checkpoints/selected.json --seed 42
+$ ./1010 auto learned --model learning_data/checkpoints/selected.json --seed 42
 ```
 
 The simulator and benchmark support learned models now. To collect search
@@ -201,32 +207,33 @@ seconds between successive moves by default. Set another interval in seconds
 with `--delay` (for example, `--delay 2`):
 
 ```sh
-$ bundle exec ruby game_1010.rb --delay 2 logs/<game>.moves
+$ ./1010 --delay 2 logs/<game>.moves
 ```
 
 Try defeating the computer (it is very hard) by taking turns and comparing the score AND time required to play it.
 
-The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam` (the default), `codex_1` and `codex_sam`. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Codex Sam uses Codex 1 to choose the tile, then Sam to choose its placement. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
+The strategies are in `lib/auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam` (the default), `codex_1` and `codex_sam`. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Codex Sam uses Codex 1 to choose the tile, then Sam to choose its placement. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
 
 ## Code:
 
-* `board.rb`: the rules (placing tiles, clearing lines, dealing, saving), with no input or output
-* `auto_player.rb`: the computer player and its strategies
-* `move_animation.rb`: shows a move square by square without pausing the window
-* `game_log.rb` / `game_trace.rb`: write, validate and replay versioned game traces with initial state, exact offers, moves, undos and final score
-* `offer_replay.rb`: the one replayer for recorded moves and offer batches, used by traces, lessons, the simulator, imitation training and window playback
-* `game_simulator.rb`: runs full games without Gosu for policy evaluation
-* `game_session.rb`: Gosu-free game state, moves, undo, auto runs, playback and save rules
-* `game_options.rb`: parses window command-line arguments without Gosu
-* `improvement_search.rb`: searches for better legal game sequences under explicit time, state, and beam limits
-* `lesson_analyzer.rb` / `lesson_store.rb`: analyze completed traces and persist reproducible, versioned lessons
-* `lesson_collector.rb`: generate complete improved lessons from reproducible training seeds
-* `learned_player.rb`: versioned action features, linear policy, and deterministic imitation training
-* `policy_corrector.rb`: searches continuations from states visited by a learned policy
-* `reinforcement_trainer.rb`: REINFORCE training, resumable checkpoints, and tuning-based selection
-* `learning_seed_sets.rb` / `scripts/benchmark.rb`: define disjoint seed sets and generate reproducible strategy benchmarks
-* `game_1010.rb`: the Gosu window (drawing and input), backed by `GameSession`
-* `terminal_game.rb`: the terminal version
+* `lib/board.rb`: the rules (placing tiles, clearing lines, dealing, saving), with no input or output
+* `lib/auto_player.rb`: the computer player and its strategies
+* `lib/move_animation.rb`: shows a move square by square without pausing the window
+* `lib/game_log.rb` / `lib/game_trace.rb`: write, validate and replay versioned game traces with initial state, exact offers, moves, undos and final score
+* `lib/offer_replay.rb`: the one replayer for recorded moves and offer batches, used by traces, lessons, the simulator, imitation training and window playback
+* `lib/game_simulator.rb`: runs full games without Gosu for policy evaluation
+* `lib/game_session.rb`: Gosu-free game state, moves, undo, auto runs, playback and save rules
+* `lib/game_options.rb`: parses window command-line arguments without Gosu
+* `lib/improvement_search.rb`: searches for better legal game sequences under explicit time, state, and beam limits
+* `lib/lesson_analyzer.rb` / `lib/lesson_store.rb`: analyze completed traces and persist reproducible, versioned lessons
+* `lib/lesson_collector.rb`: generate complete improved lessons from reproducible training seeds
+* `lib/learned_player.rb`: versioned action features, linear policy, and deterministic imitation training
+* `lib/policy_corrector.rb`: searches continuations from states visited by a learned policy
+* `lib/reinforcement_trainer.rb`: REINFORCE training, resumable checkpoints, and tuning-based selection
+* `lib/learning_seed_sets.rb` / `scripts/benchmark.rb`: define disjoint seed sets and generate reproducible strategy benchmarks
+* `scripts/game_1010.rb`: the Gosu window entry point (drawing and input), backed by `GameSession`; use `./1010` to launch it
+* `scripts/terminal_game.rb`: the terminal version
+* `scripts/learn.rb`, `scripts/benchmark.rb` and the other files in `scripts/`: runnable command-line tools
 
 ## Tests:
 

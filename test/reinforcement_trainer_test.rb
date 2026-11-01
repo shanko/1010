@@ -4,7 +4,7 @@ require "minitest/autorun"
 require "tmpdir"
 require "open3"
 require "rbconfig"
-require_relative "../reinforcement_trainer"
+require_relative "../lib/reinforcement_trainer"
 
 class ReinforcementTrainerTest < Minitest::Test
   def test_positive_return_policy_gradient_moves_preference_toward_rewarding_action

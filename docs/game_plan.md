@@ -13,16 +13,16 @@ Do not describe the optimizer's best result as a proven maximum unless it exhaus
 
 ## Current code map and constraints
 
-- `board.rb` contains the rules, tile options, placement legality, score, line clearing, and deal generation. `Board1010#play` adds the tile's square count to the score.
-- `auto_player.rb` contains current strategies (`first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam`). Most select a fitting option randomly before selecting a location; `codex_1` evaluates tile-placement pairs to preserve legal placements for the remaining current offer, and `codex_sam` combines that tile choice with Sam placement scoring.
-- `game_1010.rb` runs the graphical loop and records a seed plus move/undo records.
-- `game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `game_trace.rb` validates and replays v2 traces headlessly.
-- `game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
-- `improvement_search.rb` runs bounded beam search with strategy rollouts, seeded normal-deal search, and frozen-offer counterfactual search.
-- `learned_player.rb` defines versioned action features, a Ruby-native linear scorer, and deterministic imitation training; `policy_corrector.rb` searches continuations from states visited by a learned policy.
-- `reinforcement_trainer.rb` runs REINFORCE episodes with a rolling return baseline and writes versioned checkpoints plus a tuning-selected pointer.
-- `learning_seed_sets.rb` defines disjoint baseline, training, tuning, and held-out seed lists.
-- `terminal_game.rb` is a second human-play path and also creates game logs.
+- `lib/board.rb` contains the rules, tile options, placement legality, score, line clearing, and deal generation. `Board1010#play` adds the tile's square count to the score.
+- `lib/auto_player.rb` contains current strategies (`first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam`). Most select a fitting option randomly before selecting a location; `codex_1` evaluates tile-placement pairs to preserve legal placements for the remaining current offer, and `codex_sam` combines that tile choice with Sam placement scoring.
+- `scripts/game_1010.rb` runs the graphical loop and records a seed plus move/undo records.
+- `lib/game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `lib/game_trace.rb` validates and replays v2 traces headlessly.
+- `lib/game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
+- `lib/improvement_search.rb` runs bounded beam search with strategy rollouts, seeded normal-deal search, and frozen-offer counterfactual search.
+- `lib/learned_player.rb` defines versioned action features, a Ruby-native linear scorer, and deterministic imitation training; `lib/policy_corrector.rb` searches continuations from states visited by a learned policy.
+- `lib/reinforcement_trainer.rb` runs REINFORCE episodes with a rolling return baseline and writes versioned checkpoints plus a tuning-selected pointer.
+- `lib/learning_seed_sets.rb` defines disjoint baseline, training, tuning, and held-out seed lists.
+- `scripts/terminal_game.rb` is a second human-play path and also creates game logs.
 - `test/` contains Minitest coverage; run the full suite with `bundle exec rake test`.
 
 Important rules for the implementation:
@@ -105,7 +105,7 @@ Important rules for the implementation:
 7. Return structured results: baseline score, best score found, score delta, elapsed time, explored states, candidate move sequence, and status (`improved`, `no improvement found within budget`, or `budget exhausted`). Do not claim `optimal` without proof.
 8. Allow search to start from a captured initial state or a specified decision point. For a full-game comparison, search from the beginning so it can measure the whole trajectory.
 
-The current API is `ImprovementSearch.search` in `improvement_search.rb`. `max_states` and `max_rollouts` define reproducible work budgets; `time_budget_seconds` is a safety cap that reports `time_capped` if it interrupts search. Each beam step ranks child states with a cheap legal-placement heuristic and rolls out only the top `rollouts_per_step`. Seeded mode runs the baseline simulator first, then searches from the exact initial board and RNG position. Frozen-offer mode accepts named offer batches and reports `complete: false` when a candidate reaches the end of the supplied offers; this is a counterfactual horizon, not necessarily Game Over. The result status never claims optimality.
+The current API is `ImprovementSearch.search` in `lib/improvement_search.rb`. `max_states` and `max_rollouts` define reproducible work budgets; `time_budget_seconds` is a safety cap that reports `time_capped` if it interrupts search. Each beam step ranks child states with a cheap legal-placement heuristic and rolls out only the top `rollouts_per_step`. Seeded mode runs the baseline simulator first, then searches from the exact initial board and RNG position. Frozen-offer mode accepts named offer batches and reports `complete: false` when a candidate reaches the end of the supplied offers; this is a counterfactual horizon, not necessarily Game Over. The result status never claims optimality.
 
 ### Acceptance criteria
 
@@ -211,12 +211,12 @@ Graphical auto mode accepts `learned` plus `--model PATH` (or defaults to `learn
 
 Keep simulation, search, and training independent of Gosu so all long-running work can run in batch mode.
 
-- `game_simulator.rb`: run one seeded episode and return a result object plus optional trace.
-- `game_trace.rb`: versioned trace parsing/writing, state snapshots, offer batches, moves, undos, and final result.
-- `improvement_search.rb`: bounded search and candidate sequence validation.
-- `lesson_store.rb`: validate, append, query, and version lessons under `learning_data/`.
-- `lesson_collector.rb`: generate and validate full-game training lessons from disjoint training seeds.
-- `learned_player.rb`: legal-action scoring, model load/save, imitation training, and RL updates.
+- `lib/game_simulator.rb`: run one seeded episode and return a result object plus optional trace.
+- `lib/game_trace.rb`: versioned trace parsing/writing, state snapshots, offer batches, moves, undos, and final result.
+- `lib/improvement_search.rb`: bounded search and candidate sequence validation.
+- `lib/lesson_store.rb`: validate, append, query, and version lessons under `learning_data/`.
+- `lib/lesson_collector.rb`: generate and validate full-game training lessons from disjoint training seeds.
+- `lib/learned_player.rb`: legal-action scoring, model load/save, imitation training, and RL updates.
 - `scripts/learn.rb`: command-line entry point for offline analysis, search, evaluation, and training.
 - `scripts/benchmark.rb`: paired-seed strategy evaluation and learned-model reports.
 - Add focused tests under `test/` for each component; do not require GUI initialization in those tests.
@@ -228,7 +228,7 @@ bundle exec ruby scripts/learn.rb analyze logs/<game>.moves --budget-seconds 10
 bundle exec ruby scripts/learn.rb evaluate --strategies first_fit,jc,sam,learned --seeds-file seeds.txt
 bundle exec ruby scripts/learn.rb train-imitation --lessons learning_data/lessons.jsonl --output models/imitation.json
 bundle exec ruby scripts/learn.rb train-rl --model models/imitation.json --steps 100000 --output-dir models/rl
-bundle exec ruby game_1010.rb auto learned --model models/rl/best.json --seed 42
+./1010 auto learned --model models/rl/best.json --seed 42
 ```
 
 Learning artifacts should be self-describing and versioned. A trace needs a header (schema version, seed or initial state, rule version), ordered offer/deal records, accepted actions and undos, and an ending score. A lesson needs a reference to its source trace, the actual score/path, the candidate score/path, search budget and status, and the source/training schema versions. Reject mismatched versions instead of silently training on misread data.

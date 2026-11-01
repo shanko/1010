@@ -2,7 +2,7 @@
 
 require "minitest/autorun"
 require "tempfile"
-require_relative "../game_simulator"
+require_relative "../lib/game_simulator"
 
 class GameBenchmarkTest < Minitest::Test
   def test_reports_metrics_and_paired_seed_differences

@@ -4,7 +4,7 @@
 #
 # Each strategy gets the board, the tile and every position where the tile
 # fits, and returns the position to use. Ties go to the position found first
-# (top-left first). Choose one with `ruby game_1010.rb auto <strategy>`.
+# (top-left first). Choose one with `./1010 auto <strategy>`.
 require_relative "board"
 require_relative "learned_player"
 

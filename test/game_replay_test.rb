@@ -5,10 +5,10 @@ require "tempfile"
 require "tmpdir"
 require "open3"
 require "rbconfig"
-require_relative "../game_session"
-require_relative "../game_options"
-require_relative "../game_log"
-require_relative "../game_trace"
+require_relative "../lib/game_session"
+require_relative "../lib/game_options"
+require_relative "../lib/game_log"
+require_relative "../lib/game_trace"
 
 class GameReplayTest < Minitest::Test
   def with_moves(text)
@@ -190,7 +190,7 @@ class GameReplayTest < Minitest::Test
   end
 
   def test_invalid_game_command_line_has_plain_error_without_backtrace
-    _stdout, stderr, status = Open3.capture3(RbConfig.ruby, "game_1010.rb", "--seed")
+    _stdout, stderr, status = Open3.capture3(RbConfig.ruby, "scripts/game_1010.rb", "--seed")
 
     refute status.success?
     assert_match "--seed requires an integer", stderr

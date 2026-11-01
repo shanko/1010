@@ -2,8 +2,8 @@
 
 require "minitest/autorun"
 require "tmpdir"
-require_relative "../game_log"
-require_relative "../game_trace"
+require_relative "../lib/game_log"
+require_relative "../lib/game_trace"
 
 class GameLogTest < Minitest::Test
   def test_writes_compact_snapshot_offer_move_and_undo_records

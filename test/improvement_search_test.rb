@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../improvement_search"
-require_relative "../offer_replay"
+require_relative "../lib/improvement_search"
+require_relative "../lib/offer_replay"
 
 class ImprovementSearchTest < Minitest::Test
   def test_fixed_offer_search_matches_a_brute_force_oracle_and_preserves_source

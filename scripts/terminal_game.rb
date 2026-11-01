@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-# terminal_game.rb: play 1010! in the terminal (previously `ruby board.rb`).
+# terminal_game.rb: play 1010! in the terminal.
 #
-#   ruby terminal_game.rb
+#   bundle exec ruby scripts/terminal_game.rb
 #
 # Type a position as "row, col" (e.g. "3, 4"), then the tile number. A negative
 # position, or "q" at either question, stops the game and offers to save it.
-require_relative "board"
-require_relative "game_log"
+require_relative "../lib/board"
+require_relative "../lib/game_log"
 
 class TerminalGame
   def initialize(input: $stdin, output: $stdout, board: nil, game_log: nil)

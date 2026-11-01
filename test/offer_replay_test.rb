@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../offer_replay"
+require_relative "../lib/offer_replay"
 
 class OfferReplayTest < Minitest::Test
   def test_applies_moves_and_feeds_each_recorded_offer_batch

@@ -24,12 +24,12 @@ The order of work is set by the pinned roadmap issue, **#27**
 
 - Meet the issue's **acceptance criteria**. They are the definition of done.
 - Match the surrounding code: its naming, comment density and idiom.
-  `game_1010.rb` only reads input, updates state and draws; the rules live in `board.rb`.
+  `scripts/game_1010.rb` only reads input, updates state and draws; the rules live in `lib/board.rb`.
 - Add or update tests in `test/` for each acceptance criterion. Tests must not
   need a real Gosu window.
 - Keep long-running work (simulation, search, training) independent of Gosu.
 - Never commit `logs/`, `learning_data/`, trained models or `1010game.txt`.
-- Keep the seed sets in `learning_seed_sets.rb` disjoint. Never use `held_out`
+- Keep the seed sets in `lib/learning_seed_sets.rb` disjoint. Never use `held_out`
   seeds for training, tuning or model selection.
 
 ## 4. Check before committing

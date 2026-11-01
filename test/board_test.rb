@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../board"
+require_relative "../lib/board"
 
 class BoardTest < Minitest::Test
   def fill_row(board, row, except: [])

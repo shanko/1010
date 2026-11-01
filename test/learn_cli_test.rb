@@ -3,9 +3,9 @@
 require "minitest/autorun"
 require "tmpdir"
 require "stringio"
-require_relative "../learn_cli"
-require_relative "../game_log"
-require_relative "../offer_replay"
+require_relative "../lib/learn_cli"
+require_relative "../lib/game_log"
+require_relative "../lib/offer_replay"
 
 # rubocop:disable Metrics/BlockLength, Metrics/MethodLength
 

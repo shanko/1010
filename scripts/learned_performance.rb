@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "../game_simulator"
-require_relative "../game_1010"
+require_relative "../lib/game_simulator"
+require_relative "game_1010"
 
 def average_ms(iterations, &block)
   started = Process.clock_gettime(Process::CLOCK_MONOTONIC)

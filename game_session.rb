@@ -37,7 +37,7 @@ class GameSession
   attr_reader :board, :previous_board, :auto, :game_over, :ended_at,
               :game_log, :recording, :last_recording_path, :offer_replay,
               :playback, :playback_next_at, :auto_player, :auto_run_tracker,
-              :seed, :strategy, :replay_delay_ms, :last_move, :initial_message
+              :seed, :strategy, :replay_delay_ms, :last_move, :initial_message, :move_count
 
   def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil,
                  replay_file: nil, replay_delay: DEFAULT_REPLAY_DELAY_SECONDS, model: nil,
@@ -116,6 +116,7 @@ class GameSession
     @seed = seed
     @previous_board = nil
     @last_move = nil
+    @move_count = 0
     @playback_next_at = nil
     @playback = nil
     @offer_replay = nil
@@ -141,6 +142,7 @@ class GameSession
     return nil unless move
 
     @previous_board = previous
+    @move_count += 1
     record_placement(previous, tile, index, row, col)
     @last_move = move
     refresh_game_over
@@ -165,6 +167,7 @@ class GameSession
 
     @board = @offer_replay ? @offer_replay.undo : @previous_board
     @previous_board = nil
+    @move_count -= 1
     @last_move = nil
     @game_log.undo
     refresh_game_over
@@ -369,7 +372,7 @@ class GameSession
     @summary = if @auto_run_tracker.any_runs?
                  @auto_run_tracker.summary
                else
-                 "Total time played = #{play_seconds} seconds\nScore = #{@board.score}"
+                 "Total time played = #{play_seconds} seconds\nTotal moves = #{@move_count}\nScore = #{@board.score}"
                end
     @finished = true
     @summary

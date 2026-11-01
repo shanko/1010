@@ -172,7 +172,7 @@ class GameImprover
     recorded_sets = [output.deal_batches.size, baseline[:offers].size].min
     move_costs, move_cost_rollouts = estimate_move_costs(source, baseline, rollout_budget: states_limit)
     costliest_moves = move_costs.select {|item| item[:estimated_cost]&.positive? }
-    costliest_moves.sort_by! {|item| [-item.fetch(:estimated_cost), item.fetch(:move)] }
+    costliest_moves.sort_by! {|item| -item.fetch(:move) }
     {
       schema_version:                 1,
       source:                         File.expand_path(source_path),

@@ -206,7 +206,7 @@ $ bundle exec ruby game_1010.rb --delay 2 logs/<game>.moves
 
 Try defeating the computer (it is very hard) by taking turns and comparing the score AND time required to play it.
 
-The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc` and `sam` (the default). Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
+The strategies are in `auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam` (the default) and `codex_1`. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
 
 ## Code:
 

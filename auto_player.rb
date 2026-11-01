@@ -9,14 +9,14 @@ require_relative "board"
 require_relative "learned_player"
 
 class AutoPlayer
-  STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam].freeze
+  STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam codex_1].freeze
   VALID_STRATEGIES = (STRATEGIES + [:learned]).freeze
   DEFAULT_STRATEGY = :sam
 
   attr_reader :strategy
 
-  # `random` picks which tile to play. Keep it separate from the board's
-  # random numbers, so a recorded game deals the same tiles when played back.
+  # `random` picks which tile to play for the randomized strategies. Keep it
+  # separate from the board's random numbers, so seeded runs stay reproducible.
   def initialize(strategy=DEFAULT_STRATEGY, random: Random.new, model: nil)
     strategy = strategy.to_sym
     unless VALID_STRATEGIES.include?(strategy)
@@ -42,6 +42,7 @@ class AutoPlayer
   # Picks a random tile among those that fit somewhere, then the best spot for it.
   def choose_move(board)
     return @learned_player.choose_move(board, random: @random) if @learned_player
+    return choose_codex_1_move(board) if @strategy == :codex_1
 
     fitting = board.options.each_index.select {|index| board.fits_anywhere?(board.options[index]) }
     return nil if fitting.empty?
@@ -58,10 +59,38 @@ class AutoPlayer
     positions = board.positions_for(tile)
     return nil if positions.empty?
 
+    if @strategy == :codex_1
+      index = board.options.index(tile)
+      index = board.options.length if index.nil?
+      return positions.max_by {|row, col| codex_1_mobility(board, index, row, col, tile) }
+    end
+
     send(@strategy, board, tile, positions)
   end
 
   private
+
+  # Compare every legal tile-placement pair, choosing the move that leaves the
+  # other tiles in this offer playable with the most room for future moves.
+  def choose_codex_1_move(board)
+    board.options.each_with_index.flat_map do |tile, index|
+      board.positions_for(tile).map do |row, col|
+        [codex_1_mobility(board, index, row, col), [index, row, col]]
+      end
+    end.max_by(&:first)&.last
+  end
+
+  def codex_1_mobility(board, index, row, col, tile=nil)
+    branch = board.copy
+    if index == board.options.length
+      branch.replace_options([tile])
+      index = 0
+    end
+    return [0, [], 0] unless branch.play(index, row, col, deal: false)
+
+    placements = branch.options.map {|remaining| branch.positions_for(remaining).size }.sort
+    [placements.count(&:positive?), placements, placements.sum]
+  end
 
   # The first position found.
   def first_fit(_board, _tile, positions)

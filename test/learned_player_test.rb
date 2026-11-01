@@ -9,7 +9,7 @@ require_relative "../policy_corrector"
 
 class LearnedPlayerTest < Minitest::Test
   def test_feature_schema_is_stable_and_features_cover_documented_state_and_action_data
-    board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:dot)])
     before = [Marshal.dump(board.cells), Marshal.dump(board.options), Marshal.dump(board.random)]
 
     features = ActionFeatures.extract(board, 0, 0, 0)
@@ -77,7 +77,7 @@ class LearnedPlayerTest < Minitest::Test
     [[0, 0], [0, 4], [1, 1], [2, 2], [3, 3], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 4]].each do |row, col|
       cells[row][col] = Board1010::EMPTY
     end
-    board = Board1010.new(cells: cells, options: [Board1010::TILES[:dot]])
+    board = Board1010.new(cells: cells, options: [Tile.fetch(:dot)])
 
     features = ActionFeatures.extract(board, 0, 9, 4)
 
@@ -90,7 +90,7 @@ class LearnedPlayerTest < Minitest::Test
     model = empty_model
     model["weights"]["tile_sq2"] = 10.0
     model["weights"]["tile_dot"] = -10.0
-    board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:sq2]])
+    board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:sq2)])
 
     assert_equal 1, AutoPlayer.new(:learned, model: model, random: Random.new(5)).choose_move(board).first
   end

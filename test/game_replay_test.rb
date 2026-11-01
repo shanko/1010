@@ -21,7 +21,7 @@ class GameReplayTest < Minitest::Test
 
   def test_v2_trace_replays_initial_board_deals_moves_and_undo_exactly
     Dir.mktmpdir do |directory|
-      board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:dot]], random: Random.new(51))
+      board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:dot)], random: Random.new(51))
       logger = GameLog.new(seed: 51, board: board, mode: "test", directory: directory)
 
       tile_name = board.options[0].name
@@ -113,7 +113,7 @@ class GameReplayTest < Minitest::Test
       tile_ids = Array.new(Board1010::ROWS) { Array.new(Board1010::COLS, Board1010::EMPTY) }
       cells[4][6] = 2
       tile_ids[4][6] = Tile.fetch(:hl2).id
-      board = Board1010.new(cells: cells, tile_ids: tile_ids, options: [Board1010::TILES[:dot]], score: 17)
+      board = Board1010.new(cells: cells, tile_ids: tile_ids, options: [Tile.fetch(:dot)], score: 17)
       logger = GameLog.new(board: board, mode: "terminal", directory: directory)
       logger.finish(reason: "stopped", score: board.score)
 

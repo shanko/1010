@@ -10,4 +10,5 @@ group :development, :test do
   gem "minitest"
   gem "rake"
   gem "rubocop", "~> 1.75.0"
+  gem "tsort"
 end

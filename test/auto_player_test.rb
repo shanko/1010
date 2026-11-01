@@ -4,26 +4,24 @@ require "minitest/autorun"
 require_relative "../auto_player"
 
 class AutoPlayerTest < Minitest::Test
-  TILES = Board1010::TILES
-
   def test_sam_is_the_default_strategy
     assert_equal :sam, AutoPlayer::DEFAULT_STRATEGY
     assert_equal :sam, AutoPlayer.new.strategy
   end
 
   def test_jc_prefers_a_corner_on_an_empty_board
-    assert_equal [0, 0], AutoPlayer.new(:jc).best_position(Board1010.new, TILES[:dot])
+    assert_equal [0, 0], AutoPlayer.new(:jc).best_position(Board1010.new, Tile.fetch(:dot))
   end
 
   def test_jc_prefers_the_larger_footprint_contact_at_a_board_corner
     board = Board1010.new
     [[4, 4], [4, 5], [4, 6], [5, 4], [5, 6]].each {|row, col| board.cells[row][col] = 1 }
-    assert_equal [0, 0], AutoPlayer.new(:jc).best_position(board, TILES[:dot])
+    assert_equal [0, 0], AutoPlayer.new(:jc).best_position(board, Tile.fetch(:dot))
   end
 
   def test_jc_uses_the_whole_tile_footprint_instead_of_its_anchor
     board = footprint_disagreement_board
-    tile = TILES[:sq3]
+    tile = Tile.fetch(:sq3)
     anchor_choice = board.positions_for(tile).max_by do |row, col|
       board.filled_neighbours(row, col) + board.edges_touched(row, col)
     end
@@ -36,20 +34,20 @@ class AutoPlayerTest < Minitest::Test
 
   def test_first_fit_and_last_fit
     board = Board1010.new
-    assert_equal [0, 0], AutoPlayer.new(:first_fit).best_position(board, TILES[:sq2])
-    assert_equal [8, 8], AutoPlayer.new(:last_fit).best_position(board, TILES[:sq2])
+    assert_equal [0, 0], AutoPlayer.new(:first_fit).best_position(board, Tile.fetch(:sq2))
+    assert_equal [8, 8], AutoPlayer.new(:last_fit).best_position(board, Tile.fetch(:sq2))
   end
 
   def test_sam_completes_a_line_when_it_can
     board = Board1010.new
     Board1010::COLS.times {|col| board.cells[9][col] = 1 unless col == 3 }
-    assert_equal [9, 3], AutoPlayer.new(:sam).best_position(board, TILES[:dot])
+    assert_equal [9, 3], AutoPlayer.new(:sam).best_position(board, Tile.fetch(:dot))
   end
 
   def test_no_position_when_the_tile_fits_nowhere
     board = Board1010.new
     board.cells.each {|values| values.fill(1) }
-    assert_nil AutoPlayer.new(:jc).best_position(board, TILES[:dot])
+    assert_nil AutoPlayer.new(:jc).best_position(board, Tile.fetch(:dot))
   end
 
   def test_unknown_strategy_is_rejected_with_the_choices
@@ -58,7 +56,7 @@ class AutoPlayerTest < Minitest::Test
   end
 
   def test_choose_move_only_picks_a_tile_that_fits
-    board = Board1010.new(options: [TILES[:sq3], TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:sq3), Tile.fetch(:dot)])
     Board1010::ROWS.times {|row| board.cells[row].fill(1) }
     board.cells[0][0] = Board1010::EMPTY
 

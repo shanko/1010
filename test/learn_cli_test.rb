@@ -5,6 +5,7 @@ require "tmpdir"
 require "stringio"
 require_relative "../learn_cli"
 require_relative "../game_log"
+require_relative "../offer_replay"
 
 # rubocop:disable Metrics/BlockLength, Metrics/MethodLength
 
@@ -232,20 +233,14 @@ class LearnCLITest < Minitest::Test
     episode = GameSimulator.run(seed: seed, strategy: :first_fit)
     board = GameSimulator.initial_board(seed: seed)
     log = GameLog.new(seed: seed, board: board, mode: "auto", directory: directory)
-    next_offer = 1
+    replay = OfferReplay.new(board: board, offers: episode.offers)
     episode.moves.each do |move|
-      batch_exhausted = board.options.size == 1
+      batch_exhausted = replay.board.options.size == 1
       log.move(move.fetch(:tile), move.fetch(:option), move.fetch(:row), move.fetch(:col))
-      raise "unexpected illegal fixture move" unless board.play(move.fetch(:option), move.fetch(:row),
-                                                                move.fetch(:col), deal: false)
-
-      next unless batch_exhausted
-
-      names = episode.offers.fetch(next_offer)
-      board.replace_options(names.map {|name| Tile.fetch(name) })
-      log.deal(board.options)
-      next_offer += 1
+      replay.apply(move)
+      log.deal(replay.board.options) if batch_exhausted
     end
+    board = replay.finish!(expected_score: episode.score)
     log.finish(reason: "game_over", score: board.score)
     log.path
   end

@@ -2,6 +2,7 @@
 
 require "minitest/autorun"
 require_relative "../improvement_search"
+require_relative "../offer_replay"
 
 class ImprovementSearchTest < Minitest::Test
   def test_fixed_offer_search_matches_a_brute_force_oracle_and_preserves_source
@@ -86,7 +87,7 @@ class ImprovementSearchTest < Minitest::Test
     cells = Array.new(10) { Array.new(10, 9) }
     [[4, 4], [4, 5], [5, 4], [5, 5], [4, 0], [4, 9], [5, 0], [5, 9],
      [0, 4], [0, 5], [9, 4], [9, 5]].each {|row, col| cells[row][col] = Board1010::EMPTY }
-    Board1010.new(cells: cells, options: [Board1010::TILES[:dot], Board1010::TILES[:sq2]], random: Random.new(7))
+    Board1010.new(cells: cells, options: [Tile.fetch(:dot), Tile.fetch(:sq2)], random: Random.new(7))
   end
 
   def brute_force_score(board)
@@ -107,34 +108,11 @@ class ImprovementSearchTest < Minitest::Test
   end
 
   def replay_fixed(board, sequence, offers)
-    copy = board.copy
-    offer_index = 1
-    sequence.each do |move|
-      exhausted = copy.options.size == 1
-      assert copy.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false),
-             "illegal candidate move: #{move}"
-      batch = exhausted && offers[offer_index]
-      if batch
-        copy.replace_options(batch.map {|name| Tile.fetch(name) })
-        offer_index += 1
-      end
-    end
-    copy.score
+    replay = OfferReplay.replay(board: board.copy, moves: sequence, offers: offers, strict_offers: false)
+    replay.score
   end
 
   def replay_seeded(seed, sequence, offers)
-    board = GameSimulator.initial_board(seed: seed)
-    offer_index = 1
-    sequence.each do |move|
-      exhausted = board.options.size == 1
-      assert board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false),
-             "illegal candidate move: #{move}"
-      next unless exhausted
-
-      batch = offers.fetch(offer_index)
-      board.replace_options(batch.map {|name| Tile.fetch(name) })
-      offer_index += 1
-    end
-    board
+    OfferReplay.replay(board: GameSimulator.initial_board(seed: seed), moves: sequence, offers: offers)
   end
 end

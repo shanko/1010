@@ -8,7 +8,7 @@ require_relative "../game_trace"
 class GameLogTest < Minitest::Test
   def test_writes_compact_snapshot_offer_move_and_undo_records
     Dir.mktmpdir do |directory|
-      board = Board1010.new(options: [Board1010::TILES[:dot]])
+      board = Board1010.new(options: [Tile.fetch(:dot)])
       log = GameLog.new(seed: 42, board: board, mode: "test", directory: directory)
       log.move(:dot, 0, 9, 0)
       log.undo
@@ -23,7 +23,7 @@ class GameLogTest < Minitest::Test
 
   def test_records_missing_seed_as_dash
     Dir.mktmpdir do |directory|
-      board = Board1010.new(options: [Board1010::TILES[:dot]])
+      board = Board1010.new(options: [Tile.fetch(:dot)])
       log = GameLog.new(board: board, mode: "test", directory: directory)
       log.finish(reason: "stopped", score: 0)
 
@@ -33,7 +33,7 @@ class GameLogTest < Minitest::Test
 
   def test_each_game_gets_a_distinct_file
     Dir.mktmpdir do |directory|
-      board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:dot]])
+      board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:dot)])
       first = GameLog.new(seed: 1, board: board, mode: "test", directory: directory)
       second = GameLog.new(seed: 2, board: board, mode: "test", directory: directory)
       first.move(:dot, 0, 0, 0)

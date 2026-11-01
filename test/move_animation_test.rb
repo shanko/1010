@@ -8,7 +8,7 @@ class MoveAnimationTest < Minitest::Test
 
   # A dot that completes row 0 (cleared) at (0, 9), played at time 1000.
   def setup
-    @board = Board1010.new(options: [Board1010::TILES[:hl2], Board1010::TILES[:dot]])
+    @board = Board1010.new(options: [Tile.fetch(:hl2), Tile.fetch(:dot)])
     Board1010::COLS.times {|col| @board.cells[0][col] = 1 unless col >= 8 }
     move = @board.play(0, 0, 8, capture: true) # hl2 fills (0, 8) and (0, 9)
     @animation = MoveAnimation.new(move, 1000)
@@ -32,7 +32,7 @@ class MoveAnimationTest < Minitest::Test
   end
 
   def test_placed_cells_use_the_placed_tile_type_color_identity
-    tile_id = Board1010::TILES[:hl2].id
+    tile_id = Tile.fetch(:hl2).id
 
     assert_equal tile_id, @animation.tile_id_at(0, 8, @board.tile_ids[0][8], 1000)
     assert_equal EMPTY, @animation.tile_id_at(0, 9, @board.tile_ids[0][9], 1000)

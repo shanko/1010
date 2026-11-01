@@ -4,8 +4,6 @@ require "minitest/autorun"
 require_relative "../board"
 
 class BoardTest < Minitest::Test
-  TILES = Board1010::TILES
-
   def fill_row(board, row, except: [])
     Board1010::COLS.times {|col| board.cells[row][col] = 1 unless except.include?(col) }
   end
@@ -13,14 +11,14 @@ class BoardTest < Minitest::Test
   # --- Tiles ------------------------------------------------------------------
 
   def test_there_are_19_tiles_and_8_small_ones
-    assert_equal 19, Board1010::ALL_TILES.size
+    assert_equal 19, Tile::ALL.size
     assert_equal 8, Board1010::SMALL_TILES.compact.size
   end
 
   def test_anchor_is_the_first_filled_square_of_the_top_row
-    assert_equal 0, TILES[:tl3].anchor
-    assert_equal 1, TILES[:br2].anchor
-    assert_equal 2, TILES[:br3].anchor
+    assert_equal 0, Tile.fetch(:tl3).anchor
+    assert_equal 1, Tile.fetch(:br2).anchor
+    assert_equal 2, Tile.fetch(:br3).anchor
   end
 
   def test_tile_values_are_immutable_and_precompute_shape_metadata
@@ -41,34 +39,34 @@ class BoardTest < Minitest::Test
 
   def test_cells_for_shifts_the_tile_left_by_its_anchor
     board = Board1010.new
-    assert_equal [[0, 5, 2], [1, 4, 2], [1, 5, 2]], board.cells_for(TILES[:br2], 0, 5)
+    assert_equal [[0, 5, 2], [1, 4, 2], [1, 5, 2]], board.cells_for(Tile.fetch(:br2), 0, 5)
   end
 
   def test_fits_checks_the_edges_and_other_tiles
     board = Board1010.new
     board.cells[5][5] = 1
 
-    assert board.fits?(TILES[:hl3], 5, 6)
-    refute board.fits?(TILES[:hl3], 5, 4), "would cover (5, 5)"
-    refute board.fits?(TILES[:hl3], 0, 8), "runs off the right edge"
-    refute board.fits?(TILES[:vl5], 7, 0), "runs off the bottom"
-    refute board.fits?(TILES[:br2], 0, 0), "its anchor shifts it off the left edge"
+    assert board.fits?(Tile.fetch(:hl3), 5, 6)
+    refute board.fits?(Tile.fetch(:hl3), 5, 4), "would cover (5, 5)"
+    refute board.fits?(Tile.fetch(:hl3), 0, 8), "runs off the right edge"
+    refute board.fits?(Tile.fetch(:vl5), 7, 0), "runs off the bottom"
+    refute board.fits?(Tile.fetch(:br2), 0, 0), "its anchor shifts it off the left edge"
   end
 
   def test_play_scores_one_point_per_square_and_uses_up_the_option
-    board = Board1010.new(options: [TILES[:sq2], TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:sq2), Tile.fetch(:dot)])
     move = board.play(0, 0, 0)
 
     assert_equal 4, board.score
-    assert_equal [TILES[:dot]], board.options
+    assert_equal [Tile.fetch(:dot)], board.options
     assert_equal [[0, 0, 2], [0, 1, 2], [1, 0, 2], [1, 1, 2]], move.placed
   end
 
   def test_placing_any_shape_records_its_distinct_tile_type_id
-    ids = Board1010::ALL_TILES.map(&:id)
-    assert_equal Board1010::TILES.size, ids.uniq.size
+    ids = Tile::ALL.map(&:id)
+    assert_equal Tile::BY_NAME.size, ids.uniq.size
 
-    Board1010::TILES.each do |name, tile|
+    Tile::BY_NAME.each do |name, tile|
       board = Board1010.new(options: [tile])
       row = 0
       col = tile.anchor
@@ -79,15 +77,15 @@ class BoardTest < Minitest::Test
   end
 
   def test_play_returns_nil_and_changes_nothing_when_the_tile_does_not_fit
-    board = Board1010.new(options: [TILES[:hl3]])
+    board = Board1010.new(options: [Tile.fetch(:hl3)])
 
     assert_nil board.play(0, 0, 8)
     assert_equal 0, board.score
-    assert_equal [TILES[:hl3]], board.options
+    assert_equal [Tile.fetch(:hl3)], board.options
   end
 
   def test_play_skips_animation_snapshots_by_default
-    board = Board1010.new(options: [TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:dot)])
     move = board.play(0, 0, 0)
 
     assert_nil move.cells_before_clearing
@@ -95,7 +93,7 @@ class BoardTest < Minitest::Test
   end
 
   def test_positions_for_matches_fits_with_bounded_candidates
-    Board1010::ALL_TILES.each do |tile|
+    Tile::ALL.each do |tile|
       board = Board1010.new
       expected = (0...Board1010::ROWS).to_a.product((0...Board1010::COLS).to_a).select do |row, col|
         board.fits?(tile, row, col)
@@ -117,7 +115,7 @@ class BoardTest < Minitest::Test
   # --- Clearing lines -----------------------------------------------------------
 
   def test_full_row_is_cleared
-    board = Board1010.new(options: [TILES[:dot], TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:dot)])
     fill_row(board, 3, except: [9])
     move = board.play(0, 3, 9, capture: true)
 
@@ -128,7 +126,7 @@ class BoardTest < Minitest::Test
   end
 
   def test_row_and_column_are_cleared_together
-    board = Board1010.new(options: [TILES[:dot], TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:dot)])
     fill_row(board, 0, except: [0])
     (1...Board1010::ROWS).each {|row| board.cells[row][0] = 1 }
     move = board.play(0, 0, 0)
@@ -139,7 +137,7 @@ class BoardTest < Minitest::Test
   end
 
   def test_score_is_the_sum_of_placed_tile_areas_even_when_a_line_is_cleared
-    board = Board1010.new(options: [TILES[:hl2], TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:hl2), Tile.fetch(:dot)])
     fill_row(board, 0, except: [8, 9])
     starting_score = board.score
     placed_area = 0
@@ -158,7 +156,7 @@ class BoardTest < Minitest::Test
   # --- Dealing and game over --------------------------------------------------------
 
   def test_deals_three_new_tiles_once_all_are_used
-    board = Board1010.new(options: [TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:dot)])
     board.play(0, 0, 0)
     assert_equal 3, board.options.size
   end
@@ -180,12 +178,12 @@ class BoardTest < Minitest::Test
   end
 
   def test_game_over_when_no_option_fits
-    board = Board1010.new(options: [TILES[:sq3]])
+    board = Board1010.new(options: [Tile.fetch(:sq3)])
     Board1010::ROWS.times {|row| fill_row(board, row) }
     board.cells[0][0] = Board1010::EMPTY
     assert board.game_over?
 
-    board.options << TILES[:dot]
+    board.options << Tile.fetch(:dot)
     refute board.game_over?
   end
 
@@ -193,8 +191,8 @@ class BoardTest < Minitest::Test
 
   def test_find_position_and_positions_for
     board = Board1010.new
-    assert_equal [0, 0], board.find_position(TILES[:sq3])
-    assert_equal 64, board.positions_for(TILES[:sq3]).size # 8 x 8 places for a 3x3 square
+    assert_equal [0, 0], board.find_position(Tile.fetch(:sq3))
+    assert_equal 64, board.positions_for(Tile.fetch(:sq3)).size # 8 x 8 places for a 3x3 square
   end
 
   def test_neighbours_and_edges
@@ -210,7 +208,7 @@ class BoardTest < Minitest::Test
   def test_footprint_contact_counts_unique_filled_cells_and_board_walls
     board = Board1010.new
     board.cells[0][3] = 1
-    tile = TILES[:sq3]
+    tile = Tile.fetch(:sq3)
 
     assert_equal 1, board.footprint_neighbours(tile, 0, tile.anchor)
     assert_equal 10, board.footprint_contact(tile, 0, tile.anchor)
@@ -220,7 +218,7 @@ class BoardTest < Minitest::Test
     board = Board1010.new
     fill_row(board, 2, except: [8, 9])
 
-    assert_equal 1, board.lines_completed_by(TILES[:hl2], 2, 8)
+    assert_equal 1, board.lines_completed_by(Tile.fetch(:hl2), 2, 8)
     assert_equal Board1010::EMPTY, board.cells[2][8]
     assert_equal 0, board.score
   end
@@ -228,12 +226,12 @@ class BoardTest < Minitest::Test
   # --- Copying and saving -----------------------------------------------------------
 
   def test_copy_is_independent
-    board = Board1010.new(options: [TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:dot)])
     copy  = board.copy
     board.play(0, 0, 0)
 
     assert_equal Board1010::EMPTY, copy.cells[0][0]
-    assert_equal [TILES[:dot]], copy.options
+    assert_equal [Tile.fetch(:dot)], copy.options
     assert_equal 0, copy.score
   end
 
@@ -250,7 +248,7 @@ class BoardTest < Minitest::Test
   end
 
   def test_save_and_load_round_trip
-    board = Board1010.new(options: [TILES[:hl5], TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:hl5), Tile.fetch(:dot)])
     board.play(1, 2, 3)
     copy = Board1010.from_save(board.to_save)
 
@@ -268,7 +266,7 @@ class BoardTest < Minitest::Test
   end
 
   def test_loads_a_legacy_save_without_tile_type_rows
-    board = Board1010.new(options: [TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:dot)])
     board.play(0, 0, 0)
     old_rows = board.cells.each_with_index.flat_map do |values, row|
       types = board.tile_ids[row].map {|id| id.to_s(36) }.join

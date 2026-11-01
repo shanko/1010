@@ -20,7 +20,7 @@ class TerminalGameTest < Minitest::Test
   end
 
   def test_places_a_tile_and_stops_without_saving
-    board = Board1010.new(options: [Board1010::TILES[:sq2], Board1010::TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:sq2), Tile.fetch(:dot)])
     output = play("0, 0\n1\n-1, 0\nn\n", board)
 
     assert_equal 4, board.score
@@ -30,7 +30,7 @@ class TerminalGameTest < Minitest::Test
   end
 
   def test_reports_a_tile_that_does_not_fit
-    board = Board1010.new(options: [Board1010::TILES[:hl5], Board1010::TILES[:dot]])
+    board = Board1010.new(options: [Tile.fetch(:hl5), Tile.fetch(:dot)])
     output = play("0, 9\n1\nq\n", board)
 
     assert_includes output, "Cannot place that tile at (0, 9)"
@@ -52,7 +52,7 @@ class TerminalGameTest < Minitest::Test
 
   def test_terminal_game_trace_records_batches_and_replays_to_the_same_score
     Dir.mktmpdir do |directory|
-      board = Board1010.new(options: Array.new(3, Board1010::TILES[:dot]), random: Random.new(31))
+      board = Board1010.new(options: Array.new(3, Tile.fetch(:dot)), random: Random.new(31))
       logger = GameLog.new(seed: 31, board: board, mode: "terminal", directory: directory)
       input = "0, 0\n1\n0, 1\n1\n0, 2\n1\nq\nn\n"
       TerminalGame.new(input: StringIO.new(input), output: StringIO.new, board: board, game_log: logger).run

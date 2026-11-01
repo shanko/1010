@@ -9,7 +9,7 @@ require_relative "../reinforcement_trainer"
 class ReinforcementTrainerTest < Minitest::Test
   def test_positive_return_policy_gradient_moves_preference_toward_rewarding_action
     policy = LearnedPlayer.new(empty_model)
-    board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:sq2]])
+    board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:sq2)])
     legal = policy.legal_actions(board)
     expected = ActionFeatures::NAMES.to_h do |name|
       [name, legal.sum {|_action, features| features.fetch(name) } / legal.size]

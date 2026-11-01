@@ -6,6 +6,7 @@ require "open3"
 require "rbconfig"
 require_relative "../lesson_analyzer"
 require_relative "../game_log"
+require_relative "../offer_replay"
 
 class LessonStoreTest < Minitest::Test
   FIXTURE = File.expand_path("fixtures/lesson-v1.json", __dir__)
@@ -87,7 +88,7 @@ class LessonStoreTest < Minitest::Test
 
   def test_analyzer_rejects_non_game_over_trace
     Dir.mktmpdir do |directory|
-      board = Board1010.new(options: [Board1010::TILES[:dot]])
+      board = Board1010.new(options: [Tile.fetch(:dot)])
       log = GameLog.new(seed: 1, board: board, mode: "test", directory: directory)
       log.finish(reason: "stopped", score: 0)
 
@@ -102,21 +103,15 @@ class LessonStoreTest < Minitest::Test
     episode = GameSimulator.run(seed: 11, strategy: :first_fit)
     board = GameSimulator.initial_board(seed: 11)
     log = GameLog.new(seed: 11, board: board, mode: "auto", directory: directory)
-    next_offer = 1
+    replay = OfferReplay.new(board: board, offers: episode.offers)
 
     episode.moves.each do |move|
-      batch_exhausted = board.options.size == 1
+      batch_exhausted = replay.board.options.size == 1
       log.move(move.fetch(:tile), move.fetch(:option), move.fetch(:row), move.fetch(:col))
-      raise "unexpected illegal fixture move" unless board.play(move.fetch(:option), move.fetch(:row),
-                                                                move.fetch(:col), deal: false)
-
-      next unless batch_exhausted
-
-      names = episode.offers.fetch(next_offer)
-      board.replace_options(names.map {|name| Tile.fetch(name) })
-      log.deal(board.options)
-      next_offer += 1
+      replay.apply(move)
+      log.deal(replay.board.options) if batch_exhausted
     end
+    board = replay.finish!(expected_score: episode.score)
     log.finish(reason: "game_over", score: board.score)
     log.path
   end

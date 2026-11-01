@@ -28,7 +28,9 @@ The order of work is set by the pinned roadmap issue, **#27**
 - Add or update tests in `test/` for each acceptance criterion. Tests must not
   need a real Gosu window.
 - Keep long-running work (simulation, search, training) independent of Gosu.
-- Never commit `logs/`, `learning_data/`, trained models or `1010game.txt`.
+- Never commit `logs/`, `learning_data/`, experimental trained models or `1010game.txt`.
+  The maintainer-approved release model at `models/learned.json` is bundled
+  for the default `learned` strategy; replace it only with maintainer approval.
 - Keep the seed sets in `lib/learning_seed_sets.rb` disjoint. Never use `held_out`
   seeds for training, tuning or model selection.
 

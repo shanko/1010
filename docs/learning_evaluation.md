@@ -171,3 +171,17 @@ Reproduction settings, the experiment sequence, tuning-only decisions and audit 
 - Serial and parallel benchmark reports have identical policy statistics and pairwise results.
 - Missing-model tests use an empty temporary directory and pass with or without local trained models.
 - All six strategies recorded in `benchmarks/baseline-v3.json` match their committed per-seed results on seeds 1–100 after the style-only lint fixes. The two newer Codex policies are covered by their deterministic gameplay tests.
+
+## Approved promotion
+
+After reviewing #33, the maintainer approved making this exact candidate the
+default, named `learned`. The release model now ships at `models/learned.json`.
+`./1010 auto` and `./1010 auto learned` use it without local training artifacts;
+`--model PATH` overrides it. Codex Sam remains available explicitly.
+The proposal and unchanged-default statements above describe the evaluation
+before this approval. No additional held-out evaluation selected the release.
+
+Promotion verification: 161 tests, 915 assertions, zero failures/errors/skips;
+RuboCop passes. `benchmarks/baseline-v5.json` records the bundled policy on
+baseline seeds 1–100 and preserves all eight heuristic per-seed results from
+v4 exactly. The release model checksum matches the frozen #33 candidate.

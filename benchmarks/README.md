@@ -39,3 +39,16 @@ bundle exec ruby scripts/benchmark.rb --seeds 1..100 --workers 4 --output benchm
 | last_fit | 137.29 |
 | shanko | 123.28 |
 | random_fit | 71.28 |
+
+`baseline-v5.json` adds the maintainer-approved default `learned` policy,
+using the bundled `models/learned.json` on the same 100 baseline seeds.
+All eight heuristic results remain identical to v4. V4 remains the heuristic
+parity reference; v5 also records the released learned policy.
+
+```sh
+bundle exec ruby scripts/benchmark.rb --seeds 1..100 --workers 4 --strategies first_fit,last_fit,random_fit,shanko,jc,sam,codex_1,codex_sam,learned --model models/learned.json --output learning_data/release-parity.json
+```
+
+The committed v5 report uses repository-relative model paths to avoid publishing
+machine-specific paths. Its source fingerprint and model checksum identify the
+evaluated code and weights.

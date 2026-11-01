@@ -11,12 +11,13 @@ require_relative "learned_player"
 class AutoPlayer
   STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam codex_1 codex_sam].freeze
   VALID_STRATEGIES = (STRATEGIES + [:learned]).freeze
-  # The strongest heuristic plays by default (tuning seeds 2000000..2000999:
-  # codex_sam - sam = +38.94, 95% CI +27.76 to +50.13).
-  DEFAULT_STRATEGY = :codex_sam
+  # Promoted after #33: learned - codex_sam = +46.93 points/game
+  # (95% CI +36.87 to +56.99) on the fixed 2,000-seed evaluation set.
+  DEFAULT_STRATEGY = :learned
+  DEFAULT_MODEL_PATH = File.expand_path("../models/learned.json", __dir__).freeze
   # Search rollouts and lesson analysis run many full games, so they keep the
   # faster Sam strategy; changing it would also change generated lessons.
-  SEARCH_STRATEGY  = :sam
+  SEARCH_STRATEGY = :sam
 
   attr_reader :strategy
 
@@ -32,7 +33,7 @@ class AutoPlayer
     @random   = random
     return unless strategy == :learned
 
-    raise ArgumentError, "learned strategy requires a model hash or model path" unless model
+    model ||= DEFAULT_MODEL_PATH
 
     @learned_player = if model.is_a?(LearnedPlayer)
                         model

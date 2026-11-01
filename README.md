@@ -46,8 +46,11 @@ $ ./1010
 ```
 
 The `1010` launcher runs `bundle exec ruby scripts/game_1010.rb` and forwards
-all command-line arguments. For example, `./1010 auto codex_sam --seed 42`
-starts an auto game with the `codex_sam` strategy. Run it from the repository
+all command-line arguments. For example, `./1010 auto --seed 42`
+starts an auto game with the default `learned` strategy. The evaluated model
+is bundled at `models/learned.json`; no training is required. Use
+`./1010 auto codex_sam --seed 42` for the strongest heuristic, or
+`./1010 auto learned --model PATH` to load another learned model. Run it from the repository
 directory, or put the repository directory on your `PATH` to use `1010` as a
 command name.
 
@@ -246,7 +249,7 @@ $ ./1010 --delay 2 logs/<game>.moves
 
 Try defeating the computer (it is very hard) by taking turns and comparing the score AND time required to play it.
 
-The strategies are in `lib/auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1` and `codex_sam` (the default). Codex Sam is the strongest heuristic: on 1,000 tuning seeds it averaged 326.40 against Sam's 287.46 (paired +38.94, 95% CI +27.76 to +50.13). Search, lesson analysis and `improve` still use Sam for their many rollout games, because it is about six times faster. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Codex Sam uses Codex 1 to choose the tile, then Sam to choose its placement. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
+The strategies are in `lib/auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam` and `learned` (the default). Learned uses the frozen stronger-teacher model from #33: on the fixed 2,000-seed evaluation it averaged 375.50 versus Codex Sam's 328.57, paired +46.93 (95% CI +36.87 to +56.99). Codex Sam is the strongest heuristic: on 1,000 tuning seeds it averaged 326.40 against Sam's 287.46 (paired +38.94, 95% CI +27.76 to +50.13). Search, lesson analysis and `improve` still use Sam for their many rollout games, because it is about six times faster. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Codex Sam uses Codex 1 to choose the tile, then Sam to choose its placement. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
 
 ## Code:
 

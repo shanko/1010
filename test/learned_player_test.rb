@@ -88,8 +88,7 @@ class LearnedPlayerTest < Minitest::Test
     assert_equal 0.0, features.fetch("completed_cols")
   end
 
-  def test_learned_strategy_requires_and_uses_a_versioned_model
-    assert_raises(ArgumentError) { AutoPlayer.new(:learned) }
+  def test_learned_strategy_uses_an_explicit_versioned_model
     model = empty_model
     model["weights"]["tile_sq2"] = 10.0
     model["weights"]["tile_dot"] = -10.0

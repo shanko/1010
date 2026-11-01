@@ -70,10 +70,10 @@ class GameOptions
     strategy_name = (options[:strategy] || AutoPlayer::DEFAULT_STRATEGY).to_sym
     return unless strategy_name == :learned
 
-    options[:model] ||= File.join("learning_data", "checkpoints", "selected.json")
+    options[:model] ||= AutoPlayer::DEFAULT_MODEL_PATH
     return if File.file?(options[:model])
 
-    raise ArgumentError, "learned strategy needs --model PATH or a selected model at #{options[:model]}"
+    raise ArgumentError, "learned model does not exist: #{options[:model]}"
   end
   private_class_method :parse_seed, :parse_delay, :parse_model, :parse_positionals, :validate_strategy
 end

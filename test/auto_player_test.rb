@@ -1,13 +1,23 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "digest"
 require_relative "../lib/auto_player"
 
 class AutoPlayerTest < Minitest::Test
-  def test_codex_sam_is_the_default_strategy_and_sam_drives_search
-    assert_equal :codex_sam, AutoPlayer::DEFAULT_STRATEGY
-    assert_equal :codex_sam, AutoPlayer.new.strategy
+  def test_learned_is_the_default_strategy_and_sam_drives_search
+    assert_equal :learned, AutoPlayer::DEFAULT_STRATEGY
+    assert_equal :learned, AutoPlayer.new.strategy
     assert_equal :sam, AutoPlayer::SEARCH_STRATEGY
+  end
+
+  def test_bundled_model_is_the_frozen_evaluated_candidate
+    model = LearnedPlayer.load(AutoPlayer::DEFAULT_MODEL_PATH).model
+    assert_equal "9347eed45cb853de582b01b0e5a4664a4f387ddd6da4710bb23a71d6fa16e3e4",
+                 Digest::SHA256.hexdigest(JSON.generate(model))
+    board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:sq2)])
+    expected = AutoPlayer.new(:learned, model: model, random: Random.new(5)).choose_move(board)
+    assert_equal expected, AutoPlayer.new(random: Random.new(5)).choose_move(board)
   end
 
   def test_jc_prefers_a_corner_on_an_empty_board

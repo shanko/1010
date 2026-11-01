@@ -169,12 +169,21 @@ class GameReplayTest < Minitest::Test
     end
   end
 
-  def test_learned_mode_without_a_model_reports_the_selected_model_location
+  def test_default_and_explicit_learned_use_the_bundled_model_outside_the_repository
     Dir.mktmpdir do |directory|
       Dir.chdir(directory) do
-        error = assert_raises(ArgumentError) { GameOptions.parse(%w[auto learned]) }
-        assert_match "selected model", error.message
+        [[], %w[auto], %w[auto learned]].each do |args|
+          assert_equal AutoPlayer::DEFAULT_MODEL_PATH, GameOptions.parse(args).fetch(:model)
+        end
       end
+    end
+  end
+
+  def test_missing_explicit_model_is_rejected_instead_of_using_the_bundled_model
+    Dir.mktmpdir do |directory|
+      path = File.join(directory, "missing.json")
+      error = assert_raises(ArgumentError) { GameOptions.parse(["auto", "--model", path]) }
+      assert_includes error.message, path
     end
   end
 

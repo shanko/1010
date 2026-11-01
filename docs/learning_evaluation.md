@@ -63,4 +63,4 @@ Resume the trained RL checkpoint with `train-rl --resume PATH --episodes 10
 instead restart at step 0. `select --checkpoint PATH` deliberately overrides
 selection after tuning evaluation. Learned mode remains opt-in; run it with
 `./1010 auto learned --model learning_data/checkpoints/selected.json --seed 42`
-or use the default heuristic with `./1010 auto sam --seed 42`.
+or use the default heuristic (Codex Sam) with `./1010 auto --seed 42`.

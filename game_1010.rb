@@ -14,9 +14,8 @@ require "gosu"
 require_relative "board"
 require_relative "auto_player"
 require_relative "move_animation"
-require_relative "game_log"
-require_relative "game_trace"
-require_relative "auto_run_tracker"
+require_relative "game_session"
+require_relative "game_options"
 
 class GameWindow < Gosu::Window
   # --- Layout (pixels) --------------------------------------------------------
@@ -59,9 +58,9 @@ class GameWindow < Gosu::Window
   # --- Timing (milliseconds) --------------------------------------------------
 
   MESSAGE_MS      = 2000 # how long messages like "Game saved" stay up
-  AUTO_RESTART_MS = 500  # how long auto mode shows "Game Over!" before the next game
+  AUTO_RESTART_MS = GameSession::AUTO_RESTART_MS # auto mode pause before starting another game
   BLINK_MS        = 250  # how fast the recording mark blinks
-  REPLAY_DELAY_SECONDS = 0.5
+  REPLAY_DELAY_SECONDS = GameSession::DEFAULT_REPLAY_DELAY_SECONDS
 
   # --- Colors -----------------------------------------------------------------
 
@@ -145,33 +144,18 @@ class GameWindow < Gosu::Window
     @score_font = Gosu::Font.new(30)
     @small_font = Gosu::Font.new(20)
 
-    # Every game's seed comes from here, so `--seed` repeats a whole session.
-    @seeds       = Random.new(seed || Random.new_seed)
     @strategy = strategy.to_sym
-    @auto_player = AutoPlayer.new(strategy, random: Random.new(@seeds.rand(2**32)), model: model)
-    @auto        = auto
-    @auto_run_tracker = AutoRunTracker.new(clock: -> { Gosu.milliseconds })
+    @session = GameSession.new(auto: auto, strategy: strategy, seed: seed, replay_file: replay_file,
+                               replay_delay: replay_delay, model: model,
+                               clock: -> { Gosu.milliseconds })
     @closing = false
-    @auto_runs   = 0
-    @max_score   = 0
-    @recording   = false # visual marker; GameLog records every game to disk
-    @last_recording_path = nil
-    @offer_replay = nil
-    @playback    = nil # events still to replay
-    @replay_delay_ms = (Float(replay_delay) * 1000).round
-    raise ArgumentError, "replay delay must be a finite non-negative number" unless
-      @replay_delay_ms >= 0 && Float(replay_delay).finite?
     @message     = nil
-    @opened_at   = Gosu.milliseconds # for the time played, over every game in this window
-    self.caption = "1010!  Auto: #{@strategy}" if @auto
-
-    if replay_file
-      @auto = false
-      start_trace_playback(GameTrace.read(replay_file), mode: "replay")
-    else
-      load_game unless @auto
-      new_game unless @board
+    case @session.initial_message
+    when :loaded then show_message("Loaded the saved game (N: new game)")
+    when :damaged then show_message("The save file is damaged")
     end
+    self.caption = "1010!  Auto: #{@strategy}" if @session.auto
+    self.caption = "1010! (playback)" if replay_file
   end
 
   def needs_cursor?
@@ -182,47 +166,27 @@ class GameWindow < Gosu::Window
   # Starting games
   # ---------------------------------------------------------------------------
 
-  def new_game(seed: @seeds.rand(2**32))
-    board = Board1010.new(random: Random.new(seed))
-    board.deal_if_needed
-    start(board, seed: seed, mode: @auto ? "auto" : "window")
+  def new_game(seed: nil)
+    seed ? @session.new_game(seed: seed) : @session.new_game
+    @selected = nil
+    @animation = nil
+    flush_auto_run_line
   end
 
   # Everything that is reset when a game starts (new, loaded or played back).
   def start(board, seed: nil, mode: "window")
-    if @auto_run_tracker&.active?
-      finish_auto_run(score: @board.score, status: :stopped)
-    end
-    stop_recording
-    if @game_log && @board
-      @game_log.finish(reason: @game_over ? "game_over" : "new_game", score: @board.score)
-      @last_recording_path = @game_log.path
-    end
-    @game_log = GameLog.new(seed: seed, board: board, mode: mode)
-    @board          = board
-    @seed           = seed  # nil for a loaded game, which can't be recorded
-    @previous_board = nil   # for undo (one level, like the original)
-    @selected       = nil   # index of the chosen option
-    @dragging       = false
-    @animation      = nil
-    @playback_next_at = nil
-    @playback = nil
-    @offer_replay = nil
-    @ended_at       = nil
-    @game_over = false
-    start_auto_run if @auto && @auto_run_tracker && !@auto_run_tracker.active?
-    refresh_game_over
+    @session.start(board, seed: seed, mode: mode)
+    @selected = nil
+    @dragging = false
+    @animation = nil
+    flush_auto_run_line
   end
 
   # Call after every change to the board. (Checking every frame would mean
   # trying every tile on every square 60 times a second.)
   def refresh_game_over
-    was_game_over = @game_over
-    @game_over = @board.game_over?
-    @ended_at  = @game_over ? (@ended_at || Gosu.milliseconds) : nil
-    if @auto && @game_over && !was_game_over && @auto_run_tracker&.active?
-      finish_auto_run(score: @board.score)
-    end
+    @session.refresh_game_over
+    flush_auto_run_line
   end
 
   # ---------------------------------------------------------------------------
@@ -234,45 +198,33 @@ class GameWindow < Gosu::Window
   # During playback the replayer checks the move and supplies the recorded
   # offers, and play_back_next logs the recorded deal.
   def try_place(index, row, col)
-    previous = @board.copy
-    tile_name = previous.options[index].name
-    move = if @offer_replay
-             @offer_replay.apply({tile: tile_name, option: index, row: row, col: col}, capture: true)
-           else
-             @board.play(index, row, col, capture: true)
-           end
+    move = @session.place(index, row, col)
+    flush_auto_run_line
     unless move
       @selected = nil
       return
     end
 
-    @previous_board = previous
-    @game_log.move(tile_name, index, row, col)
-    @game_log.deal(@board.options) if !@offer_replay && previous.options.size == 1
     @selected  = nil
-    clear_step = @auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
+    clear_step = @session.auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
     @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
-    refresh_game_over
   end
 
   def undo
-    return show_message("Nothing to undo") unless @previous_board
+    return show_message("Nothing to undo") unless @session.undo
 
-    @board          = @offer_replay ? @offer_replay.undo : @previous_board
-    @previous_board = nil
     @selected       = nil
     @animation      = nil
-    @game_log.undo
-    refresh_game_over
   end
 
   def auto_move
-    move = @auto_player.choose_move(@board)
-    try_place(*move) if move
+    move = @session.auto_move
+    flush_auto_run_line
+    animate_move(move) if move
   end
 
   def select_option(index)
-    @selected = index if index < @board.options.size
+    @selected = index if index < @session.board.options.size
   end
 
   # ---------------------------------------------------------------------------
@@ -286,11 +238,21 @@ class GameWindow < Gosu::Window
     expire_finished(now)
     return if @animation # let a move finish before the next automatic one
 
-    if @playback
-      play_back_next(now)
-    elsif @auto
-      auto_step(now)
+    result = @session.tick(now: now)
+    flush_auto_run_line
+    case result
+    when Board1010::Move then animate_move(result)
+    when :finished then finish_playback
+    when :undo
+      @selected = nil
+      @animation = nil
+    when :restarted then update_auto_caption
     end
+  end
+
+  def animate_move(move)
+    clear_step = @session.auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
+    @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
   end
 
   # Drops the move animation and the message once their time is up.
@@ -300,26 +262,17 @@ class GameWindow < Gosu::Window
   end
 
   def auto_step(now)
-    return auto_move unless @game_over
-    return if now < @ended_at + AUTO_RESTART_MS
-
-    @auto_runs = @auto_run_tracker.run_count
-    @max_score = @auto_run_tracker.max_score || 0
+    result = @session.auto_step(now)
+    animate_move(result) if result.is_a?(Board1010::Move)
     update_auto_caption
-    new_game
   end
 
   def toggle_auto
-    if @auto
-      finish_auto_run(score: @board.score, status: :stopped) if @auto_run_tracker.active?
-      @auto = false
-    else
-      @auto = true
-      start_auto_run unless @game_over
-    end
+    @session.toggle_auto
+    flush_auto_run_line
     @selected = nil
     @dragging = false
-    @auto ? update_auto_caption : self.caption = "1010!"
+    @session.auto ? update_auto_caption : self.caption = "1010!"
   end
 
   def print_auto_run(line)
@@ -330,19 +283,26 @@ class GameWindow < Gosu::Window
   end
 
   def start_auto_run
-    @auto_run_tracker.start_run
+    @session.start_auto_run
   end
 
   def finish_auto_run(score:, status: :completed)
-    print_auto_run(@auto_run_tracker.finish_run(score: score, status: status))
+    line = @session.finish_auto_run(score: score, status: status)
+    @session.take_auto_run_line
+    print_auto_run(line)
   end
 
   def update_auto_caption
-    return unless @auto_run_tracker
+    tracker = @session.auto_run_tracker
+    return unless tracker
 
-    last_time = @auto_run_tracker.last_duration_seconds
+    last_time = tracker.last_duration_seconds
     timing = last_time ? "  Last: #{format('%.1fs', last_time)}" : ""
-    self.caption = "1010!  Auto: #{@strategy}  Runs: #{@auto_run_tracker.completed_count}  Max Score: #{@auto_run_tracker.max_score || 0}#{timing}"
+    self.caption = "1010!  Auto: #{@strategy}  Runs: #{tracker.completed_count}  Max Score: #{tracker.max_score || 0}#{timing}"
+  end
+
+  def flush_auto_run_line
+    print_auto_run(@session.take_auto_run_line)
   end
 
   # ---------------------------------------------------------------------------
@@ -351,87 +311,51 @@ class GameWindow < Gosu::Window
 
   # R starts recording a new game; pressing R again stops.
   def toggle_recording
-    return stop_recording if @recording
-
-    new_game
-    @recording = true
-    show_message("Recording a new game (R to stop)")
+    result = @session.toggle_recording
+    @selected = nil
+    @animation = nil
+    show_message(result == :started ? "Recording a new game (R to stop)" : "Recording stopped (P to play it back)")
   end
 
   def stop_recording
-    return unless @recording
-
-    @last_recording_path = @game_log.path if @game_log
-    @recording = false
-    show_message("Recording stopped (P to play it back)")
+    @session.stop_recording
   end
 
   # P replays the last game's durable trace instead of keeping duplicate events in memory.
   def start_playback
-    stop_recording
-    path = @last_recording_path || @game_log&.path
-    return show_message("Nothing recorded yet (R to record)") unless path
+    result = @session.start_playback
+    return show_message("Nothing recorded yet (R to record)") if result == :nothing_recorded
 
-    # The trace can only be read once it has its end record.
-    @game_log.finish(reason: @game_over ? "game_over" : "stopped", score: @board.score) if @game_log&.path == path
-
-    start_trace_playback(GameTrace.read(path), mode: "playback")
-    @auto = false
+    @selected = nil
+    @animation = nil
     self.caption = "1010! (playback)"
   end
 
   def start_trace_playback(trace, mode:)
-    start(trace.starting_board.copy, seed: trace.seed, mode: mode)
-    @playback = trace.events
-    @offer_replay = OfferReplay.new(board: @board, offers: trace.deal_batches)
+    @session.start_trace_playback(trace, mode: mode)
+    @selected = nil
+    @animation = nil
   end
 
   def play_back_next(now = Gosu.milliseconds)
-    return if @playback_next_at && now < @playback_next_at
-
-    event = @playback.shift
-    case event&.first
-    when :move
-      _type, tile_name, index, row, col = event
-      play_back_move(tile_name, index, row, col)
-      @playback_next_at = now + @replay_delay_ms
-    when :deal
-      play_back_deal(event[1])
-    when :undo
-      undo
-      @playback_next_at = now + @replay_delay_ms
-    when :end
-      _type, reason, score = event
-      @offer_replay.finish!(expected_score: score, require_all_offers: false)
-      @game_log.finish(reason: reason, score: score)
-      finish_playback
-    else
-      finish_playback
-    end
+    result = @session.playback_tick(now)
+    animate_move(result) if result.is_a?(Board1010::Move)
+    finish_playback if result == :finished
+    @session.refresh_game_over if result == :undo
   end
 
   # A move that empties its batch is followed by its deal record, which is
   # shown straight away rather than after the playback delay.
   def play_back_move(tile_name, index, row, col)
-    offered = @board.options[index]&.name
-    unless offered == tile_name
-      raise ArgumentError, "replay expected #{tile_name.inspect} at option #{index}, found #{offered.inspect}"
-    end
-
-    try_place(index, row, col)
-    play_back_deal(@playback.shift[1]) if @playback.first&.first == :deal
+    @session.play_back_move(tile_name, index, row, col)
   end
 
   def play_back_deal(tiles)
-    @offer_replay.feed_deal(tiles)
-    @game_log.deal(tiles)
-    refresh_game_over
+    @session.play_back_deal(tiles)
   end
 
   # After playback the player continues from the replayed board.
   def finish_playback
-    @playback = nil
-    @offer_replay = nil
     self.caption = "1010!"
     show_message("Playback finished")
   end
@@ -441,27 +365,20 @@ class GameWindow < Gosu::Window
   # ---------------------------------------------------------------------------
 
   def save_game
-    if saving_disabled?
-      show_message(@auto ? "Saving is off in auto mode" : "Saving is off during playback")
-      return
+    result = @session.save_game
+    case result
+    when :disabled_auto then show_message("Saving is off in auto mode")
+    when :disabled_playback then show_message("Saving is off during playback")
+    when :saved then show_message("Game saved")
+    else show_message("Could not save: #{result.last.message}")
     end
-
-    File.write(Board1010::SAVE_FILE, @board.to_save)
-    show_message("Game saved")
-  rescue SystemCallError => e
-    show_message("Could not save: #{e.message}")
   end
 
   # Like the original, carry on with a saved game if there is one.
   def load_game
-    return unless File.exist?(Board1010::SAVE_FILE)
-
-    board = Board1010.from_save(File.read(Board1010::SAVE_FILE))
-    return show_message("The save file is damaged") unless board
-
-    board.deal_if_needed
-    start(board)
-    show_message("Loaded the saved game (N: new game)")
+    result = @session.load_game
+    show_message("The save file is damaged") if result == :damaged
+    show_message("Loaded the saved game (N: new game)") if result == :loaded
   end
 
   def show_message(text)
@@ -470,20 +387,19 @@ class GameWindow < Gosu::Window
   end
 
   def save_and_quit
-    save_game unless saving_disabled?
+    result = @session.quit(save: true)
+    puts "Could not save: #{result.last.message}" if result.is_a?(Array) && result.first == :failed
     close
   end
 
   def saving_disabled?
-    @auto || @playback
+    @session.saving_disabled?
   end
 
   # Deletes the saved game too, so the next start is a new game.
   def quit_without_saving
-    File.delete(Board1010::SAVE_FILE) if !saving_disabled? && File.exist?(Board1010::SAVE_FILE)
-    close
-  rescue SystemCallError => e
-    puts "Could not delete #{Board1010::SAVE_FILE}: #{e.message}"
+    result = @session.quit(save: false)
+    puts "Could not delete #{Board1010::SAVE_FILE}: #{result.last.message}" if result.is_a?(Array) && result.first == :failed
     close
   end
 
@@ -492,23 +408,16 @@ class GameWindow < Gosu::Window
     return if @closing
 
     @closing = true
-    if @auto_run_tracker&.active?
-      finish_auto_run(score: @board.score, status: :unfinished)
-    end
-    @game_log&.finish(reason: @game_over ? "game_over" : "quit", score: @board.score)
-    if @auto_run_tracker&.any_runs?
-      puts @auto_run_tracker.summary
-    else
-      puts "Total time played = #{play_seconds} seconds"
-      puts "Score = #{@board.score}"
-    end
+    summary = @session.finish
+    flush_auto_run_line
+    puts summary
     super
   end
 
   # Since the window opened, like the original: in auto mode that covers every
   # game played, not just the one in progress.
   def play_seconds
-    (Gosu.milliseconds - @opened_at) / 1000
+    @session.play_seconds
   end
 
   # ---------------------------------------------------------------------------
@@ -518,7 +427,7 @@ class GameWindow < Gosu::Window
   # Looks the key (or mouse button) up in KEY_ACTIONS, PLAYER_ACTIONS and OPTION_KEYS.
   def button_down(id)
     return send(KEY_ACTIONS[id]) if KEY_ACTIONS.key?(id)
-    return if @auto || @playback
+    return if @session.auto || @session.playback
 
     if PLAYER_ACTIONS.key?(id)
       send(PLAYER_ACTIONS[id])
@@ -534,7 +443,7 @@ class GameWindow < Gosu::Window
     return unless id == Gosu::MS_LEFT
 
     @dragging = false
-    return if @auto || @playback || @selected.nil?
+    return if @session.auto || @session.playback || @selected.nil?
 
     row, col = cell_under_mouse
     try_place(@selected, row, col) if row
@@ -550,8 +459,8 @@ class GameWindow < Gosu::Window
 
   # C: prints the first position where each option fits (for debugging).
   def print_positions
-    @board.options.each_with_index do |tile, index|
-      puts "Option #{index + 1} #{tile.inspect} fits first at #{@board.find_position(tile).inspect}"
+    @session.board.options.each_with_index do |tile, index|
+      puts "Option #{index + 1} #{tile.inspect} fits first at #{@session.board.find_position(tile).inspect}"
     end
   end
 
@@ -571,7 +480,7 @@ class GameWindow < Gosu::Window
   def cell_under_mouse
     row = ((mouse_y - CELL_GAP) / CELL_PITCH).floor
     col = ((mouse_x - CELL_GAP) / CELL_PITCH).floor
-    [row, col] if @board.inside?(row, col)
+    [row, col] if @session.board.inside?(row, col)
   end
 
   # Where option 0, 1 or 2 is drawn and can be clicked. Used for both, so
@@ -581,7 +490,7 @@ class GameWindow < Gosu::Window
   end
 
   def option_under_mouse
-    @board.options.each_index.find do |index|
+    @session.board.options.each_index.find do |index|
       rect = option_rect(index)
       mouse_x.between?(rect[:x], rect[:x] + rect[:w]) && mouse_y.between?(rect[:y], rect[:y] + rect[:h])
     end
@@ -610,17 +519,17 @@ class GameWindow < Gosu::Window
 
   def draw_board
     now = Gosu.milliseconds
-    @board.cells.each_with_index do |values, row|
+    @session.board.cells.each_with_index do |values, row|
       values.each_with_index do |value, col|
         value = @animation.value_at(row, col, value, now) if @animation
-        tile_id = @animation ? @animation.tile_id_at(row, col, @board.tile_ids[row][col], now) : @board.tile_ids[row][col]
+        tile_id = @animation ? @animation.tile_id_at(row, col, @session.board.tile_ids[row][col], now) : @session.board.tile_ids[row][col]
         draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value, tile_id))
       end
     end
   end
 
   def draw_options
-    @board.options.each_with_index do |tile, index|
+    @session.board.options.each_with_index do |tile, index|
       rect   = option_rect(index)
       line_y = rect[:y] - OPTION_LINE_ABOVE
       Gosu.draw_line(rect[:x], line_y, COLORS[:option_line],
@@ -636,7 +545,7 @@ class GameWindow < Gosu::Window
   def draw_dragged_tile
     return unless @dragging && @selected
 
-    tile = @board.options[@selected]
+    tile = @session.board.options[@selected]
     x = mouse_x - (tile.anchor * CELL_PITCH)
     draw_tile(tile, x, mouse_y, size: CELL_SIZE, gap: CELL_GAP, corner: CELL_CORNER, z: Z_DRAGGED)
   end
@@ -650,21 +559,21 @@ class GameWindow < Gosu::Window
   end
 
   def hint_position
-    tile = @board.options[@selected]
-    key = [@board.object_id, @board.score, @selected, tile]
+    tile = @session.board.options[@selected]
+    key = [@session.board.object_id, @session.board.score, @selected, tile]
     if @hint_cache_key != key
       @hint_cache_key = key
-      @hint_cache_value = @auto_player.best_position(@board, tile)
+      @hint_cache_value = @session.auto_player.best_position(@session.board, tile)
     end
     @hint_cache_value
   end
 
   def draw_status
-    score = "Score: #{@board.score}"
-    score += "     Game Over!" if @game_over
+    score = "Score: #{@session.board.score}"
+    score += "     Game Over!" if @session.game_over
     @score_font.draw_text(score, TEXT_X, SCORE_Y, Z_TEXT, 1, 1, COLORS[:text])
 
-    if @game_over && !@auto
+    if @session.game_over && !@session.auto
       @score_font.draw_text("N to start new game, ESC to Quit", TEXT_X, STATUS_Y, Z_TEXT, 1, 1, COLORS[:text])
     end
     @small_font.draw_text(@message[:text], TEXT_X, MESSAGE_Y, Z_TEXT, 1, 1, COLORS[:text]) if @message
@@ -672,7 +581,7 @@ class GameWindow < Gosu::Window
 
   # A blinking red triangle while a game is being recorded.
   def draw_recording_mark
-    return unless @recording
+    return unless @session.recording
 
     tip   = (Gosu.milliseconds / BLINK_MS).even? ? 10 : -10
     color = Gosu::Color::RED
@@ -730,56 +639,7 @@ class GameWindow < Gosu::Window
 
   # Reads `[auto] [strategy] [--seed N] [--model PATH]` from the command line.
   def self.options_from(argv)
-    args = argv.dup
-    options = {}
-
-    seed_at = args.index("--seed")
-    if seed_at
-      raise ArgumentError, "--seed requires an integer" unless args[seed_at + 1]
-
-      options[:seed] = Integer(args[seed_at + 1])
-      args.slice!(seed_at, 2)
-    end
-
-    delay_at = args.index("--delay")
-    if delay_at
-      value = args[delay_at + 1]
-      raise ArgumentError, "--delay requires seconds (for example: --delay 1.5)" unless value
-
-      begin
-        options[:replay_delay] = Float(value)
-      rescue ArgumentError
-        raise ArgumentError, "invalid --delay value #{value.inspect}; use seconds, for example --delay 1.5"
-      end
-      unless options[:replay_delay].finite? && options[:replay_delay] >= 0
-        raise ArgumentError, "--delay must be a finite non-negative number of seconds"
-      end
-      args.slice!(delay_at, 2)
-    end
-
-    model_at = args.index("--model")
-    if model_at
-      value = args[model_at + 1]
-      raise ArgumentError, "--model requires a model JSON path" unless value
-
-      options[:model] = value
-      args.slice!(model_at, 2)
-    end
-
-    replay_at = args.index {|arg| arg.end_with?(".moves") }
-    options[:replay_file] = args.delete_at(replay_at) if replay_at
-
-    options[:auto]     = !args.delete("auto").nil?
-    options[:strategy] = args.shift unless args.empty?
-    strategy_name = (options[:strategy] || AutoPlayer::DEFAULT_STRATEGY).to_sym
-    if strategy_name == :learned
-      options[:model] ||= File.join("learning_data", "checkpoints", "selected.json")
-      unless File.file?(options[:model])
-        raise ArgumentError, "learned strategy needs --model PATH or a selected model at #{options[:model]}"
-      end
-    end
-    raise ArgumentError, "unexpected command line arguments: #{args.join(' ')}" unless args.empty?
-    options
+    GameOptions.parse(argv)
   end
 end
 

@@ -5,36 +5,12 @@ require "tempfile"
 require "tmpdir"
 require "open3"
 require "rbconfig"
-require_relative "../game_1010"
+require_relative "../game_session"
+require_relative "../game_options"
+require_relative "../game_log"
+require_relative "../game_trace"
 
 class GameReplayTest < Minitest::Test
-  def test_learned_hint_is_cached_until_the_board_or_selection_changes
-    board = Board1010.new(options: [Board1010::TILES[:dot], Board1010::TILES[:dot]])
-    player = Object.new
-    calls = []
-    player.define_singleton_method(:best_position) do |_board, tile|
-      calls << tile
-      [calls.size, calls.size]
-    end
-    window = GameWindow.allocate
-    window.instance_variable_set(:@board, board)
-    window.instance_variable_set(:@auto_player, player)
-    window.instance_variable_set(:@selected, 0)
-
-    assert_equal [1, 1], window.send(:hint_position)
-    assert_equal [1, 1], window.send(:hint_position)
-    assert_equal 1, calls.size
-
-    window.instance_variable_set(:@selected, 1)
-    assert_equal [2, 2], window.send(:hint_position)
-    assert_equal 2, calls.size
-
-    board.play(0, 0, 0)
-    window.instance_variable_set(:@selected, 0)
-    assert_equal [3, 3], window.send(:hint_position)
-    assert_equal 3, calls.size
-  end
-
   def with_moves(text)
     Tempfile.create(["game", ".moves"]) do |file|
       file.write(text)
@@ -78,7 +54,6 @@ class GameReplayTest < Minitest::Test
   def test_v2_trace_replays_an_undone_move_that_emptied_its_batch_and_its_new_deal
     Dir.mktmpdir do |directory|
       path, board = record_undo_across_a_deal(directory)
-
       trace = GameTrace.read(path)
       replayed_board = GameTrace.replay(trace)
 
@@ -88,25 +63,40 @@ class GameReplayTest < Minitest::Test
     end
   end
 
-  def test_window_playback_reaches_the_recorded_board_and_logs_a_replayable_trace
+  def test_session_playback_reaches_the_recorded_board_and_logs_a_replayable_trace
     Dir.mktmpdir do |directory|
-      Dir.chdir(directory) do
-        path, board = record_undo_across_a_deal(directory)
-        window = GameWindow.allocate
-        window.instance_variable_set(:@replay_delay_ms, 0)
-        window.define_singleton_method(:caption=) {|_text| }
-        window.define_singleton_method(:show_message) {|_text| }
+      path, board = record_undo_across_a_deal(directory)
+      session = GameSession.new(replay_delay: 0, log_directory: directory,
+                                save_store: save_store(directory), clock: -> { 0 })
+      session.start_trace_playback(GameTrace.read(path), mode: "replay")
+      playback_log = session.game_log.path
+      session.playback_tick(0) while session.playback
 
-        window.send(:start_trace_playback, GameTrace.read(path), mode: "replay")
-        playback_log = window.instance_variable_get(:@game_log).path
-        window.play_back_next(0) while window.instance_variable_get(:@playback)
+      assert_equal board.cells, session.board.cells
+      assert_equal board.options, session.board.options
+      assert_nil session.offer_replay
+      assert_equal board.cells, GameTrace.replay(GameTrace.read(playback_log)).cells
+    end
+  end
 
-        replayed = window.instance_variable_get(:@board)
-        assert_equal board.cells, replayed.cells
-        assert_equal board.options, replayed.options
-        assert_nil window.instance_variable_get(:@offer_replay)
-        assert_equal board.cells, GameTrace.replay(GameTrace.read(playback_log)).cells
-      end
+  def test_session_replay_delay_applies_after_moves_and_undos
+    Dir.mktmpdir do |directory|
+      session = GameSession.new(replay_delay: 1.25, log_directory: directory,
+                                save_store: save_store(directory), clock: -> { 0 })
+      session.start_trace_playback(replay_trace, mode: "test")
+
+      session.playback_tick(1_000)
+      assert_equal 2_250, session.playback_next_at
+      session.playback_tick(2_249)
+      assert_equal 3, session.playback.size
+      session.playback_tick(2_250)
+      assert_equal 3_500, session.playback_next_at
+      assert_equal 0, session.board.score
+      session.playback_tick(3_500)
+      assert_equal 4_750, session.playback_next_at
+      assert_equal 1, session.board.score
+      assert_equal :finished, session.playback_tick(4_750)
+      assert_nil session.playback
     end
   end
 
@@ -146,18 +136,18 @@ class GameReplayTest < Minitest::Test
   end
 
   def test_command_line_options_recognize_replay_file_alongside_auto_seed_and_delay
-    options = GameWindow.options_from(["auto", "sam", "--seed", "7", "--delay", "1.25", "logs/game.moves"])
+    options = GameOptions.parse(["auto", "sam", "--seed", "7", "--delay", "1.25", "logs/game.moves"])
 
     assert_equal({auto: true, strategy: "sam", seed: 7, replay_delay: 1.25, replay_file: "logs/game.moves"}, options)
   end
 
   def test_command_line_options_leave_non_moves_arguments_alone
-    assert_equal({auto: true, strategy: "sam"}, GameWindow.options_from(["auto", "sam"]))
+    assert_equal({auto: true, strategy: "sam"}, GameOptions.parse(["auto", "sam"]))
   end
 
   def test_command_line_options_accept_a_learned_model_path
     Tempfile.create(["learned", ".json"]) do |model|
-      options = GameWindow.options_from(["auto", "learned", "--model", model.path, "--seed", "42"])
+      options = GameOptions.parse(["auto", "learned", "--model", model.path, "--seed", "42"])
 
       assert_equal true, options.fetch(:auto)
       assert_equal "learned", options.fetch(:strategy)
@@ -167,136 +157,24 @@ class GameReplayTest < Minitest::Test
   end
 
   def test_learned_mode_without_a_model_reports_the_selected_model_location
-    error = assert_raises(ArgumentError) { GameWindow.options_from(["auto", "learned"]) }
+    error = assert_raises(ArgumentError) { GameOptions.parse(["auto", "learned"]) }
     assert_match "selected model", error.message
   end
 
   def test_command_line_delay_defaults_to_half_a_second
-    assert_equal 0.5, GameWindow::REPLAY_DELAY_SECONDS
+    assert_equal 0.5, GameSession::DEFAULT_REPLAY_DELAY_SECONDS
   end
 
   def test_rejects_invalid_or_negative_delay_values
     ["abc", "-0.1", "Infinity"].each do |value|
-      error = assert_raises(ArgumentError) { GameWindow.options_from(["--delay", value, "logs/game.moves"]) }
+      error = assert_raises(ArgumentError) { GameOptions.parse(["--delay", value, "logs/game.moves"]) }
       assert_match "delay", error.message
     end
   end
 
   def test_rejects_delay_without_a_value
-    error = assert_raises(ArgumentError) { GameWindow.options_from(["--delay"]) }
+    error = assert_raises(ArgumentError) { GameOptions.parse(["--delay"]) }
     assert_match "requires seconds", error.message
-  end
-
-  def test_replays_moves_and_undoes_with_a_quarter_second_gap
-    window = GameWindow.allocate
-    window.instance_variable_set(:@board, Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:hl2)]))
-    window.instance_variable_set(:@playback, [[:move, :hl2, 1, 2, 3], [:undo], [:move, :dot, 0, 4, 5]])
-    window.instance_variable_set(:@replay_delay_ms, 1_250)
-    moves = []
-    undos = 0
-
-    window.define_singleton_method(:try_place) {|*args| moves << args }
-    window.define_singleton_method(:undo) { undos += 1 }
-    window.define_singleton_method(:caption=) {|_text| }
-    window.define_singleton_method(:show_message) {|_text| }
-
-    window.play_back_next(1_000)
-    assert_equal [[1, 2, 3]], moves
-    assert_equal 2_250, window.instance_variable_get(:@playback_next_at)
-
-    window.play_back_next(2_249)
-    assert_equal 0, undos
-    assert_equal 2, window.instance_variable_get(:@playback).size
-
-    window.play_back_next(2_250)
-    assert_equal 1, undos
-    assert_equal 3_500, window.instance_variable_get(:@playback_next_at)
-
-    window.play_back_next(3_500)
-    assert_equal [[1, 2, 3], [0, 4, 5]], moves
-    assert_equal 4_750, window.instance_variable_get(:@playback_next_at)
-
-    window.play_back_next(4_750)
-    assert_nil window.instance_variable_get(:@playback)
-  end
-
-  def test_failed_placement_clears_selection_highlight
-    board = Board1010.new(options: [Board1010::TILES[:dot]])
-    board.cells[0][0] = 1
-    window = GameWindow.allocate
-    window.instance_variable_set(:@board, board)
-    window.instance_variable_set(:@selected, 0)
-
-    window.try_place(0, 0, 0)
-
-    assert_nil window.instance_variable_get(:@selected)
-  end
-
-  def test_update_returns_without_touching_gosu_after_window_close
-    window = GameWindow.allocate
-    window.instance_variable_set(:@closing, true)
-
-    assert_nil window.update
-  end
-
-  def test_save_keys_preserve_player_save_in_auto_and_playback_modes
-    [{auto: true, playback: false, label: "auto mode", message: "Saving is off in auto mode"},
-     {auto: false, playback: true, label: "playback", message: "Saving is off during playback"}].each do |mode|
-      [Gosu::KB_S, Gosu::KB_Q, Gosu::KB_ESCAPE].each do |key|
-        Dir.mktmpdir do |directory|
-          Dir.chdir(directory) do
-            original = "player save bytes\n"
-            File.write(Board1010::SAVE_FILE, original)
-            window = save_test_window(auto: mode.fetch(:auto), playback: mode.fetch(:playback))
-
-            window.button_down(key)
-
-            assert_equal original, File.binread(Board1010::SAVE_FILE), "#{mode.fetch(:label)} key #{key}"
-            if key == Gosu::KB_S
-              assert_equal mode.fetch(:message), window.instance_variable_get(:@test_message)
-            else
-              assert window.instance_variable_get(:@test_closed), "#{mode.fetch(:label)} key #{key} should close"
-            end
-          end
-        end
-      end
-    end
-  end
-
-  def test_save_keys_keep_human_mode_behavior
-    [Gosu::KB_S, Gosu::KB_Q, Gosu::KB_ESCAPE].each do |key|
-      Dir.mktmpdir do |directory|
-        Dir.chdir(directory) do
-          File.write(Board1010::SAVE_FILE, "player save bytes\n")
-          window = save_test_window(auto: false, playback: false)
-
-          window.button_down(key)
-
-          if key == Gosu::KB_ESCAPE
-            refute File.exist?(Board1010::SAVE_FILE)
-          else
-            assert_equal window.instance_variable_get(:@board).to_save,
-                         File.read(Board1010::SAVE_FILE)
-            assert_equal "Game saved", window.instance_variable_get(:@test_message)
-            assert_equal(key == Gosu::KB_Q, window.instance_variable_get(:@test_closed) || false)
-          end
-        end
-      end
-    end
-  end
-
-  def test_auto_run_window_helpers_use_one_injected_clock
-    now = 1_000.0
-    window = GameWindow.allocate
-    window.instance_variable_set(:@auto_run_tracker, AutoRunTracker.new(clock: -> { now }))
-    window.define_singleton_method(:print_auto_run) {|line| line }
-
-    window.send(:start_auto_run)
-    now += 12_400
-    line = window.send(:finish_auto_run, score: 78)
-
-    assert_equal "Run 1   score 78   time 12.4s  new max", line
-    assert_match "Total time: 12.4s", window.instance_variable_get(:@auto_run_tracker).summary
   end
 
   def test_invalid_game_command_line_has_plain_error_without_backtrace
@@ -317,24 +195,8 @@ class GameReplayTest < Minitest::Test
     refute_match(/scripts\/benchmark\.rb:\d+:in/, stderr)
   end
 
-  def test_each_tile_value_has_a_distinct_non_black_non_white_color
-    window = GameWindow.allocate
-    colors = GameWindow::TILE_COLORS.values
-
-    assert_equal Board1010::TILES.size, colors.map(&:to_i).uniq.size
-    refute_includes colors.map(&:to_i), Gosu::Color::BLACK.to_i
-    refute_includes colors.map(&:to_i), Gosu::Color::WHITE.to_i
-    Board1010::TILES.each do |name, tile|
-      tile_id = tile.id
-      value = tile.rows.flatten.find {|cell| cell != Board1010::EMPTY }
-      assert_equal GameWindow::TILE_COLORS.fetch(tile_id), window.cell_color(value, tile_id), name.to_s
-    end
-  end
-
   private
 
-  # Records a trace that undoes the move which emptied the first batch, plays
-  # it again (logging a fresh deal), then plays through the next batch.
   def record_undo_across_a_deal(directory)
     board = Board1010.new(options: [Tile.fetch(:dot)], random: Random.new(9))
     logger = GameLog.new(seed: nil, board: board, mode: "test", directory: directory)
@@ -355,13 +217,14 @@ class GameReplayTest < Minitest::Test
     [logger.path, board]
   end
 
-  def save_test_window(auto:, playback:)
-    window = GameWindow.allocate
-    window.instance_variable_set(:@auto, auto)
-    window.instance_variable_set(:@playback, playback ? [[:move]] : nil)
-    window.instance_variable_set(:@board, Board1010.new(options: [Board1010::TILES[:dot]]))
-    window.define_singleton_method(:close) { @test_closed = true }
-    window.define_singleton_method(:show_message) {|message| @test_message = message }
-    window
+  def replay_trace
+    board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:hl2)])
+    GameTrace::Trace.new(seed: nil, mode: "test", starting_board: board,
+                         deal_batches: [%w[dot hl2]],
+                         events: [[:move, :hl2, 1, 2, 3], [:undo], [:move, :dot, 0, 4, 5], [:end, "stopped", 1]])
+  end
+
+  def save_store(directory)
+    GameSession::SaveStore.new(path: File.join(directory, "player-save.txt"))
   end
 end

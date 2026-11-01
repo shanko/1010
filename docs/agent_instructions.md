@@ -46,12 +46,15 @@ those phases that touches the board, strategies, simulator, search or learned
 player, check that the results still match the committed baseline exactly:
 
 ```sh
-bundle exec ruby scripts/benchmark.rb --seeds 1..100 --output learning_data/parity.json
-ruby -rjson -e 'a, b = ARGV.map {|f| JSON.parse(File.read(f))["strategies"] }; diffs = b.keys.flat_map {|s| a[s]["per_seed"].zip(b[s]["per_seed"]).reject {|x, y| x == y }.map {|x, _| "#{s} seed #{x["seed"]}" } }; puts diffs.empty? ? "PARITY OK: per-seed results match baseline-v1" : "PARITY FAILED: #{diffs.first(10).join(", ")}"; exit(diffs.empty? ? 0 : 1)' learning_data/parity.json benchmarks/baseline-v1.json
+bundle exec ruby scripts/benchmark.rb --seeds 1..100 --workers 4 --output learning_data/parity.json
+ruby -rjson -e 'a, b = ARGV.map {|f| JSON.parse(File.read(f))["strategies"] }; diffs = b.keys.flat_map {|s| a[s]["per_seed"].zip(b[s]["per_seed"]).reject {|x, y| x == y }.map {|x, _| "#{s} seed #{x["seed"]}" } }; puts diffs.empty? ? "PARITY OK: per-seed results match baseline-v4" : "PARITY FAILED: #{diffs.first(10).join(", ")}"; exit(diffs.empty? ? 0 : 1)' learning_data/parity.json benchmarks/baseline-v4.json
 ```
 
-This takes about 25 seconds and must print `PARITY OK`. A performance issue
-that fails parity is not done.
+`baseline-v4.json` covers all eight heuristic strategies, including `codex_1`
+and `codex_sam`. With four workers this takes about 40 seconds (about 2¼
+minutes with one) and must print `PARITY OK`. A performance issue that fails
+parity is not done. If a deliberate change adds a strategy or changes play,
+record a new versioned baseline rather than editing an existing one.
 
 **Phase 4 issues (#24 onwards) change play on purpose.** They must record the
 new results in a new versioned file (e.g. `benchmarks/baseline-v2.json`),

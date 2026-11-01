@@ -7,7 +7,7 @@ require_relative "lesson_store"
 # Runs the learned policy, samples states it actually visits, and asks the
 # searcher for improved continuations from those exact states.
 class PolicyCorrector
-  Result = Struct.new(:episodes, :states_searched, :improvements_saved, keyword_init: true)
+  Result = Struct.new(:episodes, :states_searched, :improvements_saved, :usable_lessons, keyword_init: true)
 
   def correct(seeds:, model:, store: LessonStore.new, time_budget_seconds: 1.0,
               beam_width: 4, max_states: 2_000, max_rollouts: 1,
@@ -15,7 +15,7 @@ class PolicyCorrector
     seeds = LearningSeedSets.validate!(seeds, set: :training, purpose: "policy correction")
     stride = Integer(decision_stride)
     raise ArgumentError, "decision_stride must be positive" unless stride.positive?
-    episodes = states_searched = improvements_saved = 0
+    episodes = states_searched = improvements_saved = usable_lessons = 0
 
     seeds.each do |seed|
       episode = GameSimulator.run(seed: seed, strategy: :learned, model: model, capture_states: true)
@@ -74,11 +74,12 @@ class PolicyCorrector
 
         store.save(lesson)
         improvements_saved += 1
+        usable_lessons += 1 if result.complete
       end
     end
 
     Result.new(episodes: episodes, states_searched: states_searched,
-               improvements_saved: improvements_saved)
+               improvements_saved: improvements_saved, usable_lessons: usable_lessons)
   end
 
   private

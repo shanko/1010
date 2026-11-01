@@ -238,7 +238,7 @@ module LearnCLI
                                            rollouts_per_step: options.fetch(:rollouts_per_step, 2),
                                            decision_stride: options[:stride])
       json(out, {episodes: result.episodes, states_searched: result.states_searched,
-                 improvements_saved: result.improvements_saved})
+                 improvements_saved: result.improvements_saved, usable_lessons: result.usable_lessons})
     end
   end
 

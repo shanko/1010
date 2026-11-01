@@ -125,6 +125,19 @@ class LearnedPlayerTest < Minitest::Test
     end
   end
 
+  def test_imitation_training_excludes_incomplete_improved_candidates
+    Dir.mktmpdir do |directory|
+      lesson = improved_lesson
+      lesson["search"]["candidate_complete"] = false
+      File.write(File.join(directory, "partial.json"), JSON.pretty_generate(lesson))
+
+      error = assert_raises(ArgumentError) do
+        ImitationTrainer.new.train(directory: directory, random_seed: 29, epochs: 1)
+      end
+      assert_match "no eligible improved lessons found", error.message
+    end
+  end
+
   def test_training_excludes_held_out_seed_lessons
     Dir.mktmpdir do |directory|
       lesson = improved_lesson

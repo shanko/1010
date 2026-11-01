@@ -66,6 +66,8 @@ class LearnCLITest < Minitest::Test
 
       assert_equal 1, result.fetch("episodes")
       assert_equal 1, result.fetch("states_searched")
+      assert_equal 0, result.fetch("improvements_saved")
+      assert_equal 0, result.fetch("usable_lessons")
     end
   end
 

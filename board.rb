@@ -275,23 +275,16 @@ class Board1010
   # Saving
   # ---------------------------------------------------------------------------
 
-  # A plain text format that is easy to read in an editor:
-  #   score=133
-  #   options=hl2,sq3,dot
-  #   row=0000123000   (one line per row, top row first)
-  #   type=0000000000  (base-36 tile type IDs, one line per row)
+  # The save stores the same compact snapshot and offer records as a trace.
   def to_save
-    lines = ["score=#{@score}", "options=#{@options.map(&:name).join(',')}"]
-    @cells.each_with_index do |values, row|
-      lines << "row=#{values.join}"
-      lines << "type=#{@tile_ids[row].map {|id| id.to_s(36) }.join}"
-    end
-    lines.join("\n")
+    [BoardSnapshot::SAVE_HEADER, *BoardSnapshot.records(self)].join("\n")
   end
 
   # Builds a board from text made by #to_save, or returns nil if the text
   # doesn't look like a saved game.
   def self.from_save(text, random: Random.new)
+    return BoardSnapshot.read_save(text, random: random) if text.start_with?("#{BoardSnapshot::SAVE_HEADER}\n")
+
     fields = parse_save(text)
     rows = fields[:rows]
     return nil if fields[:score].nil? || rows.size != ROWS || rows.any? {|values| values.size != COLS }
@@ -388,4 +381,59 @@ class Board1010
     end
     bits
   end
+end
+
+# The initial board/offer records are shared by one-shot saves and replay
+# traces. Saves stop after these records; traces append their event history.
+module BoardSnapshot
+  SAVE_HEADER = "1010-board-v1"
+
+  def self.records(board)
+    [state_record(board), offer_record(board.options)]
+  end
+
+  def self.state_record(board)
+    "i#{board.score}|#{board.cells.flatten.join}|#{board.tile_ids.flatten.map {|id| id.to_s(36) }.join}"
+  end
+
+  def self.offer_record(tiles)
+    "d#{tiles.map {|tile| tile.id.to_s(36) }.join}"
+  end
+
+  def self.decode_state(record, random: Random.new)
+    match = record.match(/\Ai(\d+)\|([0-5]{100})\|([0-9a-j]{100})\z/)
+    return nil unless match
+
+    tile_ids = decode_grid(match[3])
+    return nil if tile_ids.flatten.any? {|id| id > Tile::ALL.size }
+
+    Board1010.new(score: Integer(match[1]), cells: decode_grid(match[2]), tile_ids: tile_ids, random: random)
+  end
+
+  def self.decode_offer(record)
+    match = record.match(/\Ad([1-9a-j]{1,3})\z/)
+    return nil unless match
+
+    ids = match[1].chars.map {|id| id.to_i(36) }
+    return nil if ids.any? {|id| id > Tile::ALL.size }
+
+    ids.map {|id| Tile::ALL.fetch(id - 1) }
+  end
+
+  def self.read_save(text, random: Random.new)
+    header, state, offer, extra = text.lines(chomp: true)
+    return nil unless header == SAVE_HEADER && state && offer && !extra
+
+    board = decode_state(state, random: random)
+    options = decode_offer(offer)
+    return nil unless board && options
+
+    board.replace_options(options)
+    board
+  end
+
+  def self.decode_grid(text)
+    text.chars.each_slice(10).map {|row| row.map {|id| id.to_i(36) } }
+  end
+  private_class_method :decode_grid
 end

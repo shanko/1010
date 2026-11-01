@@ -3,19 +3,22 @@
 require_relative "board"
 require_relative "offer_replay"
 
-# Reads and replays v2 game traces without depending on Gosu or random dealing.
+# Reads v2/v3 game traces without Gosu and replays them without random dealing.
 class GameTrace
-  HEADER = "1010-moves-v2"
+  HEADER = "1010-moves-v3"
+  LEGACY_HEADER = "1010-moves-v2"
   Trace = Struct.new(:seed, :mode, :starting_board, :deal_batches, :events,
                      :final_reason, :final_score, keyword_init: true)
 
   def self.versioned_file?(path)
-    File.open(path, "r") {|file| file.gets&.chomp == HEADER }
+    File.open(path, "r") {|file| [HEADER, LEGACY_HEADER].include?(file.gets&.chomp) }
   end
 
   def self.read(path)
     lines = File.readlines(path, chomp: true)
-    raise ArgumentError, "#{path} is not a v2 1010 trace" unless lines.shift == HEADER
+    version = lines.shift
+    raise ArgumentError, "#{path} is not a v2 or v3 1010 trace" unless [HEADER, LEGACY_HEADER].include?(version)
+    compact = version == HEADER
 
     seed_line = lines.shift
     raise ArgumentError, "#{path} has an invalid seed header" unless seed_line&.match?(/\As(?:-|\d+)\z/)
@@ -26,13 +29,8 @@ class GameTrace
     mode = mode_line.delete_prefix("mode=")
 
     state_line = lines.shift
-    match = state_line&.match(/\Ai(\d+)\|([0-5]{100})\|([0-9a-j]{100})\z/)
-    raise ArgumentError, "#{path} has an invalid initial board snapshot" unless match
-
-    score = Integer(match[1])
-    cells = decode_grid(match[2], 10)
-    tile_ids = decode_grid(match[3], 36)
-    board = Board1010.new(cells: cells, tile_ids: tile_ids, score: score)
+    board = state_line && BoardSnapshot.decode_state(state_line)
+    raise ArgumentError, "#{path} has an invalid initial board snapshot" unless board
     deals = []
     events = []
     final_reason = nil
@@ -43,12 +41,9 @@ class GameTrace
 
       case line
       when /\Ad(.*)\z/
-        names = Regexp.last_match(1).split(",")
-        tiles = names.map do |name|
-          Tile.fetch(name)
-        rescue ArgumentError
-          raise ArgumentError, "#{path} has unknown tile #{name.inspect} on line #{index + 5}"
-        end
+        tiles = compact ? BoardSnapshot.decode_offer(line) : decode_legacy_offer(line, path, index)
+        raise ArgumentError, "#{path} has an invalid offer batch on line #{index + 5}" unless tiles
+        names = tiles.map {|tile| tile.name.to_s }
         unless tiles.size.between?(1, Board1010::OPTIONS)
           raise ArgumentError, "#{path} has an invalid offer batch on line #{index + 5}"
         end
@@ -105,8 +100,13 @@ class GameTrace
     replay.board
   end
 
-  def self.decode_grid(text, base)
-    text.chars.each_slice(10).map {|row| row.map {|character| character.to_i(base) } }
+  def self.decode_legacy_offer(line, path, index)
+    names = line.delete_prefix("d").split(",")
+    names.map do |name|
+      Tile.fetch(name)
+    rescue ArgumentError
+      raise ArgumentError, "#{path} has unknown tile #{name.inspect} on line #{index + 5}"
+    end
   end
-  private_class_method :decode_grid
+  private_class_method :decode_legacy_offer
 end

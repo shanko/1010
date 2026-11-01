@@ -137,7 +137,7 @@ class GameImprover
     board = source.starting_board.copy
     board.replace_options(offers.first.map {|name| Tile.fetch(name) })
     lines = [GameLog::VERSION_HEADER, "s#{source.seed || '-'}", "mode=improved",
-             initial_state_line(board), "d#{offers.first.join(',')}"]
+             *BoardSnapshot.records(board)]
     offer_index = 0
     ending_reason = "game_over"
     sequence.each do |move|
@@ -154,7 +154,7 @@ class GameImprover
         break
       end
       board.replace_options(batch.map {|name| Tile.fetch(name) })
-      lines << "d#{batch.join(',')}"
+      lines << BoardSnapshot.offer_record(batch.map {|name| Tile.fetch(name) })
     end
     unless board.game_over? || ending_reason == "offers_exhausted"
       raise ArgumentError, "search result does not end at Game Over"
@@ -162,12 +162,6 @@ class GameImprover
 
     lines << "z#{ending_reason}|#{board.score}"
     File.write(path, "#{lines.join("\n")}\n")
-  end
-
-  def initial_state_line(board)
-    cells = board.cells.flatten.join
-    tile_ids = board.tile_ids.flatten.map {|id| id.to_s(36) }.join
-    "i#{board.score}|#{cells}|#{tile_ids}"
   end
 
   def build_report(source_path, output_path, source, output, baseline, search,

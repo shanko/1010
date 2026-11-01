@@ -258,6 +258,8 @@ class BoardTest < Minitest::Test
     assert_equal board.tile_ids, copy.tile_ids
     assert_equal board.score, copy.score
     assert_equal board.options, copy.options
+    assert_operator board.to_save.bytesize, :<, 250
+    assert_equal BoardSnapshot.records(board), board.to_save.lines(chomp: true).drop(1)
   end
 
   def test_a_damaged_save_is_rejected
@@ -268,7 +270,12 @@ class BoardTest < Minitest::Test
   def test_loads_a_legacy_save_without_tile_type_rows
     board = Board1010.new(options: [TILES[:dot]])
     board.play(0, 0, 0)
-    old_format = board.to_save.lines.reject {|line| line.start_with?("type=") }.join
+    old_rows = board.cells.each_with_index.flat_map do |values, row|
+      types = board.tile_ids[row].map {|id| id.to_s(36) }.join
+      ["row=#{values.join}", "type=#{types}"]
+    end
+    old_format = (["score=#{board.score}", "options=#{board.options.map(&:name).join(',')}"] + old_rows).join("\n")
+    old_format = old_format.lines.reject {|line| line.start_with?("type=") }.join
 
     loaded = Board1010.from_save(old_format)
 

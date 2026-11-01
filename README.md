@@ -54,6 +54,10 @@ Click on one of the tiles presented on the right side of the 10x10 grid (or pres
 | C | print where each tile fits (in the terminal) |
 | ESC | quit without saving, and delete the saved game so the next start is a new game |
 
+Saves store a compact snapshot using the same board and offer records as the
+start of a new `.moves` trace. New traces use compact tile IDs (v3); v2 traces
+with tile names and older verbose save files are still accepted.
+
 ## To play in the terminal:
 
 ```sh
@@ -191,10 +195,10 @@ candidate, the extractor combines its tile and anchor context with simulated
 post-placement board features. The linear scorer uses deterministic seeded
 tie-breaking.
 
-Pass a `.moves` file as the command line argument to replay it. Only v2 traces
-(first line `1010-moves-v2`, as written to `logs/`) can be replayed. Moves are shown
-in order, with 0.5 seconds between successive moves by default. Set another
-interval in seconds with `--delay` (for example, `--delay 2`):
+Pass a `.moves` file as the command line argument to replay it. Current v3 traces
+and existing v2 traces can be replayed. Moves are shown in order, with 0.5
+seconds between successive moves by default. Set another interval in seconds
+with `--delay` (for example, `--delay 2`):
 
 ```sh
 $ bundle exec ruby game_1010.rb --delay 2 logs/<game>.moves

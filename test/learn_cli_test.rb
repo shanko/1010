@@ -128,9 +128,9 @@ class LearnCLITest < Minitest::Test
     Dir.mktmpdir do |directory|
       source_path = write_completed_trace(directory, seed: 1_000_000)
       lines = File.readlines(source_path)
-      offer_names = lines[4].delete_prefix("d").strip.split(",")
+      offer_names = BoardSnapshot.decode_offer(lines[4].strip).map(&:name)
       offer_names[0] = (Tile::NAMES - offer_names).first
-      lines[4] = "d#{offer_names.join(',')}\n"
+      lines[4] = "#{BoardSnapshot.offer_record(offer_names.map {|name| Tile.fetch(name) })}\n"
       File.write(source_path, lines.join)
 
       result = GameImprover.new.validate_seed(GameTrace.read(source_path))

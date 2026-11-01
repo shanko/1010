@@ -100,8 +100,8 @@ class GameReplayTest < Minitest::Test
     end
   end
 
-  def test_v2_trace_rejects_incomplete_files
-    with_moves("#{GameTrace::HEADER}\ns1\nmode=test\ni0|#{'0' * 100}|#{'0' * 100}\nddot\n") do |path|
+  def test_v3_trace_rejects_incomplete_files
+    with_moves("#{GameTrace::HEADER}\ns1\nmode=test\ni0|#{'0' * 100}|#{'0' * 100}\nd1\n") do |path|
       error = assert_raises(ArgumentError) { GameTrace.read(path) }
       assert_match "missing the end record", error.message
     end
@@ -128,10 +128,19 @@ class GameReplayTest < Minitest::Test
     end
   end
 
-  def test_rejects_an_old_format_moves_file
+  def test_rejects_an_unversioned_old_format_moves_file
     with_moves("s12345\nm012\nm290\nu\n") do |path|
       error = assert_raises(ArgumentError) { GameTrace.read(path) }
-      assert_match "not a v2 1010 trace", error.message
+      assert_match "not a v2 or v3 1010 trace", error.message
+    end
+  end
+
+  def test_reads_a_v2_trace_with_named_tile_offers
+    with_moves("1010-moves-v2\ns1\nmode=test\ni0|#{'0' * 100}|#{'0' * 100}\nddot\nzstopped|0\n") do |path|
+      trace = GameTrace.read(path)
+
+      assert_equal [:dot], trace.starting_board.options.map(&:name)
+      assert_equal ["dot"], trace.deal_batches.first
     end
   end
 

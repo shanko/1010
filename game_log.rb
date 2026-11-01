@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
+require_relative "board"
+
 # Versioned, append-only trace for one game. Each file can be replayed without
 # relying on the current tile dealer or the original random number generator.
 class GameLog
   DIRECTORY = "logs"
-  VERSION_HEADER = "1010-moves-v2"
+  VERSION_HEADER = "1010-moves-v3"
 
   attr_reader :path
 
@@ -24,14 +26,13 @@ class GameLog
 
     @finished = false
     @file.write("#{VERSION_HEADER}\ns#{seed || '-'}\nmode=#{mode}\n")
-    @file.write("i#{board.score}|#{board.cells.flatten.join}|#{board.tile_ids.flatten.map {|id| id.to_s(36) }.join}\n")
-    deal(board.options)
+    BoardSnapshot.records(board).each {|record| @file.write("#{record}\n") }
     @file.flush
   end
 
   # Record the exact offered tiles in their offered order.
   def deal(tiles)
-    write("d#{tiles.map(&:name).join(',')}\n")
+    write("d#{tiles.map {|tile| tile.id.to_s(36) }.join}\n")
   end
 
   # Record tile identity as well as the chosen option and anchor coordinates.

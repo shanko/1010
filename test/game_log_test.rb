@@ -6,7 +6,7 @@ require_relative "../game_log"
 require_relative "../game_trace"
 
 class GameLogTest < Minitest::Test
-  def test_writes_compact_seed_move_and_undo_records
+  def test_writes_compact_snapshot_offer_move_and_undo_records
     Dir.mktmpdir do |directory|
       board = Board1010.new(options: [Board1010::TILES[:dot]])
       log = GameLog.new(seed: 42, board: board, mode: "test", directory: directory)
@@ -16,7 +16,7 @@ class GameLogTest < Minitest::Test
 
       contents = File.read(log.path)
       assert contents.start_with?("#{GameLog::VERSION_HEADER}\ns42\nmode=test\ni0|")
-      assert_includes contents, "ddot\nmdot,0,9,0\nu\nzstopped|0\n"
+      assert_includes contents, "d1\nmdot,0,9,0\nu\nzstopped|0\n"
       assert_equal ".moves", File.extname(log.path)
     end
   end

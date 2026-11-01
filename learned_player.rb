@@ -10,20 +10,22 @@ require_relative "offer_replay"
 module ActionFeatures
   VERSION = 2
   TILE_FEATURES = Board1010::TILE_NAMES.map {|name| "tile_#{name}" }.freeze
-  NEIGHBORS_4 = Array.new(100) do |index|
+  neighbors_four = Array.new(100) do |index|
     row, col = index.divmod(10)
     [[row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]]
       .select {|r, c| r.between?(0, 9) && c.between?(0, 9) }
-      .map {|r, c| r * 10 + c }
-  end.freeze
-  NEIGHBORS_8 = Array.new(100) do |index|
+      .map {|r, c| (r * 10) + c }
+  end
+  NEIGHBORS_4 = neighbors_four.freeze
+  neighbors_eight = Array.new(100) do |index|
     row, col = index.divmod(10)
     Board1010::NEIGHBOUR_OFFSETS.filter_map do |dr, dc|
       r = row + dr
       c = col + dc
-      r * 10 + c if r.between?(0, 9) && c.between?(0, 9)
+      (r * 10) + c if r.between?(0, 9) && c.between?(0, 9)
     end
-  end.freeze
+  end
+  NEIGHBORS_8 = neighbors_eight.freeze
   BASE_FEATURES = %w[
     bias tile_area completed_rows completed_cols remaining_legal_placements
     largest_empty_region empty_region_count isolated_empty_cells
@@ -33,7 +35,7 @@ module ActionFeatures
   FEATURE_INDEX = NAMES.each_with_index.to_h.freeze
   BYTE_COUNTS = Array.new(256) {|value| value.digits(2).sum }.freeze
   LEFT_EDGE_MASK = (0...Board1010::ROWS).sum {|row| 1 << (row * Board1010::COLS) }
-  RIGHT_EDGE_MASK = (0...Board1010::ROWS).sum {|row| 1 << (row * Board1010::COLS + Board1010::COLS - 1) }
+  RIGHT_EDGE_MASK = (0...Board1010::ROWS).sum {|row| 1 << ((row * Board1010::COLS) + Board1010::COLS - 1) }
 
   class FeatureVector < Array
     def initialize
@@ -146,8 +148,8 @@ class LearnedPlayer
       model = JSON.parse(File.read(selected_path))
     end
     new(model)
-  rescue JSON::ParserError => error
-    raise ArgumentError, "invalid learned policy JSON: #{error.message}"
+  rescue JSON::ParserError => e
+    raise ArgumentError, "invalid learned policy JSON: #{e.message}"
   end
 
   def initialize(model)
@@ -208,14 +210,14 @@ class LearnedPlayer
 
     scores = actions.map {|_action, features| score(features) / temperature }
     maximum = scores.max
-    masses = scores.map {|value| Math.exp([[value - maximum, -40.0].max, 0.0].min) }
+    masses = scores.map {|value| Math.exp((value - maximum).clamp(-40.0, 0.0)) }
     total = masses.sum
     probabilities = masses.map {|mass| mass / total }
     draw = random.rand
     selected_index = probabilities.each_index.find do |index|
       draw -= probabilities[index]
       draw.negative?
-    end || probabilities.size - 1
+    end || (probabilities.size - 1)
     expected = ActionFeatures::FeatureVector.new
     ActionFeatures::NAMES.each_index do |feature_index|
       expected[feature_index] = actions.each_with_index.sum do |(_action, features), index|
@@ -288,7 +290,7 @@ class ImitationTrainer
 
     examples = []
     excluded = Hash.new(0)
-    lesson_paths = Dir.glob(File.join(directory, "*.json")).sort
+    lesson_paths = Dir.glob(File.join(directory, "*.json"))
     lesson_paths.each do |path|
       lesson = LessonStore.read(path)
       seed = lesson.dig("source_episode", "seed")
@@ -344,7 +346,7 @@ class ImitationTrainer
   end
 
   def save(model, path)
-    File.write(path, JSON.pretty_generate(model) + "\n")
+    File.write(path, "#{JSON.pretty_generate(model)}\n")
     path
   end
 
@@ -381,7 +383,7 @@ class ImitationTrainer
   def update(weights, example, learning_rate)
     scored = example[:legal].map {|_action, features| [features, dot(weights, features)] }
     maximum = scored.map(&:last).max
-    probabilities = scored.map {|_features, value| Math.exp([[value - maximum, -40.0].max, 0.0].min) }
+    probabilities = scored.map {|_features, value| Math.exp((value - maximum).clamp(-40.0, 0.0)) }
     normalizer = probabilities.sum
     chosen_features = example[:chosen]
     expected = ActionFeatures::NAMES.to_h do |name|

@@ -21,7 +21,7 @@ class RLCheckpointStore
       suffix += 1
       path = File.join(@directory, "reinforce-step-#{Integer(step)}-#{timestamp}-#{suffix}.json")
     end
-    File.write(path, JSON.pretty_generate(model) + "\n")
+    File.write(path, "#{JSON.pretty_generate(model)}\n")
     path
   end
 
@@ -32,7 +32,7 @@ class RLCheckpointStore
     pointer = {"schema_version" => 1, "selected_checkpoint" => relative_path,
                "tuning_evaluation" => tuning_evaluation}
     temporary = File.join(@directory, "selected.json.tmp-#{Process.pid}")
-    File.write(temporary, JSON.pretty_generate(pointer) + "\n")
+    File.write(temporary, "#{JSON.pretty_generate(pointer)}\n")
     File.rename(temporary, File.join(@directory, "selected.json"))
     File.join(@directory, "selected.json")
   ensure
@@ -44,9 +44,7 @@ class RLCheckpointStore
   # remains an explicit override.
   def select_if_better(path, tuning_evaluation:)
     pointer_path = File.join(@directory, "selected.json")
-    previous = if File.file?(pointer_path)
-                 JSON.parse(File.read(pointer_path))
-               end
+    previous = (JSON.parse(File.read(pointer_path)) if File.file?(pointer_path))
     previous_checkpoint = previous && File.join(@directory, previous.fetch("selected_checkpoint"))
     if previous && !File.file?(previous_checkpoint)
       raise ArgumentError, "selected checkpoint does not exist: #{previous_checkpoint}"
@@ -72,8 +70,8 @@ class RLCheckpointStore
     {path: selected_pointer, selection_changed: should_select,
      previous_checkpoint: previous_checkpoint, selected_checkpoint: should_select ? path : previous_checkpoint,
      previous_evaluation: previous_evaluation, previous_rescored: rescored}
-  rescue JSON::ParserError, KeyError => error
-    raise ArgumentError, "invalid selected checkpoint pointer: #{error.message}"
+  rescue JSON::ParserError, KeyError => e
+    raise ArgumentError, "invalid selected checkpoint pointer: #{e.message}"
   end
 end
 
@@ -119,8 +117,11 @@ class ReinforcementTrainer
       raise ArgumentError, "resume random_seed must match the checkpoint"
     end
 
-    training_seeds = seeds ? seeds.map {|seed| Integer(seed) } :
-      LearningSeedSets.fetch(:training).drop(global_step).first(episode_count)
+    training_seeds = if seeds
+                       seeds.map {|seed| Integer(seed) }
+                     else
+                       LearningSeedSets.fetch(:training).drop(global_step).first(episode_count)
+                     end
     unless training_seeds.size == episode_count
       seed_label = training_seeds.size == 1 ? "seed" : "seeds"
       message = "--seeds has #{training_seeds.size} #{seed_label} but --episodes is #{episode_count}"
@@ -146,7 +147,7 @@ class ReinforcementTrainer
     trained_seeds = []
     checkpoints = []
 
-    stored_eval = rl_state.dig("tuning_evaluation")
+    stored_eval = rl_state["tuning_evaluation"]
     stored_seeds = rl_state["evaluated_tuning_seeds"]
     current_eval = if resume && stored_eval && stored_seeds == tuning_seeds
                      stored_eval
@@ -185,7 +186,12 @@ class ReinforcementTrainer
                                        temperature: temperature)
       end
       returns.each_with_index do |value, index|
-        baseline[index] = baseline[index] ? baseline[index] * baseline_decay + value * (1.0 - baseline_decay) : value
+        previous_baseline = baseline[index]
+        baseline[index] = if previous_baseline
+                            (previous_baseline * baseline_decay) + (value * (1.0 - baseline_decay))
+                          else
+                            value
+                          end
       end
 
       global_step += 1
@@ -235,8 +241,8 @@ class ReinforcementTrainer
     return path unless data["selected_checkpoint"]
 
     File.expand_path(data.fetch("selected_checkpoint"), File.dirname(path))
-  rescue JSON::ParserError => error
-    raise ArgumentError, "invalid learned policy JSON: #{error.message}"
+  rescue JSON::ParserError => e
+    raise ArgumentError, "invalid learned policy JSON: #{e.message}"
   end
 
   def run_episode(player, seed, random_seed:, step:, temperature:)
@@ -250,13 +256,13 @@ class ReinforcementTrainer
       sample = player.sample_action(board, random: sample_random, temperature: temperature)
       action = sample.fetch(:action)
       move = board.play(*action)
-      raise RuntimeError, "sampled RL action was illegal" unless move
+      raise "sampled RL action was illegal" unless move
 
       trajectory << {chosen_features: sample.fetch(:chosen_features),
                      expected_features: sample.fetch(:expected_features), reward: move.placed.size}
     end
     score = trajectory.sum {|entry| entry.fetch(:reward) }
-    raise RuntimeError, "RL episode score invariant failed" unless score == board.score
+    raise "RL episode score invariant failed" unless score == board.score
 
     [trajectory, score]
   end

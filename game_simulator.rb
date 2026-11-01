@@ -68,19 +68,19 @@ class GameSimulator
     placed_area = 0
 
     until board.game_over?
-      raise RuntimeError, "simulation exceeded #{max_moves} moves (seed #{seed})" if moves.size >= max_moves
+      raise "simulation exceeded #{max_moves} moves (seed #{seed})" if moves.size >= max_moves
 
       decision_states << {board: board.copy, offer_index: offers.size - 1} if capture_states
 
       index, row, col = player.choose_move(board)
       tile = board.options[index]
-      raise RuntimeError, "#{strategy} returned an invalid move for seed #{seed}" unless tile && board.fits?(tile, row,
-                                                                                                             col)
+      raise "#{strategy} returned an invalid move for seed #{seed}" unless tile && board.fits?(tile, row,
+                                                                                               col)
 
       option_count = board.options.size
       tile_name = tile.name
       move = board.play(index, row, col)
-      raise RuntimeError, "legal move rejected for seed #{seed}" unless move
+      raise "legal move rejected for seed #{seed}" unless move
 
       moves << {tile: tile_name, option: index, row: row, col: col}
       placed_tiles += 1
@@ -89,9 +89,7 @@ class GameSimulator
       offers << board.options.map(&:name) if option_count == 1
     end
 
-    unless board.score == placed_area
-      raise RuntimeError, "score invariant failed for seed #{seed}: #{board.score} != #{placed_area}"
-    end
+    raise "score invariant failed for seed #{seed}: #{board.score} != #{placed_area}" unless board.score == placed_area
 
     Result.new(seed: seed, strategy: strategy, score: board.score,
                placed_tiles: placed_tiles, cleared_lines: cleared_lines,
@@ -179,8 +177,8 @@ class GameBenchmark
       minimum:            sorted.first,
       percentile_10:      percentile(sorted, 0.1),
       percentile_90:      percentile(sorted, 0.9),
-      mean_ci_95:         {lower: mean - 1.96 * Math.sqrt(variance / values.size),
-                           upper: mean + 1.96 * Math.sqrt(variance / values.size)},
+      mean_ci_95:         {lower: mean - (1.96 * Math.sqrt(variance / values.size)),
+                           upper: mean + (1.96 * Math.sqrt(variance / values.size))},
       maximum:            sorted.last
     }
   end

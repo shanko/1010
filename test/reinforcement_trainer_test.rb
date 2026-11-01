@@ -34,7 +34,7 @@ class ReinforcementTrainerTest < Minitest::Test
       other_value = -0.4
       weight = policy.weights.fetch("tile_dot")
       chosen_probability = 1.0 / (1.0 + Math.exp(weight * (other_value - chosen_value) / temperature))
-      expected_value = chosen_probability * chosen_value + (1.0 - chosen_probability) * other_value
+      expected_value = (chosen_probability * chosen_value) + ((1.0 - chosen_probability) * other_value)
       chosen = ActionFeatures::NAMES.to_h {|name| [name, 0.0] }
       expected = chosen.dup
       chosen["tile_dot"] = chosen_value

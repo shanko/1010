@@ -24,7 +24,7 @@ class TerminalGameTest < Minitest::Test
     output = play("0, 0\n1\n-1, 0\nn\n", board)
 
     assert_equal 4, board.score
-    assert_equal [[:move, :sq2, 0, 0, 0]], @last_logged_moves.select {|event| event.first == :move }
+    assert_equal([[:move, :sq2, 0, 0, 0]], @last_logged_moves.select {|event| event.first == :move })
     assert_includes output, "Score = 4"
     assert_includes output, "Game stopped"
   end
@@ -39,9 +39,10 @@ class TerminalGameTest < Minitest::Test
   def test_fresh_game_seed_is_written_to_its_logger
     output = StringIO.new
     logger = Object.new
-    logger.define_singleton_method(:move) {|*| }
-    logger.define_singleton_method(:deal) {|*| }
-    logger.define_singleton_method(:finish) {|*| }
+    # This test checks terminal behavior and intentionally ignores trace output.
+    logger.define_singleton_method(:move) {|*| nil }
+    logger.define_singleton_method(:deal) {|*| nil }
+    logger.define_singleton_method(:finish) {|*| nil }
     game = TerminalGame.allocate
     game.define_singleton_method(:load_game) { nil }
     game.send(:initialize, input: StringIO.new("q\nn\n"), output: output, game_log: logger)

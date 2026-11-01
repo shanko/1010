@@ -151,7 +151,7 @@ class GameReplayTest < Minitest::Test
   end
 
   def test_command_line_options_leave_non_moves_arguments_alone
-    assert_equal({auto: true, strategy: "sam"}, GameOptions.parse(["auto", "sam"]))
+    assert_equal({auto: true, strategy: "sam"}, GameOptions.parse(%w[auto sam]))
   end
 
   def test_command_line_options_accept_a_learned_model_path
@@ -166,7 +166,7 @@ class GameReplayTest < Minitest::Test
   end
 
   def test_learned_mode_without_a_model_reports_the_selected_model_location
-    error = assert_raises(ArgumentError) { GameOptions.parse(["auto", "learned"]) }
+    error = assert_raises(ArgumentError) { GameOptions.parse(%w[auto learned]) }
     assert_match "selected model", error.message
   end
 
@@ -201,7 +201,7 @@ class GameReplayTest < Minitest::Test
     refute status.success?
     assert_match "Benchmark failed:", stderr
     assert_match "Usage:", stderr
-    refute_match(/scripts\/benchmark\.rb:\d+:in/, stderr)
+    refute_match(%r{scripts/benchmark\.rb:\d+:in}, stderr)
   end
 
   private

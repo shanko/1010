@@ -54,8 +54,8 @@ class LessonStore
     raise ArgumentError, "unsupported lesson schema version" unless lesson["schema_version"] == SCHEMA_VERSION
 
     lesson
-  rescue JSON::ParserError => error
-    raise ArgumentError, "invalid lesson JSON: #{error.message}"
+  rescue JSON::ParserError => e
+    raise ArgumentError, "invalid lesson JSON: #{e.message}"
   end
 
   # Reconstruct and validate a recorded sequence against the saved board and
@@ -96,7 +96,7 @@ class LessonStore
 
   def write_atomically(path, payload)
     temporary = "#{path}.tmp-#{Process.pid}"
-    File.write(temporary, JSON.pretty_generate(payload) + "\n")
+    File.write(temporary, "#{JSON.pretty_generate(payload)}\n")
     File.rename(temporary, path)
   ensure
     File.delete(temporary) if temporary && File.exist?(temporary)

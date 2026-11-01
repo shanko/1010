@@ -23,7 +23,7 @@ class AutoRunTracker
   end
 
   def start_run(at_ms: @clock.call)
-    raise RuntimeError, "an auto run is already active" if active?
+    raise "an auto run is already active" if active?
 
     @run_count += 1
     @first_started_at ||= Float(at_ms)
@@ -56,7 +56,7 @@ class AutoRunTracker
     @active_run = nil
     suffix = new_max ? "  new max" : ""
     suffix += "  #{status}" unless status.to_sym == :completed
-    "Run #{number}   score #{score}   time #{format('%.1f', duration)}s#{suffix}"
+    "Run #{number}   score #{score}   time #{'%.1f' % duration}s#{suffix}"
   end
 
   def summary(at_ms: nil)
@@ -66,6 +66,6 @@ class AutoRunTracker
     total = [ended_at - @first_started_at, 0.0].max / 1000.0
     maximum = @max_score.nil? ? "none" : "#{@max_score} (run #{@max_score_run})"
     ["Runs: #{@completed_count} completed, #{@unfinished_count} unfinished   Max score: #{maximum}",
-     format("Total time: %.1fs", total)].join("\n")
+     "Total time: %.1fs" % total].join("\n")
   end
 end

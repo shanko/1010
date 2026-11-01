@@ -67,17 +67,18 @@ begin
   report[:seed_set] = options[:seed_set] if options[:seed_set]
   source_files = %w[board.rb auto_player.rb learned_player.rb game_simulator.rb learning_seed_sets.rb
                     scripts/benchmark.rb]
-  source_digest_input = source_files.map do |path|
+  source_digest_parts = source_files.map do |path|
     absolute_path = File.expand_path("../#{path}", __dir__)
     "#{path}\0#{File.binread(absolute_path)}"
-  end.join("\0")
+  end
+  source_digest_input = source_digest_parts.join("\0")
   report[:source_files] = source_files
   report[:source_code_sha256] = Digest::SHA256.hexdigest(source_digest_input)
 
-  File.write(options[:output], JSON.pretty_generate(report) + "\n")
+  File.write(options[:output], "#{JSON.pretty_generate(report)}\n")
   puts "Wrote #{options[:output]} for #{options[:seeds].size} seeds and #{options[:strategies].size} strategies."
-rescue OptionParser::ParseError, ArgumentError, IOError, SystemCallError => error
-  warn "Benchmark failed: #{error.message}"
+rescue OptionParser::ParseError, ArgumentError, IOError, SystemCallError => e
+  warn "Benchmark failed: #{e.message}"
   warn parser
   exit 2
 end

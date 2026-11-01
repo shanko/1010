@@ -238,7 +238,7 @@ class BoardTest < Minitest::Test
   end
 
   def test_copy_has_an_independent_snapshot_of_the_random_state
-    board = Board1010.new(random: Random.new(8675309))
+    board = Board1010.new(random: Random.new(8_675_309))
     first_branch = board.copy
     second_branch = board.copy
 

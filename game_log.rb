@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "board"
+require "fileutils"
 
 # Versioned, append-only trace for one game. Each file can be replayed without
 # relying on the current tile dealer or the original random number generator.
@@ -10,8 +11,8 @@ class GameLog
 
   attr_reader :path
 
-  def initialize(seed: nil, board:, mode:, directory: DIRECTORY)
-    Dir.mkdir(directory) unless Dir.exist?(directory)
+  def initialize(board:, mode:, seed: nil, directory: DIRECTORY)
+    FileUtils.mkdir_p(directory)
     timestamp = Time.now.strftime("%Y%m%d-%H%M%S-%6N")
     suffix = 0
     loop do

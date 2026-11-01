@@ -25,17 +25,17 @@ class AutoPlayer
 
     @strategy = strategy
     @random   = random
-    if strategy == :learned
-      raise ArgumentError, "learned strategy requires a model hash or model path" unless model
+    return unless strategy == :learned
 
-      @learned_player = if model.is_a?(LearnedPlayer)
-                          model
-                        elsif model.is_a?(String)
-                          LearnedPlayer.load(model)
-                        else
-                          LearnedPlayer.new(model)
-                        end
-    end
+    raise ArgumentError, "learned strategy requires a model hash or model path" unless model
+
+    @learned_player = if model.is_a?(LearnedPlayer)
+                        model
+                      elsif model.is_a?(String)
+                        LearnedPlayer.load(model)
+                      else
+                        LearnedPlayer.new(model)
+                      end
   end
 
   # [option index, row, col] for the next move, or nil if no tile fits.

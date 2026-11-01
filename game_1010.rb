@@ -98,9 +98,10 @@ class GameWindow < Gosu::Window
     Gosu::Color.argb(0xff_8a_c9_26), # tr2: leaf green
     Gosu::Color.argb(0xff_c7_7d_ff)  # tr3: lilac
   ].freeze
-  TILE_COLORS = Board1010::TILE_NAMES.each_with_index.to_h do |name, index|
+  tile_colors = Board1010::TILE_NAMES.each_with_index.to_h do |name, index|
     [Tile.fetch(name).id, TILE_PALETTE[index]]
-  end.freeze
+  end
+  TILE_COLORS = tile_colors.freeze
 
   HELP_LINES = [
     "Drag a tile onto the board,",
@@ -297,7 +298,7 @@ class GameWindow < Gosu::Window
     return unless tracker
 
     last_time = tracker.last_duration_seconds
-    timing = last_time ? "  Last: #{format('%.1fs', last_time)}" : ""
+    timing = last_time ? "  Last: #{'%.1fs' % last_time}" : ""
     self.caption = [
       "1010!  Auto: #{@strategy}",
       "Runs: #{tracker.completed_count}",
@@ -619,7 +620,7 @@ class GameWindow < Gosu::Window
   def cell_color(value, tile_id=nil)
     return COLORS[:empty] if value == Board1010::EMPTY
 
-    TILE_COLORS.fetch(tile_id && tile_id.positive? ? tile_id : value)
+    TILE_COLORS.fetch(tile_id&.positive? ? tile_id : value)
   end
 
   # Draws each filled square of the tile, with its top-left square at (x, y).
@@ -657,8 +658,8 @@ end
 if __FILE__ == $PROGRAM_NAME
   begin
     window = GameWindow.new(**GameWindow.options_from(ARGV))
-  rescue ArgumentError, SystemCallError => error
-    warn "1010: #{error.message}"
+  rescue ArgumentError, SystemCallError => e
+    warn "1010: #{e.message}"
     warn "Usage: ruby game_1010.rb [auto [strategy]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]"
     exit 2
   end

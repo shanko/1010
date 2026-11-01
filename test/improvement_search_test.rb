@@ -11,7 +11,7 @@ class ImprovementSearchTest < Minitest::Test
 
     result = ImprovementSearch.search(starting_board: board, baseline_score: 1,
                                       baseline_sequence: baseline,
-                                      fixed_offers: [[:dot, :sq2]],
+                                      fixed_offers: [%i[dot sq2]],
                                       time_budget_seconds: 2.0, beam_width: 64,
                                       max_states: 5_000, rollout_strategy: :first_fit)
 
@@ -21,7 +21,7 @@ class ImprovementSearchTest < Minitest::Test
     refute result.complete # the frozen offer sequence ends before actual Game Over
     assert_equal before,
                  [Marshal.dump(board.cells), Marshal.dump(board.options), Marshal.dump(board.random), board.score]
-    assert_equal result.best_score, replay_fixed(board, result.candidate_sequence, [[:dot, :sq2]])
+    assert_equal result.best_score, replay_fixed(board, result.candidate_sequence, [%i[dot sq2]])
   end
 
   def test_zero_budget_returns_baseline_as_best_so_far
@@ -30,7 +30,7 @@ class ImprovementSearchTest < Minitest::Test
 
     result = ImprovementSearch.search(starting_board: board, baseline_score: 1,
                                       baseline_sequence: baseline,
-                                      fixed_offers: [[:dot, :sq2]],
+                                      fixed_offers: [%i[dot sq2]],
                                       time_budget_seconds: 0, max_states: 10)
 
     assert_equal 1, result.best_score
@@ -66,7 +66,7 @@ class ImprovementSearchTest < Minitest::Test
     ticks = 0.0
     clock = -> { ticks += 0.02 }
     result = ImprovementSearch.search(starting_board: handcrafted_board, baseline_score: 1,
-                                      fixed_offers: [[:dot, :sq2]], time_budget_seconds: 0.01,
+                                      fixed_offers: [%i[dot sq2]], time_budget_seconds: 0.01,
                                       max_states: 100, max_rollouts: 10, clock: clock)
 
     assert_equal "time_capped", result.status
@@ -97,12 +97,13 @@ class ImprovementSearchTest < Minitest::Test
     end
     return board.score if actions.empty?
 
-    actions.map do |name, row, col|
+    scores = actions.map do |name, row, col|
       child = board.copy
       option = child.options.index(Tile.fetch(name))
       child.play(option, row, col, deal: false)
       brute_force_score(child)
-    end.max
+    end
+    scores.max
   end
 
   def replay_fixed(board, sequence, offers)
@@ -112,7 +113,8 @@ class ImprovementSearchTest < Minitest::Test
       exhausted = copy.options.size == 1
       assert copy.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false),
              "illegal candidate move: #{move}"
-      if exhausted && (batch = offers[offer_index])
+      batch = exhausted && offers[offer_index]
+      if batch
         copy.replace_options(batch.map {|name| Tile.fetch(name) })
         offer_index += 1
       end
@@ -127,11 +129,11 @@ class ImprovementSearchTest < Minitest::Test
       exhausted = board.options.size == 1
       assert board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false),
              "illegal candidate move: #{move}"
-      if exhausted
-        batch = offers.fetch(offer_index)
-        board.replace_options(batch.map {|name| Tile.fetch(name) })
-        offer_index += 1
-      end
+      next unless exhausted
+
+      batch = offers.fetch(offer_index)
+      board.replace_options(batch.map {|name| Tile.fetch(name) })
+      offer_index += 1
     end
     board
   end

@@ -101,7 +101,7 @@ class ImprovementSearch
     beam = [root]
     visited = {state_key(root, fixed_offers) => true}
 
-    while !beam.empty?
+    until beam.empty?
       candidates = []
       beam.each do |node|
         each_legal_action(node.board) do |action|
@@ -228,7 +228,7 @@ class ImprovementSearch
     board = node.board.copy
     option_count = board.options.size
     move = board.play(action.fetch(:option), action.fetch(:row), action.fetch(:col), deal: false)
-    raise RuntimeError, "search generated an illegal move #{action.inspect}" unless move
+    raise "search generated an illegal move #{action.inspect}" unless move
 
     offer_history = node.offer_history
     next_offer_index = node.next_offer_index

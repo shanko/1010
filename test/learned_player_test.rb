@@ -29,7 +29,7 @@ class LearnedPlayerTest < Minitest::Test
     assert_equal 0.0, features.fetch("filled_neighbours")
     assert_equal 5.0 / 32.0, features.fetch("edge_cells")
     assert_equal 0.01, features.fetch("occupied_fraction")
-    assert_equal 1.0, ActionFeatures::TILE_FEATURES.sum {|name| features.fetch(name) }
+    assert_equal(1.0, ActionFeatures::TILE_FEATURES.sum {|name| features.fetch(name) })
     assert features.values.all?(&:finite?)
   end
 

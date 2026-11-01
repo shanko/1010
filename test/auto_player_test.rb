@@ -6,6 +6,11 @@ require_relative "../auto_player"
 class AutoPlayerTest < Minitest::Test
   TILES = Board1010::TILES
 
+  def test_sam_is_the_default_strategy
+    assert_equal :sam, AutoPlayer::DEFAULT_STRATEGY
+    assert_equal :sam, AutoPlayer.new.strategy
+  end
+
   def test_jc_prefers_a_corner_on_an_empty_board
     assert_equal [0, 0], AutoPlayer.new(:jc).best_position(Board1010.new, TILES[:dot])
   end
@@ -44,7 +49,7 @@ class AutoPlayerTest < Minitest::Test
   def test_no_position_when_the_tile_fits_nowhere
     board = Board1010.new
     board.cells.each {|values| values.fill(1) }
-    assert_nil AutoPlayer.new.best_position(board, TILES[:dot])
+    assert_nil AutoPlayer.new(:jc).best_position(board, TILES[:dot])
   end
 
   def test_unknown_strategy_is_rejected_with_the_choices
@@ -57,7 +62,7 @@ class AutoPlayerTest < Minitest::Test
     Board1010::ROWS.times {|row| board.cells[row].fill(1) }
     board.cells[0][0] = Board1010::EMPTY
 
-    assert_equal [1, 0, 0], AutoPlayer.new.choose_move(board)
+    assert_equal [1, 0, 0], AutoPlayer.new(:jc).choose_move(board)
   end
 
   def test_every_strategy_plays_whole_games

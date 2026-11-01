@@ -11,7 +11,7 @@ require_relative "learned_player"
 class AutoPlayer
   STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam].freeze
   VALID_STRATEGIES = (STRATEGIES + [:learned]).freeze
-  DEFAULT_STRATEGY = :jc
+  DEFAULT_STRATEGY = :sam
 
   attr_reader :strategy
 

@@ -47,6 +47,14 @@ Parallel evaluation preserves serial seed order and results, requires
 `Process.fork` (macOS/Linux), and retains metric summaries instead of full move
 histories. One process remains the default.
 
+A second, larger run uses `scripts/phase6_evaluation.sh`, which records every
+setting: 343 lessons from training seeds `1000000..1000399`, imitation with the
+settings above, 200 REINFORCE episodes with checkpoints every 25 episodes scored
+on tuning seeds `2000000..2000099`, then the held-out benchmark of every
+heuristic, the selected policy, the imitation-only model and the final RL
+checkpoint. Run it from a clean checkout (it collects its own lessons) or pass a
+directory holding `lessons/` and `lessons.sha256` to reuse a collection.
+
 Models, lessons, checkpoints and full reports remain ignored in
 `learning_data/`. The exact lesson collection is needed to reproduce these
 weights; a clean checkout can generate new lessons with `collect-training`.

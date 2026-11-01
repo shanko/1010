@@ -162,7 +162,7 @@ Feature version 2 includes normalized tile area, one-hot tile type, cleared rows
 
 ## Milestone 6: fine-tune the policy with reinforcement learning
 
-**Status: implementation complete; full held-out comparison running**
+**Status: complete; RL versus imitation and all heuristics evaluated on 2,000 held-out seeds**
 
 ### Work
 
@@ -185,14 +185,17 @@ Run `bundle exec ruby scripts/learn.rb train-rl --model MODEL`. The trainer uses
 
 ## Milestone 7: integrate, compare, and document the learned auto mode
 
-**Status: implementation complete; 100-seed held-out pilot complete; full 2,000-seed evaluation remains**
+**Status: complete; full 2,000-seed evaluation documented**
 
-The November 1 audit verified the implementation and trained a compatible
-feature-version-2 imitation model plus a 10-episode RL checkpoint. The full
-2,000-seed comparison is running with four evaluation processes; final
-Milestone 6–7 results will follow in a separate commit. See
-[`learning_evaluation.md`](learning_evaluation.md) for completed checks,
-tuning-based selection and reproduction commands.
+The November 1 audit completed the full comparison after retraining a compatible
+feature-version-2 imitation model and running 10 RL episodes. Selected imitation
+averaged 339.25 versus Codex Sam's 328.57, a paired +10.67 points (95% CI
++1.01 to +20.34). On the 1,900 seeds beyond the old pilot, the gain was +8.60
+(95% CI -1.37 to +18.57), so learned mode remains opt-in and Codex Sam remains
+the default. RL did not improve on imitation. See
+[`learning_evaluation.md`](learning_evaluation.md) for distributions, provenance
+and limitations, and [`training_workflow.md`](training_workflow.md) for repeated
+training sessions and tuning-based selection.
 
 ### Work
 

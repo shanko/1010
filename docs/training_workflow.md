@@ -187,7 +187,7 @@ the same held-out report.
 
 ```sh
 ./1010 auto learned --model learning_data/experiments/round-02/selected.json --seed 42
-./1010 auto sam --seed 42
+./1010 auto codex_sam --seed 42
 ```
 
 Changing `--model` reverts to any retained learned checkpoint. Selecting a

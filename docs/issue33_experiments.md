@@ -152,7 +152,7 @@ distributions, per-seed scores, pairwise differences and source/model provenance
 ## Verification
 
 - `bundle exec rake test`: 159 tests, 911 assertions, no failures/errors/skips.
-- `bundle exec rake lint`: 51 files, no offenses.
+- `bundle exec rake lint`: 54 files, no offenses (including ignored local analysis helpers).
 - All eight strategies match `benchmarks/baseline-v4.json` per seed on seeds
   1–100, using four benchmark workers.
 

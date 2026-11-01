@@ -4,9 +4,10 @@ require "minitest/autorun"
 require_relative "../lib/auto_player"
 
 class AutoPlayerTest < Minitest::Test
-  def test_sam_is_the_default_strategy
-    assert_equal :sam, AutoPlayer::DEFAULT_STRATEGY
-    assert_equal :sam, AutoPlayer.new.strategy
+  def test_codex_sam_is_the_default_strategy_and_sam_drives_search
+    assert_equal :codex_sam, AutoPlayer::DEFAULT_STRATEGY
+    assert_equal :codex_sam, AutoPlayer.new.strategy
+    assert_equal :sam, AutoPlayer::SEARCH_STRATEGY
   end
 
   def test_jc_prefers_a_corner_on_an_empty_board

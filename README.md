@@ -231,7 +231,7 @@ $ ./1010 --delay 2 logs/<game>.moves
 
 Try defeating the computer (it is very hard) by taking turns and comparing the score AND time required to play it.
 
-The strategies are in `lib/auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam` (the default), `codex_1` and `codex_sam`. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Codex Sam uses Codex 1 to choose the tile, then Sam to choose its placement. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
+The strategies are in `lib/auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1` and `codex_sam` (the default). Codex Sam is the strongest heuristic: on 1,000 tuning seeds it averaged 326.40 against Sam's 287.46 (paired +38.94, 95% CI +27.76 to +50.13). Search, lesson analysis and `improve` still use Sam for their many rollout games, because it is about six times faster. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Codex Sam uses Codex 1 to choose the tile, then Sam to choose its placement. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
 
 ## Code:
 

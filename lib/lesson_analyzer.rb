@@ -10,7 +10,7 @@ require_relative "offer_replay"
 class LessonAnalyzer
   def analyze(path, time_budget_seconds: 30.0, beam_width: 4, max_states: 10_000,
               max_rollouts: 8, rollouts_per_step: 2,
-              strategy: AutoPlayer::DEFAULT_STRATEGY, clock: nil)
+              strategy: AutoPlayer::SEARCH_STRATEGY, clock: nil)
     source_digest, trace, baseline = read_source(path)
     options = {time_budget_seconds: time_budget_seconds, beam_width: beam_width,
                max_states: max_states, max_rollouts: max_rollouts,

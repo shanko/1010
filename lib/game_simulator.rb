@@ -50,7 +50,7 @@ class GameSimulator
                        expected_score: result.score)
   end
 
-  def run(seed:, strategy: AutoPlayer::DEFAULT_STRATEGY, max_moves: 100_000, model: nil,
+  def run(seed:, strategy: AutoPlayer::SEARCH_STRATEGY, max_moves: 100_000, model: nil,
           capture_states: false)
     seed = Integer(seed)
     strategy = strategy.to_sym

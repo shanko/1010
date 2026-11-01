@@ -30,7 +30,7 @@ class ImprovementSearch
     new.search(**options)
   end
 
-  def search(seed: nil, strategy: AutoPlayer::DEFAULT_STRATEGY, starting_board: nil,
+  def search(seed: nil, strategy: AutoPlayer::SEARCH_STRATEGY, starting_board: nil,
              baseline_score: nil, baseline_sequence: nil, fixed_offers: nil,
              continue_after_fixed_offers: false,
              time_budget_seconds: 30.0, beam_width: 4, max_states: 10_000,

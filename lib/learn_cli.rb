@@ -71,7 +71,7 @@ module LearnCLI
 
     def parse(argv)
       options = {budget: 30.0, beam_width: 4, max_states: 10_000, max_rollouts: 8,
-                 strategy: AutoPlayer::DEFAULT_STRATEGY, output: LessonStore::DIRECTORY}
+                 strategy: AutoPlayer::SEARCH_STRATEGY, output: LessonStore::DIRECTORY}
       @parser = OptionParser.new do |opts|
         opts.banner = "Usage: scripts/learn.rb analyze GAME.moves [options]"
         define_options(opts, options)

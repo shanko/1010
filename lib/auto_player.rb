@@ -11,7 +11,12 @@ require_relative "learned_player"
 class AutoPlayer
   STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam codex_1 codex_sam].freeze
   VALID_STRATEGIES = (STRATEGIES + [:learned]).freeze
-  DEFAULT_STRATEGY = :sam
+  # The strongest heuristic plays by default (tuning seeds 2000000..2000999:
+  # codex_sam - sam = +38.94, 95% CI +27.76 to +50.13).
+  DEFAULT_STRATEGY = :codex_sam
+  # Search rollouts and lesson analysis run many full games, so they keep the
+  # faster Sam strategy; changing it would also change generated lessons.
+  SEARCH_STRATEGY  = :sam
 
   attr_reader :strategy
 

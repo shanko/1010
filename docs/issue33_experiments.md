@@ -155,5 +155,3 @@ distributions, per-seed scores, pairwise differences and source/model provenance
 - `bundle exec rake lint`: 54 files, no offenses (including ignored local analysis helpers).
 - All eight strategies match `benchmarks/baseline-v4.json` per seed on seeds
   1–100, using four benchmark workers.
-
-Final results are recorded in [the evaluation report](learning_evaluation.md#issue-33-stronger-teacher-imitation). Both held-out intervals are above zero; making learned the default is proposed for the maintainer, with no automatic change.

@@ -88,10 +88,12 @@ a reproducible JSON benchmark report:
 $ bundle exec ruby scripts/benchmark.rb --seeds 1..100 --output benchmarks/baseline-v1.json
 ```
 
-Analyze a completed, replayable `.moves` trace and save a search lesson locally:
+Analyze a completed, replayable `.moves` trace and save a search lesson locally.
+State and rollout limits make the work reproducible; `--budget` is only a safety
+cap:
 
 ```sh
-$ bundle exec ruby scripts/learn.rb analyze logs/<game>.moves --budget 2 --beam-width 8
+$ bundle exec ruby scripts/learn.rb analyze logs/<game>.moves --max-states 10000 --max-rollouts 8 --beam-width 8
 ```
 
 Lessons are stored under the ignored `learning_data/` directory by default.
@@ -112,7 +114,7 @@ episodes and complete search corrections directly into the ignored lesson
 store. Start with a small range to inspect search yield before scaling up:
 
 ```sh
-$ bundle exec ruby scripts/learn.rb collect-training --seeds 1000000..1000019 --budget 0.5
+$ bundle exec ruby scripts/learn.rb collect-training --seeds 1000000..1000019 --max-states 2000 --max-rollouts 8
 ```
 
 Evaluate a learned policy headlessly (a model is required):
@@ -136,7 +138,7 @@ The simulator and benchmark support learned models now. To collect search
 corrections from states visited by the learned policy, use training seeds only:
 
 ```sh
-$ bundle exec ruby scripts/learn.rb correct --model learning_data/models/imitation-v1.json --seeds 1000000,1000001 --budget 0.1 --stride 5
+$ bundle exec ruby scripts/learn.rb correct --model learning_data/models/imitation-v1.json --seeds 1000000,1000001 --max-states 2000 --max-rollouts 1 --stride 5
 ```
 
 Fine-tune an imitation model with REINFORCE on complete training-seed games.

@@ -105,7 +105,7 @@ Important rules for the implementation:
 7. Return structured results: baseline score, best score found, score delta, elapsed time, explored states, candidate move sequence, and status (`improved`, `no improvement found within budget`, or `budget exhausted`). Do not claim `optimal` without proof.
 8. Allow search to start from a captured initial state or a specified decision point. For a full-game comparison, search from the beginning so it can measure the whole trajectory.
 
-The current API is `ImprovementSearch.search` in `improvement_search.rb`. Its `time_budget_seconds`, `beam_width`, and `max_states` bound search expansion and frontier memory. Seeded mode runs the baseline simulator first, then searches from the exact initial board and RNG state. Frozen-offer mode accepts named offer batches and reports `complete: false` when a candidate reaches the end of the supplied offers; this is a counterfactual horizon, not necessarily Game Over. The result status never claims optimality.
+The current API is `ImprovementSearch.search` in `improvement_search.rb`. `max_states` and `max_rollouts` define reproducible work budgets; `time_budget_seconds` is a safety cap that reports `time_capped` if it interrupts search. Each beam step ranks child states with a cheap legal-placement heuristic and rolls out only the top `rollouts_per_step`. Seeded mode runs the baseline simulator first, then searches from the exact initial board and RNG position. Frozen-offer mode accepts named offer batches and reports `complete: false` when a candidate reaches the end of the supplied offers; this is a counterfactual horizon, not necessarily Game Over. The result status never claims optimality.
 
 ### Acceptance criteria
 

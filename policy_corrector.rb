@@ -9,8 +9,9 @@ require_relative "lesson_store"
 class PolicyCorrector
   Result = Struct.new(:episodes, :states_searched, :improvements_saved, keyword_init: true)
 
-  def correct(seeds:, model:, store: LessonStore.new, time_budget_seconds: 0.1,
-              beam_width: 4, max_states: 2_000, decision_stride: 1)
+  def correct(seeds:, model:, store: LessonStore.new, time_budget_seconds: 1.0,
+              beam_width: 4, max_states: 2_000, max_rollouts: 1,
+              rollouts_per_step: 2, decision_stride: 1, clock: nil)
     seeds = seeds.map {|seed| Integer(seed) }
     stride = Integer(decision_stride)
     raise ArgumentError, "provide at least one correction seed" if seeds.empty?
@@ -38,9 +39,11 @@ class PolicyCorrector
                                           fixed_offers: offers,
                                           time_budget_seconds: time_budget_seconds,
                                           beam_width: beam_width, max_states: max_states,
+                                          max_rollouts: max_rollouts, rollouts_per_step: rollouts_per_step,
                                           strategy: :learned, rollout_strategy: :learned,
-                                          baseline_model: model, rollout_model: model)
+                                          baseline_model: model, rollout_model: model, clock: clock)
         states_searched += 1
+        next if result.status == "time_capped"
         next unless result.score_delta.positive?
 
         board = state.fetch(:board)
@@ -55,10 +58,13 @@ class PolicyCorrector
           actual_sequence: continuation, actual_score: episode.score,
           candidate_sequence: result.candidate_sequence, candidate_score: result.best_score,
           improvement_delta: result.score_delta,
-          search: {strategy: :learned, time_budget_seconds: Float(time_budget_seconds),
+          search: {version: ImprovementSearch::VERSION, strategy: :learned,
+                   time_budget_seconds: Float(time_budget_seconds),
                    beam_width: Integer(beam_width), max_states: Integer(max_states),
-                   elapsed_seconds: result.elapsed_seconds, explored_states: result.explored_states,
+                   max_rollouts: Integer(max_rollouts), rollouts_per_step: Integer(rollouts_per_step),
+                   explored_states: result.explored_states, explored_rollouts: result.explored_rollouts,
                    transpositions_pruned: result.transpositions_pruned, status: result.status,
+                   cap_reason: result.cap_reason,
                    candidate_complete: result.complete},
           outcome: "improved",
           provenance: [{path: source[:path], seed: seed, decision_index: index,

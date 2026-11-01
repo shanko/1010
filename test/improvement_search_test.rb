@@ -34,8 +34,10 @@ class ImprovementSearchTest < Minitest::Test
 
     assert_equal 1, result.best_score
     assert_equal baseline, result.candidate_sequence
-    assert_equal "budget exhausted", result.status
+    assert_equal "time_capped", result.status
+    assert_equal "time", result.cap_reason
     assert_equal 0, result.explored_states
+    assert_equal 0, result.explored_rollouts
   end
 
   def test_seeded_mode_returns_a_replayable_baseline_when_budget_is_zero
@@ -46,13 +48,35 @@ class ImprovementSearchTest < Minitest::Test
 
     assert_equal baseline.score, result.best_score
     assert_equal baseline.score, replayed.score
-    assert_equal "budget exhausted", result.status
+    assert_equal "time_capped", result.status
+  end
+
+  def test_rollout_budget_is_counted_separately_from_expanded_states
+    result = ImprovementSearch.search(seed: 29, strategy: :jc,
+                                      time_budget_seconds: 100, max_states: 1_000,
+                                      max_rollouts: 1, rollouts_per_step: 1)
+
+    assert_equal 1, result.explored_rollouts
+    assert_equal "rollouts", result.cap_reason
+    assert_operator result.explored_states, :>, 1
+  end
+
+  def test_time_safety_cap_is_reported_separately_from_work_budgets
+    ticks = 0.0
+    clock = -> { ticks += 0.02 }
+    result = ImprovementSearch.search(starting_board: handcrafted_board, baseline_score: 1,
+                                      fixed_offers: [[:dot, :sq2]], time_budget_seconds: 0.01,
+                                      max_states: 100, max_rollouts: 10, clock: clock)
+
+    assert_equal "time_capped", result.status
+    assert_equal "time", result.cap_reason
   end
 
   def test_validates_bounds_and_start_state_requirements
     assert_raises(ArgumentError) { ImprovementSearch.search(seed: 1, time_budget_seconds: -1) }
     assert_raises(ArgumentError) { ImprovementSearch.search(starting_board: handcrafted_board) }
     assert_raises(ArgumentError) { ImprovementSearch.search(seed: 1, max_states: 0) }
+    assert_raises(ArgumentError) { ImprovementSearch.search(seed: 1, max_rollouts: 0) }
   end
 
   private

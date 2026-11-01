@@ -136,6 +136,18 @@ class LearnedPlayerTest < Minitest::Test
     end
   end
 
+  def test_training_excludes_time_capped_lessons
+    Dir.mktmpdir do |directory|
+      lesson = improved_lesson
+      lesson["search"]["status"] = "time_capped"
+      File.write(File.join(directory, "time-capped.json"), JSON.pretty_generate(lesson))
+
+      error = assert_raises(ArgumentError) { ImitationTrainer.new.train(directory: directory) }
+
+      assert_match "no eligible improved lessons", error.message
+    end
+  end
+
   def test_benchmark_accepts_a_model_for_learned_policy_and_reports_uncertainty
     Dir.mktmpdir do |directory|
       File.write(File.join(directory, "lesson.json"), JSON.pretty_generate(improved_lesson))

@@ -14,9 +14,10 @@ def usage
   warn "Usage: bundle exec ruby scripts/learn.rb COMMAND [options]"
   warn "Commands: analyze GAME.moves, train-imitation, collect-training, correct, train-rl, select"
   warn "Analyze options:"
-  warn "  --budget SECONDS    search time after baseline preparation (default: 1.0)"
+  warn "  --budget SECONDS    safety cap after baseline preparation (default: 30)"
   warn "  --beam-width N      beam width (default: 4)"
   warn "  --max-states N      maximum expanded states (default: 10000)"
+  warn "  --max-rollouts N    maximum full-game rollouts (default: 8)"
   warn "  --strategy NAME     rollout strategy (default: #{AutoPlayer::DEFAULT_STRATEGY})"
   warn "  --output DIR        lesson directory (default: learning_data)"
 end
@@ -28,12 +29,14 @@ unless %w[analyze train-imitation collect-training correct train-rl select].incl
 end
 
 if command == "analyze"
-  options = {budget: 1.0, beam_width: 4, max_states: 10_000,
+  options = {budget: 30.0, beam_width: 4, max_states: 10_000, max_rollouts: 8,
              strategy: AutoPlayer::DEFAULT_STRATEGY, output: LessonStore::DIRECTORY}
   parser = OptionParser.new do |opts|
     opts.on("--budget SECONDS", Float) {|value| options[:budget] = value }
     opts.on("--beam-width N", Integer) {|value| options[:beam_width] = value }
     opts.on("--max-states N", Integer) {|value| options[:max_states] = value }
+    opts.on("--max-rollouts N", Integer) {|value| options[:max_rollouts] = value }
+    opts.on("--rollouts-per-step N", Integer) {|value| options[:rollouts_per_step] = value }
     opts.on("--strategy NAME") {|value| options[:strategy] = value.to_sym }
     opts.on("--output DIR") {|value| options[:output] = value }
   end
@@ -53,6 +56,8 @@ if command == "analyze"
   begin
     lesson = LessonAnalyzer.new.analyze(path, time_budget_seconds: options[:budget],
                                         beam_width: options[:beam_width], max_states: options[:max_states],
+                                        max_rollouts: options[:max_rollouts],
+                                        rollouts_per_step: options.fetch(:rollouts_per_step, 2),
                                         strategy: options[:strategy])
     saved = LessonStore.new(directory: options[:output]).save(lesson)
     divergence = lesson.fetch(:actual_sequence).zip(lesson.fetch(:candidate_sequence)).index do |actual, candidate|
@@ -114,7 +119,7 @@ elsif command == "train-imitation"
     exit 1
   end
 elsif command == "collect-training"
-  options = {strategy: :sam, budget: 0.5, beam_width: 4, max_states: 2_000,
+  options = {strategy: :sam, budget: 30.0, beam_width: 4, max_states: 2_000, max_rollouts: 8,
              output: LessonStore::DIRECTORY}
   parser = OptionParser.new do |opts|
     opts.banner = "Usage: bundle exec ruby scripts/learn.rb collect-training --seeds LIST [options]"
@@ -131,6 +136,8 @@ elsif command == "collect-training"
     opts.on("--budget SECONDS", Float) {|value| options[:budget] = value }
     opts.on("--beam-width N", Integer) {|value| options[:beam_width] = value }
     opts.on("--max-states N", Integer) {|value| options[:max_states] = value }
+    opts.on("--max-rollouts N", Integer) {|value| options[:max_rollouts] = value }
+    opts.on("--rollouts-per-step N", Integer) {|value| options[:rollouts_per_step] = value }
     opts.on("--output DIR") {|value| options[:output] = value }
   end
   begin
@@ -149,6 +156,8 @@ elsif command == "collect-training"
     result = LessonCollector.new.collect(seeds: options[:seeds], strategy: options[:strategy],
                                           time_budget_seconds: options[:budget],
                                           beam_width: options[:beam_width], max_states: options[:max_states],
+                                          max_rollouts: options[:max_rollouts],
+                                          rollouts_per_step: options.fetch(:rollouts_per_step, 2),
                                           store: LessonStore.new(directory: options[:output]))
     puts JSON.pretty_generate({episodes: result.episodes,
                                improvements_found: result.improvements_found,
@@ -159,7 +168,7 @@ elsif command == "collect-training"
     exit 1
   end
 elsif command == "correct"
-  options = {budget: 0.1, beam_width: 4, max_states: 2_000, stride: 1,
+  options = {budget: 1.0, beam_width: 4, max_states: 2_000, max_rollouts: 1, stride: 1,
              output: LessonStore::DIRECTORY}
   parser = OptionParser.new do |opts|
     opts.banner = "Usage: bundle exec ruby scripts/learn.rb correct --model MODEL --seeds LIST [options]"
@@ -168,6 +177,8 @@ elsif command == "correct"
     opts.on("--budget SECONDS", Float) {|value| options[:budget] = value }
     opts.on("--beam-width N", Integer) {|value| options[:beam_width] = value }
     opts.on("--max-states N", Integer) {|value| options[:max_states] = value }
+    opts.on("--max-rollouts N", Integer) {|value| options[:max_rollouts] = value }
+    opts.on("--rollouts-per-step N", Integer) {|value| options[:rollouts_per_step] = value }
     opts.on("--stride N", Integer) {|value| options[:stride] = value }
     opts.on("--output DIR") {|value| options[:output] = value }
   end
@@ -193,6 +204,8 @@ elsif command == "correct"
                                           store: LessonStore.new(directory: options[:output]),
                                           time_budget_seconds: options[:budget],
                                           beam_width: options[:beam_width], max_states: options[:max_states],
+                                          max_rollouts: options[:max_rollouts],
+                                          rollouts_per_step: options.fetch(:rollouts_per_step, 2),
                                           decision_stride: options[:stride])
     puts JSON.pretty_generate({episodes: result.episodes, states_searched: result.states_searched,
                                improvements_saved: result.improvements_saved})

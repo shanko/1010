@@ -35,6 +35,25 @@ class LessonStoreTest < Minitest::Test
     end
   end
 
+  def test_analyzer_lesson_is_byte_identical_with_a_slower_clock
+    Dir.mktmpdir do |directory|
+      path = write_completed_trace(directory)
+      analyzer = LessonAnalyzer.new
+      fast_clock = ticking_clock(0.0001)
+      slow_clock = ticking_clock(0.01)
+      options = {time_budget_seconds: 1_000, beam_width: 4, max_states: 60,
+                 max_rollouts: 4, strategy: :first_fit}
+
+      fast_lesson = analyzer.analyze(path, **options, clock: fast_clock)
+      slow_lesson = analyzer.analyze(path, **options, clock: slow_clock)
+
+      assert_equal JSON.generate(fast_lesson), JSON.generate(slow_lesson)
+      assert_equal 4, fast_lesson.dig(:search, :max_rollouts)
+      assert_equal fast_lesson.dig(:search, :explored_rollouts), slow_lesson.dig(:search, :explored_rollouts)
+      refute fast_lesson.fetch(:search).key?(:elapsed_seconds)
+    end
+  end
+
   def test_store_deduplicates_identical_states_and_retains_new_provenance
     Dir.mktmpdir do |directory|
       lesson = LessonStore.read(FIXTURE).transform_keys(&:to_sym)
@@ -98,5 +117,10 @@ class LessonStoreTest < Minitest::Test
     end
     log.finish(reason: "game_over", score: board.score)
     log.path
+  end
+
+  def ticking_clock(increment)
+    time = 0.0
+    -> { time += increment }
   end
 end

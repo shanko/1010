@@ -8,8 +8,9 @@ require_relative "offer_replay"
 
 # Converts a replayable completed trace into a search lesson.
 class LessonAnalyzer
-  def analyze(path, time_budget_seconds: 1.0, beam_width: 4, max_states: 10_000,
-              strategy: AutoPlayer::DEFAULT_STRATEGY)
+  def analyze(path, time_budget_seconds: 30.0, beam_width: 4, max_states: 10_000,
+              max_rollouts: 8, rollouts_per_step: 2,
+              strategy: AutoPlayer::DEFAULT_STRATEGY, clock: nil)
     raise ArgumentError, "#{path} is not a versioned replayable .moves trace" unless GameTrace.versioned_file?(path)
 
     source_digest = Digest::SHA256.file(path).hexdigest
@@ -27,7 +28,8 @@ class LessonAnalyzer
                                       fixed_offers: baseline[:offers],
                                       time_budget_seconds: time_budget_seconds,
                                       beam_width: beam_width, max_states: max_states,
-                                      strategy: strategy, rollout_strategy: strategy)
+                                      max_rollouts: max_rollouts, rollouts_per_step: rollouts_per_step,
+                                      strategy: strategy, rollout_strategy: strategy, clock: clock)
 
     record = {
       schema_version: LessonStore::SCHEMA_VERSION,
@@ -39,10 +41,13 @@ class LessonAnalyzer
       actual_sequence: baseline[:sequence], actual_score: baseline[:board].score,
       candidate_sequence: result.candidate_sequence, candidate_score: result.best_score,
       improvement_delta: result.score_delta,
-      search: {strategy: strategy.to_sym, time_budget_seconds: Float(time_budget_seconds),
+      search: {version: ImprovementSearch::VERSION, strategy: strategy.to_sym,
+               time_budget_seconds: Float(time_budget_seconds),
                beam_width: Integer(beam_width), max_states: Integer(max_states),
-               elapsed_seconds: result.elapsed_seconds, explored_states: result.explored_states,
+               max_rollouts: Integer(max_rollouts), rollouts_per_step: Integer(rollouts_per_step),
+               explored_states: result.explored_states, explored_rollouts: result.explored_rollouts,
                transpositions_pruned: result.transpositions_pruned, status: result.status,
+               cap_reason: result.cap_reason,
                candidate_complete: result.complete},
       outcome: result.score_delta.positive? ? "improved" : "no_improvement",
       provenance: [{path: File.expand_path(path), sha256: source_digest, seed: trace.seed,

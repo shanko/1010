@@ -8,8 +8,9 @@ class LessonCollector
   Result = Struct.new(:episodes, :improvements_found, :complete_improvements,
                       :lessons_saved, keyword_init: true)
 
-  def collect(seeds:, strategy: :sam, time_budget_seconds: 0.5, beam_width: 4,
-              max_states: 2_000, store: LessonStore.new)
+  def collect(seeds:, strategy: :sam, time_budget_seconds: 30.0, beam_width: 4,
+              max_states: 2_000, max_rollouts: 8, rollouts_per_step: 2,
+              store: LessonStore.new, clock: nil)
     seeds = seeds.map {|seed| Integer(seed) }
     raise ArgumentError, "provide at least one training seed" if seeds.empty?
     training = LearningSeedSets::DEFINITIONS.fetch(:training)
@@ -21,7 +22,9 @@ class LessonCollector
       result = ImprovementSearch.search(seed: seed, strategy: strategy,
                                         time_budget_seconds: time_budget_seconds,
                                         beam_width: beam_width, max_states: max_states,
-                                        rollout_strategy: strategy)
+                                        max_rollouts: max_rollouts, rollouts_per_step: rollouts_per_step,
+                                        rollout_strategy: strategy, clock: clock)
+      next if result.status == "time_capped"
       next unless result.score_delta.positive?
 
       improvements_found += 1
@@ -45,10 +48,13 @@ class LessonCollector
         actual_sequence: actual.moves, actual_score: actual.score,
         candidate_sequence: result.candidate_sequence,
         candidate_score: result.best_score, improvement_delta: result.score_delta,
-        search: {strategy: strategy.to_sym, time_budget_seconds: Float(time_budget_seconds),
+        search: {version: ImprovementSearch::VERSION, strategy: strategy.to_sym,
+                 time_budget_seconds: Float(time_budget_seconds),
                  beam_width: Integer(beam_width), max_states: Integer(max_states),
-                 elapsed_seconds: result.elapsed_seconds, explored_states: result.explored_states,
+                 max_rollouts: Integer(max_rollouts), rollouts_per_step: Integer(rollouts_per_step),
+                 explored_states: result.explored_states, explored_rollouts: result.explored_rollouts,
                  transpositions_pruned: result.transpositions_pruned, status: result.status,
+                 cap_reason: result.cap_reason,
                  candidate_complete: result.complete},
         outcome: "improved",
         provenance: [{path: "simulator:#{seed}:#{strategy}", seed: seed,

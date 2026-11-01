@@ -26,6 +26,8 @@ class TerminalGameTest < Minitest::Test
     assert_equal 4, board.score
     assert_equal([[:move, :sq2, 0, 0, 0]], @last_logged_moves.select {|event| event.first == :move })
     assert_includes output, "Score = 4"
+    assert_includes output, "Total time elapsed = "
+    assert_includes output, "Total moves = 1"
     assert_includes output, "Game stopped"
   end
 

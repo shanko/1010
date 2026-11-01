@@ -14,6 +14,7 @@ class TerminalGame
     @input  = input
     @output = output
     @seed = nil
+    @move_count = 0
     @board = board || load_game
     unless @board
       @seed = Random.new_seed
@@ -48,6 +49,7 @@ class TerminalGame
     option_count = @board.options.size
     tile_name = @board.options[index].name
     if @board.play(index, row, col)
+      @move_count += 1
       @game_log.move(tile_name, index, row, col)
       @game_log.deal(@board.options) if option_count == 1
     else
@@ -57,6 +59,7 @@ class TerminalGame
 
   def finish_run(started_at)
     say("Total time elapsed = #{(Time.now - started_at).round} seconds")
+    say("Total moves = #{@move_count}")
     say("Score = #{@board.score}")
     @game_log.finish(reason: @board.game_over? ? "game_over" : "stopped", score: @board.score)
   end

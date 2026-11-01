@@ -10,7 +10,17 @@
 # The rules live in lib/board.rb, the computer player in lib/auto_player.rb,
 # and the move animation in lib/move_animation.rb. This file only reads input,
 # updates state and draws.
-require "gosu"
+begin
+  require "gosu"
+rescue LoadError => e
+  abort <<~MESSAGE
+    The game window needs the gosu gem, which could not be loaded (#{e.message}).
+    If this bundle skips the gui group, include it again with:
+      bundle config unset --local without && bundle install
+    (or unset BUNDLE_WITHOUT if it is set in the environment).
+    See "Installation" in README.md for gosu's system libraries.
+  MESSAGE
+end
 require_relative "../lib/board"
 require_relative "../lib/auto_player"
 require_relative "../lib/move_animation"

@@ -1,9 +1,14 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../scripts/game_1010"
+require_relative "gui_support"
+require_relative "../scripts/game_1010" unless GuiSupport.excluded?
 
 class GameWindowTest < Minitest::Test
+  def setup
+    skip GuiSupport::SKIP_MESSAGE if GuiSupport.excluded?
+  end
+
   def test_global_input_keys_map_only_to_session_commands
     actions = GameWindow::KEY_ACTIONS
 

@@ -22,6 +22,19 @@ $ gem install gosu -v 1.4.6 -- --with-ldflags="-L/usr/local/lib -lSDL2 -framewor
 
 (On Apple Silicon, Homebrew's libraries are in `/opt/homebrew/lib` instead of `/usr/local/lib`.)
 
+**Training or benchmarking only (no game window):** gosu is in the Gemfile's
+`gui` group, which `bundle install` includes by default. On a machine that only
+runs `scripts/learn.rb`, `scripts/benchmark.rb` or `scripts/terminal_game.rb`,
+skip it so gosu and its system libraries aren't needed:
+
+```sh
+$ bundle config set --local without gui
+$ bundle install
+```
+
+The window tests are then skipped. To play in the window again, run
+`bundle config unset --local without && bundle install`.
+
 ## Version:
 
 1.0

@@ -10,6 +10,8 @@
 # WORKERS defaults to one less than the number of CPUs (held-out benchmark only;
 # training is single-threaded). Outputs go to learning_data/run-20261101/ (ignored by Git).
 # Each step is skipped when its output already exists, so an interrupted run can resume.
+# Training does not need the game window: on a headless machine run
+# `bundle config set --local without gui` first to skip building gosu.
 set -euo pipefail
 
 BUNDLE=${1:-}
@@ -22,9 +24,11 @@ stamp() { echo "[$(date '+%F %T')] $*"; }
 
 stamp "ruby: $(ruby -v)"
 stamp "revision: $(git rev-parse HEAD)"
-git diff --quiet 8bfb58d -- lib Gemfile Gemfile.lock scripts/*.rb ||
-  { echo "lib/, scripts/*.rb or the Gemfile differ from 8bfb58d; results would not be comparable"; exit 1; }
-[ -z "$(git status --porcelain -- lib scripts)" ] || { echo "uncommitted changes in lib/ or scripts/"; exit 1; }
+# The Gemfile itself may differ (gosu moved to the :gui group); the resolved gems may not.
+git diff --quiet 8bfb58d -- lib Gemfile.lock scripts/learn.rb scripts/benchmark.rb ||
+  { echo "lib/, learn.rb, benchmark.rb or Gemfile.lock differ from 8bfb58d; results would not be comparable"; exit 1; }
+[ -z "$(git status --porcelain -- lib scripts/learn.rb scripts/benchmark.rb)" ] ||
+  { echo "uncommitted changes in lib/, learn.rb or benchmark.rb"; exit 1; }
 bundle install --quiet
 
 # 1. Lessons: complete improved lessons from training seeds only.

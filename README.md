@@ -148,10 +148,22 @@ Evaluate a learned policy headlessly (a model is required):
 $ bundle exec ruby scripts/benchmark.rb --seed-set held_out --strategies first_fit,last_fit,random_fit,shanko,jc,sam,codex_1,codex_sam,learned --model learning_data/models/imitation-v1.json --output learning_data/held-out.json
 ```
 
-For a full learned-versus-heuristics report, include all six heuristic strategies
+For a full learned-versus-heuristics report, include all eight heuristic strategies
 and `learned`. The report records per-seed results, pairwise score differences,
 95% confidence intervals, and the strongest heuristic by mean score. The held-out
 seed set is for final reporting only; choose models with tuning seeds.
+
+Compare an RL checkpoint directly with the tuning-selected policy in the same
+report by adding `--comparison-model reinforcement=PATH`. This flag can be
+repeated with distinct names. Each model receives the same seeds; the report
+includes every pairwise score difference, model fingerprints, score distributions
+and game lengths. Models and reports remain under ignored `learning_data/`.
+Add `--workers 4` to use four evaluation processes on macOS/Linux. Parallel
+evaluation preserves the serial seed order and results; the default is one
+process.
+
+See [the full learning evaluation](docs/learning_evaluation.md) for the milestone
+audit, model-selection outcome, held-out comparison and reproduction commands.
 
 Start the graphical learned auto-player with the tuning-selected checkpoint:
 
@@ -193,13 +205,17 @@ To reselect a retained checkpoint, evaluate it on tuning seeds first:
 $ bundle exec ruby scripts/learn.rb select --checkpoint learning_data/checkpoints/reinforce-step-100-20261030T054859123456Z.json
 ```
 
-Action feature version 1 records tile area and one-hot tile type, rows and
+Action feature version 2 records tile area and one-hot tile type, rows and
 columns cleared, remaining legal placements, largest four-neighbor empty
 region, empty-region count, isolated eight-neighbor empty cells, filled
 neighbors, touched edges, and resulting occupied fraction. For every legal
 candidate, the extractor combines its tile and anchor context with simulated
 post-placement board features. The linear scorer uses deterministic seeded
 tie-breaking.
+
+Feature version 1 models must be retrained before use with the current code.
+Use `train-imitation --output learning_data/models/imitation-v2.json` to retain
+the older model while producing a compatible one.
 
 Pass a `.moves` file as the command line argument to replay it. Current v3 traces
 and existing v2 traces can be replayed. Moves are shown in order, with 0.5

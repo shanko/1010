@@ -134,6 +134,11 @@ class ReinforcementTrainerTest < Minitest::Test
       assert File.file?(first_checkpoint)
       assert_equal checkpoint_count_before_resume + 1, Dir.glob(File.join(directory, "reinforce-step-*.json")).size
       assert_equal true, resumed.checkpoints.first.fetch(:existing)
+      uninterrupted = ReinforcementTrainer.new.train(initial_model: empty_model, episode_count: 2,
+                                                     random_seed: 23, seeds: [1_000_010, 1_000_011],
+                                                     tuning_seeds: [2_000_010], checkpoint_interval: 1,
+                                                     checkpoint_store: store)
+      assert_equal uninterrupted.model, resumed.model
     end
   end
   # rubocop:enable Metrics/MethodLength

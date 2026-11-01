@@ -4,6 +4,7 @@ require_relative "board"
 require_relative "auto_player"
 require_relative "offer_replay"
 require "time"
+require "tmpdir"
 
 # Runs complete games without Gosu, sleeps, or other UI behavior.
 class GameSimulator
@@ -132,10 +133,13 @@ class GameBenchmark
   SCHEMA_VERSION = 1
   METRICS = %i[score placed_tiles cleared_lines option_batches].freeze
 
-  def self.run(seeds:, strategies: AutoPlayer::STRATEGIES, max_moves: 100_000, models: {})
+  def self.run(seeds:, strategies: AutoPlayer::STRATEGIES, max_moves: 100_000, models: {}, workers: 1)
     seeds, strategies = validate_inputs(seeds, strategies, models)
+    workers = Integer(workers)
+    raise ArgumentError, "workers must be positive" unless workers.positive?
+
     resolved_models = resolve_models(models)
-    results = run_strategies(seeds, strategies, resolved_models, max_moves)
+    results = run_strategies(seeds, strategies, resolved_models, max_moves, workers)
     baseline = strategies.first
     pairwise = pairwise_summaries(results, strategies)
 
@@ -158,14 +162,14 @@ class GameBenchmark
     strategies = strategies.map(&:to_sym)
     raise ArgumentError, "provide at least one strategy" if strategies.empty?
 
-    validate_strategies!(strategies)
+    validate_strategies!(strategies, models)
     require_learned_model!(strategies, models)
     [seeds, strategies]
   end
   private_class_method :validate_inputs
 
-  def self.validate_strategies!(strategies)
-    unknown = strategies - AutoPlayer::VALID_STRATEGIES
+  def self.validate_strategies!(strategies, models)
+    unknown = strategies - AutoPlayer::VALID_STRATEGIES - models.keys.map(&:to_sym)
     raise ArgumentError, "unknown strategies: #{unknown.join(', ')}" unless unknown.empty?
   end
   private_class_method :validate_strategies!
@@ -184,14 +188,62 @@ class GameBenchmark
   end
   private_class_method :resolve_models
 
-  def self.run_strategies(seeds, strategies, models, max_moves)
+  def self.run_strategies(seeds, strategies, models, max_moves, workers)
     strategies.to_h do |strategy|
-      [strategy, seeds.map do |seed|
-        GameSimulator.run(seed: seed, strategy: strategy, max_moves: max_moves, model: models[strategy])
-      end]
+      policy = models.key?(strategy) ? :learned : strategy
+      run = lambda do |batch|
+        batch.map do |seed|
+          result = GameSimulator.run(seed: seed, strategy: policy, max_moves: max_moves, model: models[strategy])
+          GameSimulator::Result.new(**result.summary, strategy: strategy)
+        end
+      end
+      [strategy, workers == 1 ? run.call(seeds) : parallel_episodes(seeds, workers, &run)]
     end
   end
   private_class_method :run_strategies
+
+  # Keep worker creation, reaping and private output cleanup in one scope.
+  # rubocop:disable Metrics/AbcSize
+  def self.parallel_episodes(seeds, workers)
+    raise ArgumentError, "parallel evaluation requires Process.fork support" unless Process.respond_to?(:fork)
+
+    Dir.mktmpdir("1010-benchmark") do |directory|
+      jobs = seeds.each_slice((seeds.size.to_f / workers).ceil).with_index.map do |batch, index|
+        path = File.join(directory, "#{index}.json")
+        pid = Process.fork do
+          write_worker_output(path) { yield(batch) }
+        end
+        [pid, path]
+      end
+      wait_for_workers(jobs)
+
+      jobs.flat_map {|_pid, path| read_worker_results(path) }
+    end
+  end
+  # rubocop:enable Metrics/AbcSize
+  private_class_method :parallel_episodes
+
+  def self.write_worker_output(path)
+    File.write(path, JSON.generate(yield.map(&:summary)))
+    exit! 0
+  rescue StandardError => e
+    warn "Benchmark worker failed: #{e.message}"
+    exit! 1
+  end
+  private_class_method :write_worker_output
+
+  def self.wait_for_workers(jobs)
+    statuses = jobs.map {|pid, _path| Process.wait2(pid).last }
+    raise ArgumentError, "benchmark worker failed; no complete report was written" unless statuses.all?(&:success?)
+  end
+  private_class_method :wait_for_workers
+
+  def self.read_worker_results(path)
+    JSON.parse(File.read(path), symbolize_names: true).map do |summary|
+      GameSimulator::Result.new(**summary, strategy: summary.fetch(:strategy).to_sym)
+    end
+  end
+  private_class_method :read_worker_results
 
   def self.pairwise_summaries(results, strategies)
     strategies.to_h do |candidate|

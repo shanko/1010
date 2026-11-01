@@ -169,8 +169,12 @@ class GameReplayTest < Minitest::Test
   end
 
   def test_learned_mode_without_a_model_reports_the_selected_model_location
-    error = assert_raises(ArgumentError) { GameOptions.parse(%w[auto learned]) }
-    assert_match "selected model", error.message
+    Dir.mktmpdir do |directory|
+      Dir.chdir(directory) do
+        error = assert_raises(ArgumentError) { GameOptions.parse(%w[auto learned]) }
+        assert_match "selected model", error.message
+      end
+    end
   end
 
   def test_command_line_delay_defaults_to_half_a_second

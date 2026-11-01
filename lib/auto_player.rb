@@ -76,11 +76,12 @@ class AutoPlayer
   # Compare every legal tile-placement pair, choosing the move that leaves the
   # other tiles in this offer playable with the most room for future moves.
   def choose_codex_1_move(board)
-    board.options.each_with_index.flat_map do |tile, index|
+    candidates = board.options.each_with_index.flat_map do |tile, index|
       board.positions_for(tile).map do |row, col|
         [codex_1_mobility(board, index, row, col), [index, row, col]]
       end
-    end.max_by(&:first)&.last
+    end
+    candidates.max_by(&:first)&.last
   end
 
   # Let Codex 1 choose the tile, then let Sam choose that tile's placement.

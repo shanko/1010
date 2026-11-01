@@ -142,8 +142,7 @@ class GameWindow < Gosu::Window
                  replay_delay: REPLAY_DELAY_SECONDS, model: nil)
     super(WIDTH, HEIGHT, fullscreen: false)
     self.caption = "1010!"
-    @score_font = Gosu::Font.new(30)
-    @small_font = Gosu::Font.new(20)
+    initialize_fonts
 
     @strategy = strategy.to_sym
     @session = GameSession.new(auto: auto, strategy: strategy, seed: seed, replay_file: replay_file,
@@ -159,6 +158,12 @@ class GameWindow < Gosu::Window
     self.caption = "1010!  Auto: #{@strategy}" if @session.auto
     self.caption = "1010! (playback)" if replay_file
   end
+
+  def initialize_fonts
+    @score_font = Gosu::Font.new(30)
+    @small_font = Gosu::Font.new(20)
+  end
+  private :initialize_fonts
 
   def needs_cursor?
     true

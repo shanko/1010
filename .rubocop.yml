@@ -32,9 +32,9 @@ Metrics/ParameterLists:
 Naming/MethodParameterName:
   AllowedNames: [as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, to, x, y, z]
 
-# Benchmark report keys are stable serialized schema names.
+# Benchmark keys and strategy names are stable serialized schema names.
 Naming/VariableNumber:
-  AllowedIdentifiers: [percentile_10, percentile_90, mean_ci_95]
+  AllowedIdentifiers: [percentile_10, percentile_90, mean_ci_95, codex_1]
 
 # No space makes the method definition shorter and differentiates
 # from a regular assignment.

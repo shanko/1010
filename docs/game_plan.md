@@ -16,7 +16,7 @@ Do not describe the optimizer's best result as a proven maximum unless it exhaus
 - `lib/board.rb` contains the rules, tile options, placement legality, score, line clearing, and deal generation. `Board1010#play` adds the tile's square count to the score.
 - `lib/auto_player.rb` contains current strategies (`first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam`). Most select a fitting option randomly before selecting a location; `codex_1` evaluates tile-placement pairs to preserve legal placements for the remaining current offer, and `codex_sam` combines that tile choice with Sam placement scoring.
 - `scripts/game_1010.rb` runs the graphical loop and records a seed plus move/undo records.
-- `lib/game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `lib/game_trace.rb` validates and replays v2 traces headlessly.
+- `lib/game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `lib/game_trace.rb` validates and replays v2/v3 traces headlessly.
 - `lib/game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
 - `lib/improvement_search.rb` runs bounded beam search with strategy rollouts, seeded normal-deal search, and frozen-offer counterfactual search.
 - `lib/learned_player.rb` defines versioned action features, a Ruby-native linear scorer, and deterministic imitation training; `lib/policy_corrector.rb` searches continuations from states visited by a learned policy.
@@ -128,7 +128,7 @@ The current API is `ImprovementSearch.search` in `lib/improvement_search.rb`. `m
 4. Make analysis read-only with respect to the source `.moves` file.
 5. Deduplicate identical states and retain provenance so later training can exclude low-confidence or incomplete search results.
 
-The command is `bundle exec ruby scripts/learn.rb analyze GAME.moves`. It accepts `--budget`, `--beam-width`, `--max-states`, `--strategy`, and `--output`. The default `learning_data/` directory is ignored by Git; the schema example in `test/fixtures/lesson-v1.json` is tracked. Only completed v2 traces are accepted. Lesson records preserve exact initial board, active offer history, actual and candidate sequences/scores, search limits and outcome. Search status and candidate completeness remain explicit so incomplete best-found results can be filtered during training.
+The command is `bundle exec ruby scripts/learn.rb analyze GAME.moves`. It accepts `--budget`, `--beam-width`, `--max-states`, `--strategy`, and `--output`. The default `learning_data/` directory is ignored by Git; the schema example in `test/fixtures/lesson-v1.json` is tracked. Only completed, replayable v2/v3 traces are accepted. Lesson records preserve exact initial board, active offer history, actual and candidate sequences/scores, search limits and outcome. Search status and candidate completeness remain explicit so incomplete best-found results can be filtered during training.
 
 ### Acceptance criteria
 
@@ -150,7 +150,7 @@ The command is `bundle exec ruby scripts/learn.rb analyze GAME.moves`. It accept
 5. Include states visited by the learned policy and ask the searcher for corrections where possible. This reduces the mismatch between states in the demonstrations and states encountered by the learned player.
 6. Add a `learned` strategy name and a model-loading option. If no model exists, fail clearly or fall back only when explicitly requested.
 
-Feature version 1 includes normalized tile area, one-hot tile type, cleared rows and columns, remaining legal placements in the current offer, largest four-neighbor empty component, empty-component count, isolated empty cells under eight-neighbor adjacency, anchor neighbors, touched edges, and resulting occupancy. The linear scorer uses a softmax imitation update on complete improved lessons, weighted by score delta. Training only accepts lessons from the training seed range and excludes non-improvements, incomplete candidates, invalid replays, and held-out episodes. `scripts/learn.rb correct` captures decision states visited by the learned policy and asks the bounded searcher for better continuations using training seeds. `scripts/benchmark.rb` can load a learned model and reports per-seed results and 95% mean confidence intervals.
+Feature version 2 includes normalized tile area, one-hot tile type, cleared rows and columns, remaining legal placements in the current offer, largest four-neighbor empty component, empty-component count, isolated empty cells under eight-neighbor adjacency, footprint neighbors, footprint contact (including edges), and resulting occupancy. Version 1 models must be retrained because the contact features changed. The linear scorer uses a softmax imitation update on complete improved lessons, weighted by score delta. Training only accepts lessons from the training seed range and excludes non-improvements, incomplete candidates, invalid replays, and held-out episodes. `scripts/learn.rb correct` captures decision states visited by the learned policy and asks the bounded searcher for better continuations using training seeds. `scripts/benchmark.rb` can load a learned model and reports per-seed results and 95% mean confidence intervals.
 
 ### Acceptance criteria
 
@@ -162,7 +162,7 @@ Feature version 1 includes normalized tile area, one-hot tile type, cleared rows
 
 ## Milestone 6: fine-tune the policy with reinforcement learning
 
-**Status: complete**
+**Status: implementation complete; full held-out comparison running**
 
 ### Work
 
@@ -186,6 +186,13 @@ Run `bundle exec ruby scripts/learn.rb train-rl --model MODEL`. The trainer uses
 ## Milestone 7: integrate, compare, and document the learned auto mode
 
 **Status: implementation complete; 100-seed held-out pilot complete; full 2,000-seed evaluation remains**
+
+The November 1 audit verified the implementation and trained a compatible
+feature-version-2 imitation model plus a 10-episode RL checkpoint. The full
+2,000-seed comparison is running with four evaluation processes; final
+Milestone 6–7 results will follow in a separate commit. See
+[`learning_evaluation.md`](learning_evaluation.md) for completed checks,
+tuning-based selection and reproduction commands.
 
 ### Work
 

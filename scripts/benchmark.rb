@@ -9,6 +9,7 @@ require_relative "../lib/game_simulator"
 require_relative "../lib/learning_seed_sets"
 
 options = {strategies: AutoPlayer::STRATEGIES, max_moves: 100_000, models: {}}
+# rubocop:disable Metrics/BlockLength
 parser = OptionParser.new do |parser|
   parser.banner = "Usage: ruby scripts/benchmark.rb (--seeds 1..100 | --seed-set baseline) --output baseline.json"
   parser.on("--seeds LIST", "Comma-separated seeds or an inclusive range, e.g. 1,2,3 or 1..100") do |value|
@@ -28,13 +29,24 @@ parser = OptionParser.new do |parser|
   end
   parser.on("--output PATH", "Write the JSON report to PATH (required)") {|value| options[:output] = value }
   parser.on("--max-moves COUNT", Integer, "Safety limit per simulated episode") {|value| options[:max_moves] = value }
+  parser.on("--workers COUNT", Integer, "Parallel processes (default: 1)") {|value| options[:workers] = value }
   parser.on("--model PATH", "Learned policy model (required when learned strategy is selected)") do |value|
     options[:models][:learned] = value
   end
+  parser.on("--comparison-model NAME=PATH", "Add a named learned model to the same paired comparison") do |value|
+    name, path = value.split("=", 2)
+    if name.to_s.empty? || path.to_s.empty? || AutoPlayer::VALID_STRATEGIES.include?(name.to_sym)
+      raise OptionParser::InvalidArgument, "use a distinct model name and path: NAME=PATH"
+    end
+
+    options[:models][name.to_sym] = path
+  end
 end
+# rubocop:enable Metrics/BlockLength
 
 begin
   parser.parse!(ARGV)
+  options[:strategies] |= options[:models].keys - [:learned]
 
   raise OptionParser::MissingArgument, "--seeds is required" unless options[:seeds]
   raise OptionParser::MissingArgument, "--output is required" unless options[:output]
@@ -49,7 +61,14 @@ begin
   end
 
   report = GameBenchmark.run(seeds: options[:seeds], strategies: options[:strategies],
-                             max_moves: options[:max_moves], models: options[:models])
+                             max_moves: options[:max_moves], models: options[:models],
+                             workers: options.fetch(:workers, 1))
+  report[:workers] = options.fetch(:workers, 1)
+  report[:models] = options[:models].to_h do |name, path|
+    model = LearnedPlayer.load(path).model
+    [name, {path: File.expand_path(path), sha256: Digest::SHA256.hexdigest(JSON.generate(model)),
+            feature_version: model.fetch("feature_version")}]
+  end
   if options[:strategies].include?(:learned)
     best_heuristic = AutoPlayer::STRATEGIES.max_by do |strategy|
       report.fetch(:strategies).fetch(strategy).fetch(:metrics).fetch(:score).fetch(:mean)

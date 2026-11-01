@@ -63,6 +63,38 @@ class AutoPlayerTest < Minitest::Test
     assert_equal [1, 0, 0], AutoPlayer.new(:jc).choose_move(board)
   end
 
+  def test_codex_1_mobility_counts_remaining_tile_placements_without_mutating_board
+    board = Board1010.new(options: [Tile.fetch(:sq2), Tile.fetch(:dot)])
+    before = [board.cells.map(&:dup), board.options.dup, board.score]
+
+    mobility = AutoPlayer.new(:codex_1).send(:codex_1_mobility, board, 0, 0, 0)
+
+    assert_equal [1, [96], 96], mobility
+    assert_equal before, [board.cells, board.options, board.score]
+  end
+
+  def test_codex_1_chooses_the_tile_and_placement_that_preserve_more_options
+    board = Board1010.new(options: [Tile.fetch(:sq2), Tile.fetch(:dot)])
+    before = [board.cells.map(&:dup), board.options.dup, board.score]
+
+    move = AutoPlayer.new(:codex_1).choose_move(board)
+
+    assert_equal [0, 0, 0], move
+    assert_equal before, [board.cells, board.options, board.score]
+  end
+
+  def test_codex_sam_uses_codex_1_tile_choice_and_sam_placement
+    board = Board1010.new(options: [Tile.fetch(:sq2), Tile.fetch(:dot)])
+    codex_move = AutoPlayer.new(:codex_1).choose_move(board)
+    tile = board.options[codex_move.first]
+    sam_position = AutoPlayer.new(:sam).best_position(board, tile)
+
+    hybrid_move = AutoPlayer.new(:codex_sam).choose_move(board)
+
+    assert_equal codex_move.first, hybrid_move.first
+    assert_equal sam_position, hybrid_move.drop(1)
+  end
+
   def test_every_strategy_plays_whole_games
     AutoPlayer::STRATEGIES.each do |strategy|
       player = AutoPlayer.new(strategy, random: Random.new(1))

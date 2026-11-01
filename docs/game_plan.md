@@ -14,7 +14,7 @@ Do not describe the optimizer's best result as a proven maximum unless it exhaus
 ## Current code map and constraints
 
 - `board.rb` contains the rules, tile options, placement legality, score, line clearing, and deal generation. `Board1010#play` adds the tile's square count to the score.
-- `auto_player.rb` contains current strategies (`first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`). Most select a fitting option randomly before selecting a location; `codex_1` evaluates tile-placement pairs to preserve legal placements for the remaining current offer.
+- `auto_player.rb` contains current strategies (`first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam`). Most select a fitting option randomly before selecting a location; `codex_1` evaluates tile-placement pairs to preserve legal placements for the remaining current offer, and `codex_sam` combines that tile choice with Sam placement scoring.
 - `game_1010.rb` runs the graphical loop and records a seed plus move/undo records.
 - `game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `game_trace.rb` validates and replays v2 traces headlessly.
 - `game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.

@@ -107,7 +107,7 @@ class GameWindow < Gosu::Window
     "Drag a tile onto the board,",
     "or pick one (click or 1/2/3)",
     "and click a square.",
-    "O (hold): show best position",
+    "O (hold): show Sam placement hint",
     "U: undo       N: new game",
     "A: auto play  E: one auto move",
     "S: save       Q: save and quit",
@@ -149,6 +149,7 @@ class GameWindow < Gosu::Window
     @session = GameSession.new(auto: auto, strategy: strategy, seed: seed, replay_file: replay_file,
                                replay_delay: replay_delay, model: model,
                                clock: -> { Gosu.milliseconds })
+    @hint_player = AutoPlayer.new(:sam)
     @closing = false
     @message = nil
     case @session.initial_message
@@ -591,7 +592,7 @@ class GameWindow < Gosu::Window
     key = [@session.board.object_id, @session.board.score, @selected, tile]
     if @hint_cache_key != key
       @hint_cache_key = key
-      @hint_cache_value = @session.auto_player.best_position(@session.board, tile)
+      @hint_cache_value = @hint_player.best_position(@session.board, tile)
     end
     @hint_cache_value
   end

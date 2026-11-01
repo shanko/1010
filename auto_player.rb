@@ -9,7 +9,7 @@ require_relative "board"
 require_relative "learned_player"
 
 class AutoPlayer
-  STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam codex_1].freeze
+  STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam codex_1 codex_sam].freeze
   VALID_STRATEGIES = (STRATEGIES + [:learned]).freeze
   DEFAULT_STRATEGY = :sam
 
@@ -43,6 +43,7 @@ class AutoPlayer
   def choose_move(board)
     return @learned_player.choose_move(board, random: @random) if @learned_player
     return choose_codex_1_move(board) if @strategy == :codex_1
+    return choose_codex_sam_move(board) if @strategy == :codex_sam
 
     fitting = board.options.each_index.select {|index| board.fits_anywhere?(board.options[index]) }
     return nil if fitting.empty?
@@ -65,6 +66,8 @@ class AutoPlayer
       return positions.max_by {|row, col| codex_1_mobility(board, index, row, col, tile) }
     end
 
+    return sam(board, tile, positions) if @strategy == :codex_sam
+
     send(@strategy, board, tile, positions)
   end
 
@@ -78,6 +81,17 @@ class AutoPlayer
         [codex_1_mobility(board, index, row, col), [index, row, col]]
       end
     end.max_by(&:first)&.last
+  end
+
+  # Let Codex 1 choose the tile, then let Sam choose that tile's placement.
+  def choose_codex_sam_move(board)
+    codex_choice = choose_codex_1_move(board)
+    return unless codex_choice
+
+    index = codex_choice.first
+    tile = board.options[index]
+    row, col = sam(board, tile, board.positions_for(tile))
+    [index, row, col]
   end
 
   def codex_1_mobility(board, index, row, col, tile=nil)

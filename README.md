@@ -167,6 +167,8 @@ process.
 
 See [the full learning evaluation](docs/learning_evaluation.md) for the milestone
 audit, model-selection outcome, held-out comparison and reproduction commands.
+For repeated lesson collection, imitation training, resumable RL sessions and
+tuning comparisons, follow [the training workflow](docs/training_workflow.md).
 
 Start the graphical learned auto-player with the tuning-selected checkpoint:
 

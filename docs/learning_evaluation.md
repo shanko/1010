@@ -64,3 +64,40 @@ instead restart at step 0. `select --checkpoint PATH` deliberately overrides
 selection after tuning evaluation. Learned mode remains opt-in; run it with
 `./1010 auto learned --model learning_data/checkpoints/selected.json --seed 42`
 or use the default heuristic (Codex Sam) with `./1010 auto --seed 42`.
+
+## Session handoff — paused November 1
+
+The implementation is committed as `2968bfa`. The repeated-training guide is
+in [`training_workflow.md`](training_workflow.md); all nine shell blocks pass
+Bash and Zsh syntax checks. The user requested a pause before final evaluation
+finished. Do not mark Milestones 6–7 fully complete until the results are checked.
+
+The current evaluation was launched as process 24478 (tool session 92105).
+It was still running at 15:23 UTC on November 1. It has been left running;
+whether it survives closing this session depends on the execution environment.
+The models and completed training are already saved. On resuming, first check
+for `learning_data/held-out-2000-v2.json` and validate that it contains all
+2,000 seeds and all ten policies. If the process ended without producing that
+file, restart this exact evaluation without retraining:
+
+```sh
+bundle exec ruby scripts/benchmark.rb --seed-set held_out --workers 4 --strategies first_fit,last_fit,random_fit,shanko,jc,sam,codex_1,codex_sam,learned --model learning_data/checkpoints/selected.json --comparison-model reinforcement=learning_data/checkpoints/reinforce-step-10-20261101T141034457441Z.json --output learning_data/held-out-2000-v2.json
+```
+
+Saved artifacts:
+
+- Imitation model: `learning_data/models/imitation-v2.json`.
+- Training summary: `learning_data/rl-training-v2.json`.
+- Selected imitation checkpoint: `learning_data/checkpoints/reinforce-step-0-20261101T141006532822Z.json`.
+- Trained RL checkpoint: `learning_data/checkpoints/reinforce-step-10-20261101T141034457441Z.json`.
+- Selected pointer: `learning_data/checkpoints/selected.json`.
+- Baseline parity check: `learning_data/milestone-parity.json`.
+
+Remaining work: report score and game-length distributions for every policy,
+paired imitation-versus-strongest-heuristic and RL-versus-imitation differences
+with 95% intervals, and the separate 1,900-seed check excluding the old pilot.
+Document source/model fingerprints and the honest outcome in this file, update
+Milestone 6–7 statuses in `game_plan.md`, and commit the findings separately.
+Keep all generated models and full JSON data ignored. A draft report generator
+exists at `/tmp/build_1010_learning_report.py` if that temporary file survives;
+review its conclusions against the actual results before using it.

@@ -128,9 +128,112 @@ The models, checkpoints and full report are in the ignored
 See [the training workflow](training_workflow.md) for continued sessions and
 model selection.
 
+## Issue #33: stronger-teacher imitation
+
+The first new experiment used Codex Sam as the lesson baseline and search rollout
+policy. Of 400 training seeds (`1000000..1000399`), 304 yielded complete improved
+lessons, 96 found no improvement, and zero searches were time-capped. Feature
+version 2 imitation used seed 17, 20 epochs and learning rate 0.1. No code or
+heuristic behavior changed. See [the experiment record](issue33_experiments.md)
+for collection settings, tuning results and reproduction commands.
+
+On 500 tuning seeds (`2000000..2000499`), imitation scored 379.972 versus Codex
+Sam's 322.932: paired +57.040 (95% CI +36.069 to +78.011). The candidate was
+frozen before one final held-out evaluation; no corrective lessons, feature-v3
+or further RL experiments were run.
+
+### Final paired evaluation
+
+| Seeds | Games | Learned mean | Codex Sam mean | Paired gain | 95% CI | Wins / ties / losses |
+|---|---:|---:|---:|---:|---|---|
+| `3000000..3001999` | 2,000 | 375.503 | 328.572 | +46.931 | +36.873 to +56.989 | 1095 / 140 / 765 |
+| `3000100..3001999` | 1,900 | 374.472 | 329.707 | +44.765 | +34.379 to +55.151 | 1034 / 137 / 729 |
+
+Both intervals are entirely above zero. **Proposal for the maintainer: make
+this learned policy the default**, subject to deciding how its model artifact
+will be distributed or installed. The current default remains `codex_sam` until
+the maintainer decides; a clean checkout still requires no trained model.
+
+These held-out seeds were already used in earlier experiments. They were not
+newly untouched data: this run froze its candidate before evaluating them once,
+and no result from this evaluation was used to select another model or setting.
+The 1,900-seed subset excludes the original pilot, but was also used previously.
+The result supports improvement on this fixed evaluation set; confirmation on
+new seeds would be a separate preregistered evaluation.
+
+### Full-set distributions
+
+| Policy | Mean score | 95% CI for mean | Median | SD | P10 / P90 | Min / max | Mean placements |
+|---|---:|---|---:|---:|---|---|---:|
+| `first_fit` | 144.073 | 142.101 to 146.045 | 136 | 44.996 | 94 / 204 | 53 / 417 | 37.664 |
+| `last_fit` | 143.175 | 141.220 to 145.130 | 136 | 44.605 | 93 / 203 | 53 / 383 | 37.426 |
+| `random_fit` | 72.624 | 71.856 to 73.393 | 70 | 17.526 | 54 / 95 | 38 / 172 | 19.348 |
+| `shanko` | 126.814 | 124.838 to 128.789 | 118 | 45.069 | 78 / 185 | 42 / 390 | 33.358 |
+| `jc` | 176.583 | 174.025 to 179.142 | 164 | 58.374 | 117 / 253 | 78 / 488 | 46.179 |
+| `sam` | 282.606 | 277.034 to 288.177 | 252 | 127.136 | 155 / 456 | 87 / 1150 | 73.581 |
+| `codex_1` | 266.651 | 261.910 to 271.393 | 246 | 108.191 | 149 / 410 | 88 / 788 | 69.475 |
+| `codex_sam` | 328.572 | 321.726 to 335.419 | 296 | 156.227 | 171 / 520 | 77 / 1210 | 85.412 |
+| `learned` | 375.503 | 366.948 to 384.059 | 325 | 195.212 | 185 / 633 | 96 / 1581 | 97.618 |
+
+All eight heuristics reproduce the earlier full-set per-seed results exactly.
+The full report retains per-seed results, game-length distributions and all
+pairwise comparisons under ignored `learning_data/issue33/final/held-out.json`.
+The detached job exited 0 and verified the frozen model hash before and after
+benchmarking. Evaluation took about 2 minutes 32 seconds with 11 workers.
+
+| Provenance | Value |
+|---|---|
+| Source revision | `d25a570ccaacfd2282f4c947fd88cf14e9fa1c66` (clean compute checkout) |
+| Source SHA-256 | `056489be4602f524710a6c497e41d2a600a24e94344788cfaeee7eeb1723948e` |
+| Resolved model SHA-256 | `9347eed45cb853de582b01b0e5a4664a4f387ddd6da4710bb23a71d6fa16e3e4` |
+| Lesson-manifest SHA-256 | `ca8bb2d90c4266e862f31c6bbfe806b6538e04fd2d00c367fcb6bb43615a401c` |
+
+Reproduce evaluation with the archived frozen model (do not use another
+held-out run to select settings):
+
+```sh
+bundle exec ruby scripts/benchmark.rb --seed-set held_out --workers 11 --strategies first_fit,last_fit,random_fit,shanko,jc,sam,codex_1,codex_sam,learned --model learning_data/issue33/experiment1/models/imitation.json --output learning_data/issue33/final/reproduced.json
+```
+
+## Issue #33: stronger-teacher lessons — tuning-selected candidate
+
+The next experiment changed the lesson baseline and rollout strategy to `codex_sam`. It used the same training seed range `1000000..1000399`, action features v2, imitation seed 17, 20 epochs and learning rate 0.1. Search limits were beam width 4, 2,000 states, 8 rollouts, 2 rollouts per step and a 30-second safety cap. Collection retained 304 complete improved lessons from 400 episodes; 96 found no improvement within the rollout budget and none was time-capped. Training used 793,420 example presentations, with no lesson exclusions.
+
+All jobs ran detached on the designated compute machine. Source `d25a570` and the benchmark-source fingerprint `056489be4602f524710a6c497e41d2a600a24e94344788cfaeee7eeb1723948e` remained unchanged throughout collection, training, tuning and final evaluation. No heuristic or feature implementation changed.
+
+On paired tuning seeds `2000000..2000499` (500), the new model averaged **379.972** versus Codex Sam's **322.932**: **+57.040 (95% CI +36.069 to +78.011)**, 286 wins/40 ties/174 losses. Against the previously selected model on the same seeds, the gain was +33.576 (95% CI +11.315 to +55.837). The tuning result was [posted on #33](https://github.com/shanko/1010/issues/33#issuecomment-6565072047) before any held-out evaluation began.
+
+The qualifying model was frozen at resolved-model SHA-256 `9347eed45cb853de582b01b0e5a4664a4f387ddd6da4710bb23a71d6fa16e3e4`. The lesson manifest SHA-256 is `ca8bb2d90c4266e862f31c6bbfe806b6538e04fd2d00c367fcb6bb43615a401c`. No corrective-lesson, feature-v3 or longer-RL experiment was needed.
+
+The model then received **one final held-out evaluation**, against all eight heuristics. Every heuristic per-seed summary reproduced the prior report exactly, so the heuristic table above remains applicable.
+
+| Policy | Mean score | 95% CI for mean | Median | SD | P10 / P90 | Min / max |
+|---|---:|---|---:|---:|---|---|
+| Codex Sam | 328.573 | 321.726 to 335.419 | 296 | 156.227 | 171 / 520 | 77 / 1210 |
+| Stronger-teacher imitation | 375.504 | 366.948 to 384.059 | 325 | 195.212 | 185 / 633 | 96 / 1581 |
+
+| Paired candidate minus Codex Sam | Mean difference | 95% CI | Wins/ties/losses |
+|---|---:|---|---|
+| All 2,000 seeds (`3000000..3001999`) | +46.931 | +36.873 to +56.989 | 1095/140/765 |
+| 1,900 seeds after the pilot (`3000100..3001999`) | +44.765 | +34.379 to +55.151 | 1034/137/729 |
+
+The candidate's game length averaged 97.618 placements (95% CI 95.340 to 99.895), median 83, P10/P90 47/167, range 22–428. Codex Sam averaged 85.412 placements. Full score/game-length distributions and per-seed comparisons for all nine policies are in `learning_data/issue33/final/held-out.json`.
+
+**Conclusion:** this candidate beats Codex Sam with a paired 95% interval above zero on both required ranges, after passing the tuning gate. The full-sample mean gain is about 14.3%. These seed ranges were used in earlier experiments; they are not a newly untouched test set. For #33, the candidate and settings were frozen before reading its held-out scores, and the result was not used to start further training.
+
+**Default proposal for the maintainer:** the frozen model now meets #33's statistical criterion for considering learned mode as the default. Codex Sam remains the actual default until the maintainer approves a change and decides how to distribute/configure the model for clean checkouts. No model, checkpoint or lesson data is committed. The model is available locally and on the compute machine under the same repository-relative path.
+
+Try the exact candidate:
+
+```sh
+./1010 auto learned --model learning_data/issue33/experiment1/models/imitation.json --seed 42
+```
+
+Reproduction settings, the experiment sequence, tuning-only decisions and audit counts are recorded in [the #33 experiment log](issue33_experiments.md). The candidate model is `learning_data/issue33/experiment1/models/imitation.json`; the training summary and tuning report are beside it. The final report and artifacts remain ignored.
+
 ## Verification
 
-- Full Minitest suite: 159 tests, 911 assertions, no failures/errors/skips. RuboCop: 50 files, no offenses.
+- Full Minitest suite: 159 tests, 911 assertions, no failures/errors/skips. RuboCop: 51 files, no offenses.
 - Resumed RL training exactly matches an uninterrupted two-episode run.
 - Serial and parallel benchmark reports have identical policy statistics and pairwise results.
 - Missing-model tests use an empty temporary directory and pass with or without local trained models.

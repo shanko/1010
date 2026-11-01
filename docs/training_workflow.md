@@ -4,6 +4,10 @@ Run these commands from the repository root after `bundle install`. Training
 and search run headlessly; they do not belong in the graphical update loop.
 See [the evaluation report](learning_evaluation.md) for the measured results
 and [the objective](learning_objective.md) for scoring and seed definitions.
+Run long collection, training and benchmark commands on the designated compute
+machine, detached and logged as described in `agent_instructions.md` section 8.
+Do not run them locally as a fallback if remote access fails.
+
 More training is an experiment: promotion depends on tuning performance, not
 on the amount of compute spent or the best single game.
 
@@ -29,8 +33,12 @@ Choose another unused range within the training split. For example:
 
 ```sh
 mkdir -p learning_data/runs learning_data/models
-bundle exec ruby scripts/learn.rb collect-training --seeds 1000020..1000039 --strategy sam --max-states 2000 --max-rollouts 8 --beam-width 4 --budget 30 > learning_data/runs/collect-1000020-1000039.json
+bundle exec ruby scripts/learn.rb collect-training --seeds 1000020..1000039 --strategy codex_sam --max-states 2000 --max-rollouts 8 --beam-width 4 --budget 30 > learning_data/runs/collect-1000020-1000039.json
 ```
+
+Use `codex_sam` as the lesson baseline and rollout strategy: the #33 experiment
+produced a stronger model this way without changing action features. See
+[the experiment log](issue33_experiments.md) for its fixed settings and results.
 
 The output reports episodes, improvements found, complete improvements and
 lessons saved. Only complete, validated improvements are saved as training

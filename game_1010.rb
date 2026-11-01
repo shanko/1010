@@ -498,9 +498,14 @@ class GameWindow < Gosu::Window
 
   def option_under_mouse
     @session.board.options.each_index.find do |index|
-      rect = option_rect(index)
-      mouse_x.between?(rect[:x], rect[:x] + rect[:w]) && mouse_y.between?(rect[:y], rect[:y] + rect[:h])
+      option_contains_mouse?(index)
     end
+  end
+
+  def option_contains_mouse?(index)
+    rect = option_rect(index)
+    mouse_x.between?(rect[:x], rect[:x] + rect[:w]) &&
+      mouse_y.between?(rect[:y], rect[:y] + rect[:h])
   end
 
   # ---------------------------------------------------------------------------
@@ -528,29 +533,40 @@ class GameWindow < Gosu::Window
     now = Gosu.milliseconds
     @session.board.cells.each_with_index do |values, row|
       values.each_with_index do |value, col|
-        value = @animation.value_at(row, col, value, now) if @animation
-        tile_id = if @animation
-                    @animation.tile_id_at(row, col, @session.board.tile_ids[row][col],
-                                          now)
-                  else
-                    @session.board.tile_ids[row][col]
-                  end
-        draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value, tile_id))
+        draw_board_cell(row, col, value, now)
       end
     end
   end
 
+  def draw_board_cell(row, col, value, now)
+    value = @animation.value_at(row, col, value, now) if @animation
+    tile_id = board_tile_id(row, col, now)
+    draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value, tile_id))
+  end
+
+  def board_tile_id(row, col, now)
+    tile_id = @session.board.tile_ids[row][col]
+    @animation ? @animation.tile_id_at(row, col, tile_id, now) : tile_id
+  end
+
   def draw_options
     @session.board.options.each_with_index do |tile, index|
-      rect   = option_rect(index)
-      line_y = rect[:y] - OPTION_LINE_ABOVE
-      Gosu.draw_line(rect[:x], line_y, COLORS[:option_line],
-                     rect[:x] + OPTION_LINE_LENGTH, line_y, COLORS[:option_line], Z_CELLS)
-
-      color = COLORS[:selected] if index == @selected # the original turned the selected tile yellow
-      draw_tile(tile, rect[:x], rect[:y], size: OPTION_CELL_SIZE, gap: OPTION_CELL_GAP,
-                                          corner: OPTION_CORNER, color: color)
+      draw_option(tile, index)
     end
+  end
+
+  def draw_option(tile, index)
+    rect = option_rect(index)
+    draw_option_line(rect)
+    color = COLORS[:selected] if index == @selected # the original turned the selected tile yellow
+    draw_tile(tile, rect[:x], rect[:y], size: OPTION_CELL_SIZE, gap: OPTION_CELL_GAP,
+                                        corner: OPTION_CORNER, color: color)
+  end
+
+  def draw_option_line(rect)
+    line_y = rect[:y] - OPTION_LINE_ABOVE
+    Gosu.draw_line(rect[:x], line_y, COLORS[:option_line],
+                   rect[:x] + OPTION_LINE_LENGTH, line_y, COLORS[:option_line], Z_CELLS)
   end
 
   # While dragging, the tile follows the mouse with its anchor square at the pointer.

@@ -9,8 +9,9 @@
 # dealer. A strictly better trace becomes the new base for the next round.
 # Stops early after --patience consecutive failures.
 #
-# On the seed-4152104760 study stream this climbed 5,644 -> 18,781 before the
-# per-round gains tapered to a few hundred points.
+# On the seed-4152104760 game, the same approach with six splices tried in
+# parallel each round climbed 5,505 -> 34,944 in ten rounds, and the next two
+# found nothing better. See samples/improved_score_34944.moves.
 #
 # Usage:
 #   bundle exec ruby scripts/iterate_improve.rb START.moves [options]

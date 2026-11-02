@@ -11,8 +11,8 @@ require_relative "learned_player"
 class AutoPlayer
   STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam codex_1 codex_sam].freeze
   VALID_STRATEGIES = (STRATEGIES + [:learned]).freeze
-  # Promoted after #33: learned - codex_sam = +46.93 points/game
-  # (95% CI +36.87 to +56.99) on the fixed 2,000-seed evaluation set.
+  # Demonstration-guided calibration: learned - prior release = +43.62
+  # (95% CI +31.53 to +55.70) on 2,000 new test seeds.
   DEFAULT_STRATEGY = :learned
   DEFAULT_MODEL_PATH = File.expand_path("../models/learned.json", __dir__).freeze
   # Search rollouts and lesson analysis run many full games, so they keep the

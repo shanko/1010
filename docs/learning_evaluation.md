@@ -185,3 +185,12 @@ Promotion verification: 161 tests, 915 assertions, zero failures/errors/skips;
 RuboCop passes. `benchmarks/baseline-v5.json` records the bundled policy on
 baseline seeds 1–100 and preserves all eight heuristic per-seed results from
 v4 exactly. The release model checksum matches the frozen #33 candidate.
+
+## Best-score demonstration follow-up
+
+The [best-score study](best_score_study.md) subsequently calibrated wall contact
+from the maintainer's 1,184-point recording. After separate tuning confirmation,
+the frozen candidate gained +43.615 points/game over the #33 release (95% CI
++31.528 to +55.702) on new test seeds `4000000..4001999`. It is now bundled
+under the same `learned` name. That test range is consumed; further selection
+must not use its results. See `models/README.md` for the current model checksum.

@@ -52,3 +52,12 @@ bundle exec ruby scripts/benchmark.rb --seeds 1..100 --workers 4 --strategies fi
 The committed v5 report uses repository-relative model paths to avoid publishing
 machine-specific paths. Its source fingerprint and model checksum identify the
 evaluated code and weights.
+
+`baseline-v6.json` records the demonstration-guided wall calibration of
+`learned`. All eight heuristic per-seed results still match v4 and v5 exactly.
+The model hash identifies the new release; model paths are normalized to the
+bundled path and its JSON file checksum reflects the packaged trailing newline.
+Generation used the frozen candidate with the same command as v5, before
+packaging (the source revision and source fingerprint record that checkout).
+See [the best-score study](../docs/best_score_study.md) for independent tuning
+confirmation and the one final evaluation on newly reserved test seeds.

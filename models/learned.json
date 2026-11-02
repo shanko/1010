@@ -42,8 +42,8 @@
     "largest_empty_region": 1.4644908993381847,
     "empty_region_count": -7.102406391626869,
     "isolated_empty_cells": -2.8353309998682197,
-    "filled_neighbours": 1.067481096817443,
-    "edge_cells": 35.58022725517943,
+    "filled_neighbours": 9.962537910612301,
+    "edge_cells": 26.68517044138457,
     "occupied_fraction": -1.6854351385682287,
     "tile_dot": 1.259880238080483,
     "tile_hl2": -0.9194629973303273,
@@ -66,11 +66,11 @@
     "tile_tr3": 1.685821454687036
   },
   "training": {
-    "seed_set": "training",
-    "random_seed": 17,
-    "epochs": 20,
-    "learning_rate": 0.1,
-    "episodes_used": 304,
-    "examples_seen": 793420
+    "method": "demonstration_guided_wall_calibration",
+    "parent_sha256": "9347eed45cb853de582b01b0e5a4664a4f387ddd6da4710bb23a71d6fa16e3e4",
+    "demonstration_sha256": "4de0d6f03f8b0f0fd99b4e9a68639eac1cf87ee078ab00bec78c5efecefa3871",
+    "source_seed": 1009413778,
+    "wall_contact_multiplier": 0.75,
+    "occupied_contact_coefficient_preserved": true
   }
 }

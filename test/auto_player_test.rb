@@ -13,7 +13,7 @@ class AutoPlayerTest < Minitest::Test
 
   def test_bundled_model_is_the_frozen_evaluated_candidate
     model = LearnedPlayer.load(AutoPlayer::DEFAULT_MODEL_PATH).model
-    assert_equal "9347eed45cb853de582b01b0e5a4664a4f387ddd6da4710bb23a71d6fa16e3e4",
+    assert_equal "4a06731303861400f195484161d1d974a077bc75e2f439aed19b23114f371203",
                  Digest::SHA256.hexdigest(JSON.generate(model))
     board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:sq2)])
     expected = AutoPlayer.new(:learned, model: model, random: Random.new(5)).choose_move(board)

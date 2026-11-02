@@ -204,7 +204,9 @@ points over Codex Sam on all 2,000 held-out seeds (95% CI +36.87 to +56.99),
 and +44.76 on the 1,900 seeds after the pilot (95% CI +34.38 to +55.15).
 The candidate and settings were frozen before its single final evaluation.
 The maintainer subsequently approved promotion as `learned`; the evaluated
-model is bundled at `models/learned.json` and is now the default. See [`issue33_experiments.md`](issue33_experiments.md).
+model is bundled at `models/learned.json` and is now the default. A subsequent
+[best-score study](best_score_study.md) calibrated wall preference and improved
+the bundled release on newly reserved test seeds. See [`issue33_experiments.md`](issue33_experiments.md).
 
 ### Work
 

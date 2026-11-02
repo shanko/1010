@@ -178,11 +178,14 @@ seeds. Continue using consistent tuning lists within an experiment.
 
 ## 6. Freeze, evaluate once, then play
 
+The best-score study has consumed `4000000..4001999` for its frozen final
+evaluation. Keep those seeds out of future training and settings selection.
+
 Choose models and settings using tuning results before inspecting new test
 results. For future experiments, reserve a new test-only range in advance;
-for example `4000000..4001999` is outside all current training and tuning
+for example `5000000..5001999` is outside all current training and tuning
 ranges. Record that reservation and keep it out of all learning decisions.
-Run the final comparison with `--seeds 4000000..4001999` instead of the tuning
+Run the final comparison with `--seeds 5000000..5001999` instead of the tuning
 range in the preceding benchmark command. Use a new output filename and
 retain the report with its model/source fingerprints. That custom range is
 supplied with `--seeds`; the predefined `--seed-set held_out` still denotes

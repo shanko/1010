@@ -95,6 +95,21 @@ $ ./1010 auto jc --seed 42   # the same games every time
 $ ./1010 logs/20261030-123456-1234-567.moves # replay a logged game
 ```
 
+To skip the window and animation, add `--headless`. It plays one game unless
+you give `--games`, then exits, and does not need gosu:
+
+```sh
+$ ./1010 --headless                           # one game with the default player
+$ ./1010 --headless sam --games 10 --seed 42  # the same games every time
+```
+
+It prints each game's score and log file, then the mean, minimum and maximum.
+Every game is logged to `logs/`, so you can replay it in the window. It never
+reads or changes your saved game, so its games match `./1010 auto sam --seed 42`
+only when no saved game exists; the window continues a saved game first. To
+compare strategies across many seeds, use
+`scripts/benchmark.rb`, which reports paired results and writes no logs.
+
 Auto mode prints one line when each game ends, then a run summary when you
 quit. Run time excludes the half-second restart pause; total time includes it.
 

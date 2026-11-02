@@ -6,10 +6,18 @@
 #   ./1010 auto                the computer plays, game after game
 #   ./1010 auto sam --seed 42  pick the computer's strategy, and repeat the same games
 #   ./1010 auto learned --model learning_data/checkpoints/selected.json
+#   ./1010 --headless --games 10   the computer plays without a window
 #
 # The rules live in lib/board.rb, the computer player in lib/auto_player.rb,
 # and the move animation in lib/move_animation.rb. This file only reads input,
 # updates state and draws.
+
+# Headless play must work on machines without Gosu, so it branches off first.
+if __FILE__ == $PROGRAM_NAME && ARGV.include?("--headless")
+  require_relative "../lib/headless_game"
+  exit HeadlessGame.main(ARGV)
+end
+
 begin
   require "gosu"
 rescue LoadError => e
@@ -692,7 +700,7 @@ if __FILE__ == $PROGRAM_NAME
     window = GameWindow.new(**GameWindow.options_from(ARGV))
   rescue ArgumentError, SystemCallError => e
     warn "1010: #{e.message}"
-    warn "Usage: ./1010 [auto [strategy]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]"
+    warn GameOptions::USAGE
     exit 2
   end
   window.show

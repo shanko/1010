@@ -4,13 +4,21 @@ require_relative "auto_player"
 
 # Command-line options for the graphical front end, kept independent of Gosu.
 class GameOptions
+  USAGE = <<~TEXT.chomp.freeze
+    Usage: ./1010 [auto [strategy]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]
+           ./1010 --headless [strategy] [--games N] [--seed N] [--model PATH]
+  TEXT
+
   def self.parse(argv)
     args = argv.dup
     options = {}
     parse_seed(args, options)
     parse_delay(args, options)
     parse_model(args, options)
+    parse_games(args, options)
+    options[:headless] = true if args.delete("--headless")
     parse_positionals(args, options)
+    validate_headless(options)
     validate_strategy(options)
     raise ArgumentError, "unexpected command line arguments: #{args.join(' ')}" unless args.empty?
 
@@ -58,12 +66,33 @@ class GameOptions
     args.slice!(model_at, 2)
   end
 
+  def self.parse_games(args, options)
+    games_at = args.index("--games")
+    return unless games_at
+
+    options[:games] = Integer(args[games_at + 1].to_s, exception: false)
+    raise ArgumentError, "--games requires a positive integer" unless options[:games]&.positive?
+
+    args.slice!(games_at, 2)
+  end
+
   def self.parse_positionals(args, options)
     replay_at = args.index {|arg| arg.end_with?(".moves") }
     options[:replay_file] = args.delete_at(replay_at) if replay_at
 
     options[:auto] = !args.delete("auto").nil?
     options[:strategy] = args.shift unless args.empty?
+  end
+
+  # Headless play has nobody to take a turn, so it is always auto mode.
+  def self.validate_headless(options)
+    raise ArgumentError, "--games requires --headless" if options[:games] && !options[:headless]
+    return unless options[:headless]
+
+    raise ArgumentError, "--headless cannot replay a .moves file" if options[:replay_file]
+    raise ArgumentError, "--headless has no animation, so --delay does not apply" if options[:replay_delay]
+
+    options[:auto] = true
   end
 
   def self.validate_strategy(options)
@@ -75,5 +104,6 @@ class GameOptions
 
     raise ArgumentError, "learned model does not exist: #{options[:model]}"
   end
-  private_class_method :parse_seed, :parse_delay, :parse_model, :parse_positionals, :validate_strategy
+  private_class_method :parse_seed, :parse_delay, :parse_model, :parse_games, :parse_positionals,
+                       :validate_headless, :validate_strategy
 end

@@ -10,8 +10,9 @@ class BoardTest < Minitest::Test
 
   # --- Tiles ------------------------------------------------------------------
 
-  def test_there_are_19_tiles
+  def test_there_are_19_tiles_and_8_small_ones
     assert_equal 19, Tile::ALL.size
+    assert_equal 8, Board1010::SMALL_TILES.compact.size
   end
 
   def test_anchor_is_the_first_filled_square_of_the_top_row
@@ -166,13 +167,14 @@ class BoardTest < Minitest::Test
     assert_equal first, second
   end
 
-  def test_the_board_never_changes_the_tiles_dealt
-    full = Board1010.new(random: Random.new(42))
-    Board1010::ROWS.times {|row| fill_row(full, row) }
-    full.cells[0][0] = Board1010::EMPTY # room for a dot only
-    empty = Board1010.new(random: Random.new(42))
+  def test_a_small_tile_is_swapped_in_when_nothing_dealt_fits
+    board = Board1010.new
+    Board1010::ROWS.times {|row| fill_row(board, row) }
+    board.cells[0][0] = board.cells[0][1] = Board1010::EMPTY # room for hl2 (or a dot)
 
-    20.times { assert_equal empty.generate_options, full.generate_options }
+    20.times do
+      assert(board.generate_options.any? {|tile| board.fits_anywhere?(tile) })
+    end
   end
 
   def test_game_over_when_no_option_fits

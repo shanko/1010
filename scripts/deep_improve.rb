@@ -8,7 +8,9 @@
 # Method: replay the first --prefix moves of the recorded game on the natural
 # seeded dealer. A seed-consistent trace's deals are regenerated identically,
 # so the board's RNG ends in exactly the right position for the dealer to
-# deal every set after the splice.
+# deal every set after the splice. Those sets are not taken from the recorded
+# game: when no tile of a set fits, the dealer swaps one for a small tile, and
+# that swap belongs to the board it was dealt on, not to the searched one.
 # ImprovementSearch then explores the tail with a real rollout budget —
 # GameImprover caps rollouts at min(states, 100), which stops the beam near
 # depth ~50 and cannot reach a ~200-move Game Over. Here the beam walks far

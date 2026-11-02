@@ -10,11 +10,16 @@ require_relative "../lib/game_session"
 class TraceScriptsTest < Minitest::Test
   DEEP_IMPROVE = File.expand_path("../scripts/deep_improve.rb", __dir__)
   VERIFY_TRACE = File.expand_path("../scripts/verify_trace.rb", __dir__)
+  # This first_fit game ends on a set where the dealer swapped br3 for hl2,
+  # because none of its tiles fit that board.
   SEED = 2
+  SWAPPED_SET = 10
 
-  def test_an_improved_trace_is_a_game_its_seed_deals
+  def test_a_recorded_swap_is_not_carried_onto_a_different_board
     Dir.mktmpdir do |directory|
       source = write_game(directory)
+      assert_equal :hl2, GameTrace.read(source).deal_batches.fetch(SWAPPED_SET).first.to_sym
+
       output = File.join(directory, "improved.moves")
       stdout, stderr, status = run_script(DEEP_IMPROVE, source, "--prefix", "0", "--states", "3000",
                                           "--rollouts", "40", "--output", output)
@@ -22,7 +27,7 @@ class TraceScriptsTest < Minitest::Test
       assert status.success?, stderr
       assert_match "wrote", stdout
       improved = GameTrace.read(output)
-      assert_operator improved.final_score, :>, GameTrace.read(source).final_score
+      assert_operator improved.deal_batches.size, :>, SWAPPED_SET + 1
       assert_equal({consistent: true, reason: nil}, GameImprover.new.validate_seed(improved))
     end
   end

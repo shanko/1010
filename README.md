@@ -92,6 +92,7 @@ $ bundle exec ruby scripts/terminal_game.rb
 $ ./1010 auto
 $ ./1010 auto sam            # choose the strategy
 $ ./1010 auto jc --seed 42   # the same games every time
+$ ./1010 auto --games 10     # stop after 10 games and leave the last board up
 $ ./1010 logs/20261030-123456-1234-567.moves # replay a logged game
 ```
 

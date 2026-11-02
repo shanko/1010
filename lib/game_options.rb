@@ -5,7 +5,7 @@ require_relative "auto_player"
 # Command-line options for the graphical front end, kept independent of Gosu.
 class GameOptions
   USAGE = <<~TEXT.chomp.freeze
-    Usage: ./1010 [auto [strategy]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]
+    Usage: ./1010 [auto [strategy] [--games N]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]
            ./1010 --headless [strategy] [--games N] [--seed N] [--model PATH]
   TEXT
 
@@ -19,6 +19,7 @@ class GameOptions
     options[:headless] = true if args.delete("--headless")
     parse_positionals(args, options)
     validate_headless(options)
+    validate_games(options)
     validate_strategy(options)
     raise ArgumentError, "unexpected command line arguments: #{args.join(' ')}" unless args.empty?
 
@@ -86,13 +87,19 @@ class GameOptions
 
   # Headless play has nobody to take a turn, so it is always auto mode.
   def self.validate_headless(options)
-    raise ArgumentError, "--games requires --headless" if options[:games] && !options[:headless]
     return unless options[:headless]
 
     raise ArgumentError, "--headless cannot replay a .moves file" if options[:replay_file]
     raise ArgumentError, "--headless has no animation, so --delay does not apply" if options[:replay_delay]
 
     options[:auto] = true
+  end
+
+  def self.validate_games(options)
+    return unless options[:games]
+
+    raise ArgumentError, "--games requires auto or --headless" unless options[:auto]
+    raise ArgumentError, "--games cannot be used when replaying a .moves file" if options[:replay_file]
   end
 
   def self.validate_strategy(options)
@@ -105,5 +112,5 @@ class GameOptions
     raise ArgumentError, "learned model does not exist: #{options[:model]}"
   end
   private_class_method :parse_seed, :parse_delay, :parse_model, :parse_games, :parse_positionals,
-                       :validate_headless, :validate_strategy
+                       :validate_headless, :validate_games, :validate_strategy
 end

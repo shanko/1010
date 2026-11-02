@@ -141,7 +141,53 @@ class GameSessionTest < Minitest::Test
     end
   end
 
+  def test_auto_stops_after_the_requested_games_and_leaves_the_last_board
+    with_session(auto: true, strategy: :sam, seed: 42, games: 2) do |session, directory|
+      now = play_until_finished(session)
+
+      assert session.game_over
+      assert_equal 2, session.auto_run_tracker.completed_count
+      board = session.board
+      assert_nil session.tick(now: now + 10_000_000)
+      assert_same board, session.board
+      assert_equal 2, Dir[File.join(directory, "*.moves")].size
+    end
+  end
+
+  def test_auto_without_a_game_count_keeps_restarting
+    with_session(auto: true, strategy: :sam, seed: 42) do |session, _directory|
+      session.auto_move until session.game_over
+      refute session.auto_games_finished?
+      assert_equal :restarted, session.tick(now: 10_000_000)
+    end
+  end
+
+  def test_abandoned_games_do_not_count_and_a_new_game_still_plays_after_the_limit
+    with_session(auto: true, strategy: :sam, seed: 42, games: 1) do |session, _directory|
+      session.auto_move
+      session.new_game
+      assert_equal 0, session.auto_run_tracker.completed_count
+      refute session.auto_games_finished?
+
+      play_until_finished(session)
+      assert session.auto_games_finished?
+      session.new_game
+      refute session.game_over
+      assert_instance_of Board1010::Move, session.tick(now: 0)
+    end
+  end
+
   private
+
+  # The injected clock stays at 0, so `now` is what passes the restart pause.
+  def play_until_finished(session)
+    now = 0
+    until session.auto_games_finished?
+      session.tick(now: now)
+      now += GameSession::AUTO_RESTART_MS
+    end
+    now
+  end
 
   def replay_trace
     board = Board1010.new(options: [Tile.fetch(:dot), Tile.fetch(:hl2)])

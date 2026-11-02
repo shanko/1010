@@ -40,10 +40,11 @@ class GameSession
               :seed, :strategy, :replay_delay_ms, :last_move, :initial_message, :move_count
 
   def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil,
-                 replay_file: nil, replay_delay: DEFAULT_REPLAY_DELAY_SECONDS, model: nil,
+                 replay_file: nil, replay_delay: DEFAULT_REPLAY_DELAY_SECONDS, model: nil, games: nil,
                  clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) * 1000.0 },
                  save_store: SaveStore.new, log_directory: GameLog::DIRECTORY,
                  logger_factory: ->(**options) { GameLog.new(**options) })
+    @games = games
     initialize_dependencies(clock, save_store, log_directory, logger_factory)
     initialize_policy(auto, strategy, seed, model)
     initialize_state(replay_delay)
@@ -188,10 +189,16 @@ class GameSession
 
   def auto_step(now)
     return auto_move unless @game_over
-    return if now < @ended_at + AUTO_RESTART_MS
+    return if auto_games_finished? || now < @ended_at + AUTO_RESTART_MS
 
     new_game
     :restarted
+  end
+
+  # True once auto mode has completed the requested number of games. Games
+  # abandoned with N or by turning auto off do not count.
+  def auto_games_finished?
+    !@games.nil? && @auto_run_tracker.completed_count >= @games
   end
 
   def toggle_auto

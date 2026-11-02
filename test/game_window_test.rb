@@ -21,6 +21,12 @@ class GameWindowTest < Minitest::Test
     assert_equal :start_playback, actions.fetch(Gosu::KB_P)
   end
 
+  def test_window_accepts_every_auto_mode_option
+    parameters = GameWindow.instance_method(:initialize).parameters
+
+    assert_includes parameters, %i[key games]
+  end
+
   def test_player_keys_and_option_keys_map_to_expected_actions
     assert_equal :auto_move, GameWindow::PLAYER_ACTIONS.fetch(Gosu::KB_E)
     assert_equal :undo, GameWindow::PLAYER_ACTIONS.fetch(Gosu::KB_U)

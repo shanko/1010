@@ -6,6 +6,7 @@
 #   ./1010 auto                the computer plays, game after game
 #   ./1010 auto sam --seed 42  pick the computer's strategy, and repeat the same games
 #   ./1010 auto learned --model learning_data/checkpoints/selected.json
+#   ./1010 auto --games 10     stop after 10 games and leave the last board up
 #   ./1010 --headless --games 10   the computer plays without a window
 #
 # The rules live in lib/board.rb, the computer player in lib/auto_player.rb,
@@ -157,14 +158,14 @@ class GameWindow < Gosu::Window
 
   # A recorded game: the seed that deals its tiles, and the moves and undos made.
   def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, replay_file: nil,
-                 replay_delay: REPLAY_DELAY_SECONDS, model: nil)
+                 replay_delay: REPLAY_DELAY_SECONDS, model: nil, games: nil)
     super(WIDTH, HEIGHT, fullscreen: false)
     self.caption = "1010!"
     initialize_fonts
 
     @strategy = strategy.to_sym
     @session = GameSession.new(auto: auto, strategy: strategy, seed: seed, replay_file: replay_file,
-                               replay_delay: replay_delay, model: model,
+                               replay_delay: replay_delay, model: model, games: games,
                                clock: -> { Gosu.milliseconds })
     @hint_player = AutoPlayer.new(:sam)
     @closing = false
@@ -625,10 +626,16 @@ class GameWindow < Gosu::Window
     score += "     Game Over!" if @session.game_over
     @score_font.draw_text(score, TEXT_X, SCORE_Y, Z_TEXT, 1, 1, COLORS[:text])
 
-    if @session.game_over && !@session.auto
-      @score_font.draw_text("N to start new game, ESC to Quit", TEXT_X, STATUS_Y, Z_TEXT, 1, 1, COLORS[:text])
-    end
+    status = status_text
+    @score_font.draw_text(status, TEXT_X, STATUS_Y, Z_TEXT, 1, 1, COLORS[:text]) if status
     @small_font.draw_text(@message[:text], TEXT_X, MESSAGE_Y, Z_TEXT, 1, 1, COLORS[:text]) if @message
+  end
+
+  def status_text
+    return unless @session.game_over
+    return "N to start new game, ESC to Quit" unless @session.auto
+
+    "All games done, ESC to Quit" if @session.auto_games_finished?
   end
 
   # A blinking red triangle while a game is being recorded.

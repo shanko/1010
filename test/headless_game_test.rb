@@ -74,9 +74,15 @@ class HeadlessGameTest < Minitest::Test
     refute GameOptions.parse(%w[auto sam]).key?(:headless)
   end
 
-  def test_rejects_options_that_do_not_apply_to_headless_play
-    {%w[--games 2 sam] => "--games", %w[--headless --games] => "--games", %w[--headless --games 0] => "--games",
-     %w[--headless --games x] => "--games", %w[--headless --delay 1] => "--delay",
+  def test_games_also_works_with_the_window_auto_mode
+    assert_equal({auto: true, games: 10}, GameOptions.parse(%w[auto --games 10]).slice(:auto, :games))
+    refute GameOptions.parse(%w[auto --games 10]).key?(:headless)
+  end
+
+  def test_rejects_options_that_do_not_apply
+    {%w[--games 2 sam] => "requires auto", %w[--games 2] => "requires auto", %w[auto --games] => "--games",
+     %w[auto --games 0] => "--games", %w[auto --games x] => "--games", %w[auto --games 2 a.moves] => "replaying",
+     %w[--headless --games] => "--games", %w[--headless --delay 1] => "--delay",
      %w[--headless a.moves] => ".moves"}.each do |args, message|
       error = assert_raises(ArgumentError, args.join(" ")) { GameOptions.parse(args) }
       assert_includes error.message, message

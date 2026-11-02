@@ -161,6 +161,28 @@ $ ./1010 --delay 0.5 logs/<game>.improved.moves
 Add `--save-lesson` to store a lesson from the improved trace under
 `learning_data/`.
 
+For a deeper improvement pass, `scripts/deep_improve.rb` replays a recorded
+prefix on the seeded dealer and re-searches the tail with a real rollout
+budget — `learn.rb improve` caps rollouts at 100, which stops its beam near
+depth 50 and cannot reach a ~200-move Game Over. The splice point decides how
+much of the recorded game to keep; the search is deterministic per splice
+point, so results vary with it. On one recorded 930-point game, a mid-game
+splice scored 5,644 on the same offers, and iterating late splices with
+`scripts/iterate_improve.rb` reached 18,781 before gains tapered:
+
+```sh
+$ bundle exec ruby scripts/score_progression.rb logs/<game>.moves    # pick a splice point
+$ bundle exec ruby scripts/deep_improve.rb logs/<game>.moves --prefix 140
+$ bundle exec ruby scripts/iterate_improve.rb logs/<game>.improved.moves
+```
+
+`iterate_improve.rb` walks the splice fraction down after each failed round
+(a fresh dice roll needs a different point) and keeps each strictly better
+trace as the new base. Two smaller study utilities: `scripts/eval_seed.rb`
+plays chosen strategies against a trace's exact dealer seed, and
+`scripts/verify_trace.rb` replays traces and checks them against their
+declared scores.
+
 Train a deterministic imitation model from completed, improved lessons whose
 source seeds are in the training range. The trainer rejects held-out lessons,
 and ignores incomplete or non-improving search results:

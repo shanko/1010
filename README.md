@@ -166,9 +166,11 @@ prefix on the seeded dealer and re-searches the tail with a real rollout
 budget — `learn.rb improve` caps rollouts at 100, which stops its beam near
 depth 50 and cannot reach a ~200-move Game Over. The splice point decides how
 much of the recorded game to keep; the search is deterministic per splice
-point, so results vary with it. On one recorded 930-point game, a mid-game
-splice scored 5,644 on the same offers, and iterating late splices with
-`scripts/iterate_improve.rb` reached 18,781 before gains tapered:
+point, so results vary with it. Every set after the splice is dealt on the
+searched board, so a result is a game the seed could really deal. On one
+recorded 930-point game, a mid-game splice scored 5,644 on the same seed, and
+iterating late splices with `scripts/iterate_improve.rb` reached 18,781 before
+gains tapered:
 
 ```sh
 $ bundle exec ruby scripts/score_progression.rb logs/<game>.moves    # pick a splice point
@@ -181,7 +183,7 @@ $ bundle exec ruby scripts/iterate_improve.rb logs/<game>.improved.moves
 trace as the new base. Two smaller study utilities: `scripts/eval_seed.rb`
 plays chosen strategies against a trace's exact dealer seed, and
 `scripts/verify_trace.rb` replays traces and checks them against their
-declared scores.
+declared scores and seeded dealer.
 
 Train a deterministic imitation model from completed, improved lessons whose
 source seeds are in the training range. The trainer rejects held-out lessons,

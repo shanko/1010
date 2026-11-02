@@ -15,10 +15,6 @@ class Board1010
   # Where the window and the terminal game keep a saved game.
   SAVE_FILE = "1010game.txt"
 
-  # When none of the tiles dealt fit, the first one is swapped for the first
-  # of these that does.
-  SMALL_TILES = %i[hl2 vl2 sq2 bl2 tl2 br2 tr2 dot].map {|name| Tile.fetch(name) }.freeze
-
   # [row, col] steps to the 8 squares around a square.
   NEIGHBOUR_OFFSETS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].freeze
   NEIGHBOUR_MASKS = Array.new(ROWS) {|row|
@@ -101,15 +97,9 @@ class Board1010
     @options = tiles.dup
   end
 
-  # 3 random tiles. If none of them fit anywhere, the first one is swapped for
-  # a small tile that does fit.
+  # 3 random tiles, whatever is on the board. If none of them fit, the game is over.
   def generate_options
-    tiles = Array.new(OPTIONS) { Tile::ALL.sample(random: @random) }
-    return tiles if tiles.any? {|tile| fits_anywhere?(tile) }
-
-    small = SMALL_TILES.find {|tile| fits_anywhere?(tile) }
-    tiles[0] = small if small
-    tiles
+    Array.new(OPTIONS) { Tile::ALL.sample(random: @random) }
   end
 
   # ---------------------------------------------------------------------------

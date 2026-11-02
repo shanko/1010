@@ -8,13 +8,14 @@
 # Method: replay the first --prefix moves of the recorded game on the natural
 # seeded dealer. A seed-consistent trace's deals are regenerated identically,
 # so the board's RNG ends in exactly the right position for the dealer to
-# continue dealing the recorded offers (and then fresh ones) after the splice.
+# deal every set after the splice.
 # ImprovementSearch then explores the tail with a real rollout budget —
 # GameImprover caps rollouts at min(states, 100), which stops the beam near
 # depth ~50 and cannot reach a ~200-move Game Over. Here the beam walks far
 # enough that rollout completions can outscore the recorded ending. The
 # prefix moves plus the searched tail are merged into one legal sequence and
-# written with GameImprover's own trace writer, then verified by replay.
+# written with GameImprover's own trace writer, then verified by replay and
+# against the seeded dealer.
 #
 # Usage:
 #   bundle exec ruby scripts/deep_improve.rb logs/<game>.moves [options]
@@ -102,14 +103,18 @@ puts "baseline: #{baseline_score} points, #{sequence.size} moves, " \
 
 # Replay the recorded prefix with deal_if_needed: seed consistency means the
 # generated batches are the recorded ones, so the board RNG lands in the right
-# position for the seeded continuation after the recorded offers run out.
+# position for the dealer to continue after the splice. A trace that left the
+# dealer can only be spliced before that point.
 board = Board1010.new(random: Random.new(Integer(trace.seed)))
 board.deal_if_needed
 prefix = options[:prefix].clamp(0, sequence.size)
 offer_index = 0
-sequence.first(prefix).each do |move|
-  played = board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col))
-  raise "prefix move #{move.inspect} illegal" unless played
+sequence.first(prefix).each_with_index do |move, index|
+  dealt = board.options[move.fetch(:option)]&.name == move.fetch(:tile)
+  unless dealt && board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col))
+    reason = GameImprover.new.validate_seed(trace).fetch(:reason)
+    abort "#{trace_path} left the seeded dealer by move #{index + 1} (#{reason}); use a smaller --prefix"
+  end
 
   offer_index += 1 if board.options.size == Board1010::OPTIONS
 end
@@ -124,16 +129,14 @@ in_batch = current_batch.all? do |tile|
 end
 raise "offer mismatch at prefix: #{current_batch.inspect} not in #{offers[offer_index].inspect}" unless in_batch
 
-fixed_offers = [current_batch, *offers[(offer_index + 1)..]]
-puts "prefix: #{prefix} moves, score #{board.score}, on offer set #{offer_index + 1}/#{offers.size} " \
-     "(#{fixed_offers.size} sets left incl. current)"
+puts "prefix: #{prefix} moves, score #{board.score}, on offer set #{offer_index + 1}/#{offers.size}"
 
 model = options[:model] || (options[:rollout] == :learned ? AutoPlayer::DEFAULT_MODEL_PATH : nil)
 model &&= LearnedPlayer.load(model)
 search = ImprovementSearch.search(
   seed: trace.seed, starting_board: board,
   baseline_score: baseline_score, baseline_sequence: [],
-  fixed_offers: fixed_offers, continue_after_fixed_offers: true,
+  fixed_offers: [current_batch], continue_after_fixed_offers: true,
   strategy: :sam, rollout_strategy: options[:rollout], rollout_model: model,
   beam_width: options[:beam], max_states: options[:states],
   max_rollouts: options[:rollouts], rollouts_per_step: options[:per_step],
@@ -154,6 +157,9 @@ if search.best_score > baseline_score && search.complete
   GameImprover.new.send(:write_improved_trace, output, trace, merged_offers, merged_sequence)
   replayed = GameTrace.replay(GameTrace.read(output))
   raise "replay #{replayed.score} != search #{search.best_score}" unless replayed.score == search.best_score
+
+  seed_check = GameImprover.new.validate_seed(GameTrace.read(output))
+  raise "improved trace left the seeded dealer: #{seed_check[:reason]}" unless seed_check[:consistent]
 
   puts "wrote #{output}: #{replayed.score} points, #{merged_sequence.size} moves, " \
        "#{merged_offers.size} offer sets"

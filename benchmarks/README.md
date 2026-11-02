@@ -61,3 +61,11 @@ Generation used the frozen candidate with the same command as v5, before
 packaging (the source revision and source fingerprint record that checkout).
 See [the best-score study](../docs/best_score_study.md) for independent tuning
 confirmation and the one final evaluation on newly reserved test seeds.
+
+`baseline-v7.json` records the same nine strategies after the dealer stopped
+swapping a small tile into a set when none of its tiles fit, because the real
+game has no such rule. The games the swap kept alive now end earlier, so a few
+per-seed results change: `sam` falls from 259.93 to 257.20, `learned` from 368.30
+to 361.15, and `codex_sam` is unchanged at 346.10. The model is unchanged. V7 is
+the current parity reference; earlier baselines were measured with the swap.
+Generation used the same command as v5, with the model path normalized.

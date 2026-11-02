@@ -33,9 +33,9 @@
 #
 #   DEBUG=1 bundle exec ruby scripts/deep_improve.rb ...  # replay diagnostics
 #
-# Found during the logs/20261102-034244-381358-64434-0.moves study (score 930):
-# mid-game splices produced a 5,644-point trace, and iterated late splices
-# reached 18,781 on the same offers. See scripts/iterate_improve.rb.
+# Found during the samples/manual_score_930.moves study: a late splice produced
+# a 5,505-point trace, and repeated late splices reached 34,944 on the same
+# seed. See scripts/iterate_improve.rb and samples/improved_score_34944.moves.
 
 require "optparse"
 require_relative "../lib/game_trace"

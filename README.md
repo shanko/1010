@@ -167,10 +167,12 @@ budget — `learn.rb improve` caps rollouts at 100, which stops its beam near
 depth 50 and cannot reach a ~200-move Game Over. The splice point decides how
 much of the recorded game to keep; the search is deterministic per splice
 point, so results vary with it. Every set after the splice is dealt on the
-searched board, so a result is a game the seed could really deal. On one
-recorded 930-point game, a mid-game splice scored 5,644 on the same seed, and
-iterating late splices with `scripts/iterate_improve.rb` reached 18,781 before
-gains tapered:
+searched board, so a result is a game the seed could really deal. On the
+930-point game in `samples/manual_score_930.moves`, a late splice scored 5,505
+on the same seed. Repeating this from each new best trace, with six splice
+points tried in parallel each round, reached 34,944 in ten rounds, and the next
+two rounds found nothing better (`samples/improved_score_34944.moves`).
+`scripts/iterate_improve.rb` does the same one splice at a time:
 
 ```sh
 $ bundle exec ruby scripts/score_progression.rb logs/<game>.moves    # pick a splice point

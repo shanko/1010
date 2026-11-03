@@ -2,7 +2,9 @@
 
 The maintainer supplied `my-best-score.moves` as a demonstration for improving
 `learned`. A byte-identical original is preserved as
-`learning_data/best-score-study/original.moves`. A working copy removes
+`learning_data/best-score-study/original.moves` on the development machine;
+its checksum was verified again on 2026-11-02 against `logs/my-best-score.moves`.
+A working copy removes
 one empty line (original line 150), which the strict trace parser rejects.
 The cleaned trace replays legally to Game Over at **1,184 points**, with
 **320 retained placements** and **two undo events**. Its recorded dealer seed,
@@ -74,11 +76,20 @@ used held-out range is not consulted for selecting new weights.
 
 ## Preserved artifacts
 
-Temporary code, models, reports and the source copy remain under
-`learning_data/best-score-study/`. In particular, `audit.rb`, `compare-offers`,
-`train-experiment`, `wall-experiment` and `run-experiment.sh` are retained.
-The maintainer explicitly requested that temporary Ruby code not be cleared.
-No raw recording or machine-specific path is committed.
+The compute machine retains `source.moves`, `improved.moves`, `final.json`,
+`confirmation.json`, `screening.json`, `wall-screening.json`, `run-experiment.sh`,
+`train-experiment`, `wall-experiment`, `confirm-experiment`, and the candidate
+`models/` directory under ignored `learning_data/best-score-study/`.
+The checksum of its `source.moves` matches the cleaned trace below and the
+committed `samples/manual_score_1184.moves`.
+
+A filesystem search on the development machine on 2026-11-02 also found
+`audit.rb`, `compare-offers`, the raw `original.moves`, cleaned `source.moves`,
+and the experiment runners and reports at that study location. The earlier
+search missed ignored files. The raw and cleaned checksums match those below.
+The parent model was restored there from Git as `released-before-study.json`.
+No raw recording, ignored experiment artifact, or machine-specific path is
+committed.
 
 ### Wall calibration screening
 
@@ -141,12 +152,19 @@ being copied blindly. Its raw source SHA-256 is
 The cleaned trace SHA-256 is
 `4de0d6f03f8b0f0fd99b4e9a68639eac1cf87ee078ab00bec78c5efecefa3871`.
 The parent model is identified in `models/README.md` and remains in Git history
-and the ignored `released-before-study.json` artifact.
+and can be recovered with `git show f5addb1:models/learned.json`. The ignored
+`released-before-study.json` copy on the development machine was restored from
+that revision on 2026-11-02.
 
 ### Reproduction
 
-All temporary experiment code remains in `learning_data/best-score-study/`.
-On the designated compute checkout, the recorded sequence was:
+This study cannot be reproduced from a fresh clone alone. It needs the ignored
+runners, reports and candidate models retained on the compute machine under
+`learning_data/best-score-study/`, plus the parent model recoverable from Git.
+The audit and offer-comparison helpers are retained on the development machine.
+The raw recording is retained on the development machine, and the cleaned
+sequence is also committed as `samples/manual_score_1184.moves`.
+On the compute checkout, the recorded sequence was:
 
 ```sh
 bash learning_data/best-score-study/run-experiment.sh
@@ -165,7 +183,8 @@ To replay the validated 1,184-point sequence, use:
 ```
 
 The `improved.moves` filename is the existing search command's output name;
-its score stayed at 1,184. No stronger recorded sequence was found.
+its score stayed at 1,184. No stronger recorded sequence was found in that bounded study. Later deep
+searches are separate experiments; see the improved traces in `samples/`.
 
 ## Release verification
 

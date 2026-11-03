@@ -27,19 +27,18 @@ class GameSessionTest < Minitest::Test
       with_session(auto: true, seed: 42) do |session, _directory|
         assert_equal :learned, session.strategy
         session.auto_move until session.game_over
-        score = session.board.score
         session.finish
         trace = GameTrace.read(session.game_log.path)
         assert_equal "game_over", trace.final_reason
-        assert_equal score, trace.final_score
-        assert_equal score, GameTrace.replay(trace).score
+        assert_equal session.board.score, trace.final_score
+        assert_equal session.board.score, GameTrace.replay(trace).score
         [trace.seed, trace.events]
       end
     end
 
     assert_equal runs.first, runs.last
-    model = LearnedPlayer.load(AutoPlayer::DEFAULT_MODEL_PATH)
-    expected = GameSimulator.run(seed: 42, strategy: :learned, model: model)
+    expected = GameSimulator.run(seed: 42, strategy: :learned,
+                                 model: LearnedPlayer.load(AutoPlayer::DEFAULT_MODEL_PATH))
     actual = runs.first.last.select {|event| event.first == :move }.map do |event|
       _type, tile, option, row, col = event
       {tile: tile, option: option, row: row, col: col}

@@ -12,11 +12,11 @@ class AutoRunTrackerTest < Minitest::Test
   def test_run_duration_excludes_pause_but_total_includes_it
     @tracker.start_run
     @now = 12_400
-    assert_match "time 12.4s  new max", @tracker.finish_run(score: 78)
+    assert_match "time 12.4s   moves 21  new max", @tracker.finish_run(score: 78, moves: 21)
     @now = 12_900 # 500 ms restart pause
     @tracker.start_run
     @now = 22_700
-    assert_includes @tracker.finish_run(score: 66), "9.8s"
+    assert_includes @tracker.finish_run(score: 66, moves: 18), "9.8s"
 
     assert_equal 2, @tracker.completed_count
     assert_equal 78, @tracker.max_score
@@ -27,7 +27,7 @@ class AutoRunTrackerTest < Minitest::Test
   def test_quit_reports_an_unfinished_run_without_counting_it_as_a_max
     @tracker.start_run
     @now = 4_250
-    assert_match "unfinished", @tracker.finish_run(score: 500, status: :unfinished)
+    assert_match "moves 120  unfinished", @tracker.finish_run(score: 500, moves: 120, status: :unfinished)
 
     assert_equal 0, @tracker.completed_count
     assert_equal 1, @tracker.unfinished_count
@@ -38,11 +38,11 @@ class AutoRunTrackerTest < Minitest::Test
   def test_stopping_and_restarting_auto_mode_keeps_run_number_and_total_span
     @tracker.start_run
     @now = 3_000
-    @tracker.finish_run(score: 10, status: :stopped)
+    @tracker.finish_run(score: 10, moves: 3, status: :stopped)
     @now = 8_000
     assert_equal 2, @tracker.start_run
     @now = 10_000
-    @tracker.finish_run(score: 20)
+    @tracker.finish_run(score: 20, moves: 6)
 
     assert_equal 2, @tracker.run_count
     assert_equal 1, @tracker.completed_count
@@ -54,6 +54,6 @@ class AutoRunTrackerTest < Minitest::Test
   def test_rejects_nested_runs_and_unknown_statuses
     @tracker.start_run
     assert_raises(RuntimeError) { @tracker.start_run }
-    assert_raises(ArgumentError) { @tracker.finish_run(score: 0, status: :paused) }
+    assert_raises(ArgumentError) { @tracker.finish_run(score: 0, moves: 0, status: :paused) }
   end
 end

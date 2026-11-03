@@ -156,7 +156,9 @@ the approved default, hint strategy, game rules and bundled model are unchanged.
 The 500 final seeds are now consumed. The rest of reserved block
 `6000500..6001999` is retired without inspection, so the whole block stays out
 of future tuning or selection. The next unreserved range is `7000000..7001999`.
-No new settings or code were chosen after inspecting these final results.
+No new policy settings or decision code were chosen after inspecting these final
+results. The later run-line move counter changes reporting only, outside the
+frozen benchmark source fingerprint.
 
 ## Verification and retained artifacts
 

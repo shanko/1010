@@ -115,12 +115,13 @@ compare strategies across many seeds, use
 
 Auto mode prints one line when each game ends, then a run summary when you
 quit. Run time excludes the half-second restart pause; total time includes it.
+Each line also reports the current game's retained move count after the time.
 
 ```text
-Run 1   score 78   time 12.4s  new max
-Run 2   score 66   time 9.8s
-Run 3   score 122   time 18.1s  new max
-Run 4   score 52   time 4.2s  unfinished
+Run 1   score 78   time 12.4s   moves 21  new max
+Run 2   score 66   time 9.8s   moves 18
+Run 3   score 122   time 18.1s   moves 31  new max
+Run 4   score 52   time 4.2s   moves 14  unfinished
 Runs: 3 completed, 1 unfinished   Max score: 122 (run 3)
 Total time: 46.0s
 ```

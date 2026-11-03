@@ -136,11 +136,12 @@ class GameSessionTest < Minitest::Test
 
   def test_auto_run_timing_uses_the_injected_clock
     now = 1_000.0
-    with_session(auto: true, clock: -> { now }) do |session, _directory|
+    with_session(auto: true, strategy: :sam, seed: 42, clock: -> { now }) do |session, _directory|
+      3.times { session.auto_move }
       now += 12_400
       line = session.finish_auto_run(score: 78)
 
-      assert_equal "Run 1   score 78   time 12.4s  new max", line
+      assert_equal "Run 1   score 78   time 12.4s   moves 3  new max", line
       assert_match "Total time: 12.4s", session.auto_run_tracker.summary
     end
   end

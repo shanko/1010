@@ -290,13 +290,13 @@ class LearnedPlayerTest < Minitest::Test
     actual = [{tile: "dot", option: 0, row: 4, col: 4}]
     candidate = [{tile: "dot", option: 0, row: 4, col: 0},
                  {tile: "sq2", option: 0, row: 4, col: 4}]
-    {"schema_version" => 1,
+    {"schema_version" => LessonStore::SCHEMA_VERSION, "versions" => LessonStore.versions,
      "source_episode" => {"path" => "train.moves", "sha256" => "example", "seed" => 1_000_000},
      "initial_state" => initial, "offers" => offers,
      "actual_sequence" => actual, "actual_score" => 1,
      "candidate_sequence" => candidate, "candidate_score" => 5,
      "improvement_delta" => 4, "outcome" => "improved",
-     "search" => {"status" => "improved", "candidate_complete" => true},
+     "search" => {"version" => ImprovementSearch::VERSION, "status" => "improved", "candidate_complete" => true},
      "provenance" => []}
   end
 end

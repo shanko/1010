@@ -77,7 +77,7 @@ Click on one of the tiles presented on the right side of the 10x10 grid (or pres
 | ESC | quit without saving, and delete the saved game so the next start is a new game |
 
 Saves store a compact snapshot using the same board and offer records as the
-start of a new `.moves` trace. New traces use compact tile IDs (v3); v2 traces
+start of a new `.moves` trace. New traces use compact tile IDs and a rule version (v4); v2/v3 traces
 with tile names and older verbose save files are still accepted.
 
 ## To play in the terminal:
@@ -280,8 +280,8 @@ Feature version 1 models must be retrained before use with the current code.
 Use `train-imitation --output learning_data/models/imitation-v2.json` to retain
 the older model while producing a compatible one.
 
-Pass a `.moves` file as the command line argument to replay it. Current v3 traces
-and existing v2 traces can be replayed. Moves are shown in order, with 0.5
+Pass a `.moves` file as the command line argument to replay it. Current v4 traces
+and existing v2/v3 traces can be replayed. Moves are shown in order, with 0.5
 seconds between successive moves by default. Set another interval in seconds
 with `--delay` (for example, `--delay 2`):
 

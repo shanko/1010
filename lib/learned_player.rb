@@ -326,17 +326,19 @@ end
 class ImitationTrainer
   Result = Struct.new(:model, :episodes_used, :examples_seen, :excluded, keyword_init: true)
 
-  def train(directory:, seed_set: :training, random_seed: 1, epochs: 10, learning_rate: 0.1)
+  def train(directory:, seed_set: :training, random_seed: 1, epochs: 10, learning_rate: 0.1,
+            allow_legacy_lessons: false)
     epochs, rate = validate_training_options(epochs, learning_rate)
     LearningSeedSets.validate_set!(seed_set, allowed: :training, purpose: "imitation training")
     excluded = Hash.new(0)
-    examples = collect_examples(directory, seed_set, excluded)
+    examples = collect_examples(directory, seed_set, excluded, allow_legacy_lessons)
     raise ArgumentError, "no eligible improved lessons found in #{directory} (seed set #{seed_set})" if examples.empty?
 
     random_seed = Integer(random_seed)
     weights, examples_seen = train_weights(examples, random_seed, epochs, rate)
     model = training_model(weights: weights, examples: examples, seed_set: seed_set,
                            random_seed: random_seed, epochs: epochs, rate: rate, seen: examples_seen)
+    model["training"]["allow_legacy_lessons"] = true if allow_legacy_lessons
     Result.new(model: model, episodes_used: episode_count(examples),
                examples_seen: examples_seen, excluded: excluded)
   end
@@ -354,14 +356,14 @@ class ImitationTrainer
     [epochs, rate]
   end
 
-  def collect_examples(directory, seed_set, excluded)
+  def collect_examples(directory, seed_set, excluded, allow_legacy_lessons)
     Dir.glob(File.join(directory, "*.json")).flat_map do |path|
-      examples_from_path(path, seed_set, excluded)
+      examples_from_path(path, seed_set, excluded, allow_legacy_lessons)
     end
   end
 
-  def examples_from_path(path, seed_set, excluded)
-    lesson = LessonStore.read(path)
+  def examples_from_path(path, seed_set, excluded, allow_legacy_lessons)
+    lesson = LessonStore.read(path, allow_legacy: allow_legacy_lessons)
     return [] unless eligible_seed?(lesson, seed_set, excluded)
     return reject_lesson(excluded, :low_confidence_or_no_improvement) unless complete_improvement?(lesson)
 

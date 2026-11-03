@@ -221,3 +221,34 @@ Use `correct --model FILE` for learned policy correction. `improve` uses Sam; `b
 explicit learned model. The heuristic lesson format and gameplay default are
 unchanged. These optional provenance fields avoid an extra lesson schema change before
 the versioning work in #40.
+
+## Trace and lesson compatibility
+
+New traces use `1010-moves-v4` and an `r1` rule header after the mode header.
+`GameRules::VERSION` changes only when placement, scoring, clearing, tile geometry,
+or dealer behavior changes. Unknown rule versions are rejected with instructions
+to use matching rules or regenerate the trace. Legacy v2 (tile names) and v3
+(compact tile IDs) still replay; `format_version` identifies their format and
+`rule_version` is explicitly nil because they did not record one.
+
+New lessons use schema v2. `versions` records the analysis rule version, simulator
+version and source trace format (nil for simulator-generated lessons); existing
+`search.version` records the search implementation version. Analysis of a legacy
+trace records its actual source format, without pretending the trace recorded
+rules. Mismatched or missing current lesson versions fail before training and
+must be recollected or processed with matching historical tooling. Version
+metadata participates in deduplication, preventing cross-version merging.
+
+Historical schema-v1 lessons remain readable with `LessonStore.read` for replay.
+Training rejects their unrecorded versions by default. To reproduce an existing
+experiment explicitly, use:
+
+```sh
+bundle exec ruby scripts/learn.rb train-imitation --lessons learning_data/historical --allow-legacy-lessons --output learning_data/reproduced.json
+```
+
+The API equivalent is `allow_legacy_lessons: true`; this opt-in is recorded in
+training metadata and does not change the weighting or learned weights. It does
+not bypass mismatches in schema-v2 lessons. Prefer recollecting lessons for new
+experiments. The committed v1 fixture is retained unchanged alongside a new v2
+fixture. Bundled model bytes, game rules and existing baselines are unchanged.

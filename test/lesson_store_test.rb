@@ -9,7 +9,7 @@ require_relative "../lib/game_log"
 require_relative "../lib/offer_replay"
 
 class LessonStoreTest < Minitest::Test
-  FIXTURE = File.expand_path("fixtures/lesson-v1.json", __dir__)
+  FIXTURE = File.expand_path("fixtures/lesson-v2.json", __dir__)
 
   def test_fixture_loads_and_both_sequences_replay
     lesson = LessonStore.read(FIXTURE)

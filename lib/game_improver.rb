@@ -148,7 +148,7 @@ class GameImprover
     board = source.starting_board.copy
     board.replace_options(offers.first.map {|name| Tile.fetch(name) })
     lines = [GameLog::VERSION_HEADER, "s#{source.seed || '-'}", "mode=improved",
-             *BoardSnapshot.records(board)]
+             "r#{GameRules::VERSION}", *BoardSnapshot.records(board)]
     offer_index = 0
     ending_reason = "game_over"
     sequence.each do |move|

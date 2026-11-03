@@ -7,7 +7,7 @@ require "fileutils"
 # relying on the current tile dealer or the original random number generator.
 class GameLog
   DIRECTORY = "logs"
-  VERSION_HEADER = "1010-moves-v3"
+  VERSION_HEADER = "1010-moves-v4"
 
   attr_reader :path
 
@@ -26,7 +26,7 @@ class GameLog
     end
 
     @finished = false
-    @file.write("#{VERSION_HEADER}\ns#{seed || '-'}\nmode=#{mode}\n")
+    @file.write("#{VERSION_HEADER}\ns#{seed || '-'}\nmode=#{mode}\nr#{GameRules::VERSION}\n")
     BoardSnapshot.records(board).each {|record| @file.write("#{record}\n") }
     @file.flush
   end

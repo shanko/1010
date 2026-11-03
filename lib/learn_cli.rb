@@ -134,7 +134,8 @@ module LearnCLI
       LearningSeedSets.validate_set!(options[:seed_set], allowed: :training, purpose: "imitation training")
       trained = ImitationTrainer.new.train(directory: options[:lessons], seed_set: options[:seed_set],
                                            random_seed: options[:seed], epochs: options[:epochs],
-                                           learning_rate: options[:learning_rate])
+                                           learning_rate: options[:learning_rate],
+                                           allow_legacy_lessons: options.fetch(:allow_legacy_lessons, false))
       FileUtils.mkdir_p(File.dirname(options[:output]))
       ImitationTrainer.new.save(trained.model, options[:output])
       json(out, {model: File.expand_path(options[:output]), episodes_used: trained.episodes_used,
@@ -144,6 +145,9 @@ module LearnCLI
     private
 
     def define_options(opts, options)
+      opts.on("--allow-legacy-lessons", "Reproduce historical v1 lessons with unrecorded versions") {
+        options[:allow_legacy_lessons] = true
+      }
       opts.on("--lessons DIR") {|value| options[:lessons] = value }
       opts.on("--output FILE") {|value| options[:output] = value }
       opts.on("--seed-set NAME", LearningSeedSets.names.map(&:to_s).join(", ")) {|value|

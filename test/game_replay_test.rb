@@ -105,7 +105,7 @@ class GameReplayTest < Minitest::Test
   end
 
   def test_v3_trace_rejects_incomplete_files
-    with_moves("#{GameTrace::HEADER}\ns1\nmode=test\ni0|#{'0' * 100}|#{'0' * 100}\nd1\n") do |path|
+    with_moves("1010-moves-v3\ns1\nmode=test\ni0|#{'0' * 100}|#{'0' * 100}\nd1\n") do |path|
       error = assert_raises(ArgumentError) { GameTrace.read(path) }
       assert_match "missing the end record", error.message
     end
@@ -135,7 +135,7 @@ class GameReplayTest < Minitest::Test
   def test_rejects_an_unversioned_old_format_moves_file
     with_moves("s12345\nm012\nm290\nu\n") do |path|
       error = assert_raises(ArgumentError) { GameTrace.read(path) }
-      assert_match "not a v2 or v3 1010 trace", error.message
+      assert_match "not a v2, v3 or v4 1010 trace", error.message
     end
   end
 

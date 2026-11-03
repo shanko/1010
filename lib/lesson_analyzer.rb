@@ -69,7 +69,7 @@ class LessonAnalyzer
   end
 
   def record_header(path, source_digest, trace, baseline)
-    {schema_version: LessonStore::SCHEMA_VERSION,
+    {schema_version: LessonStore::SCHEMA_VERSION, versions: LessonStore.versions(source_trace: trace.format_version),
      source_episode: {path: File.expand_path(path), sha256: source_digest,
                       seed: trace.seed, mode: trace.mode, final_reason: trace.final_reason},
      initial_state:  {cells: trace.starting_board.cells, tile_ids: trace.starting_board.tile_ids,

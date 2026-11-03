@@ -61,7 +61,8 @@ class LessonCollector
   def build_lesson(seed, actual, result, options)
     initial = GameSimulator.initial_board(seed: seed)
     validate_initial_offers!(actual, result)
-    {schema_version: LessonStore::SCHEMA_VERSION, source_episode: source_record(seed, options),
+    {schema_version: LessonStore::SCHEMA_VERSION, versions: LessonStore.versions,
+     source_episode: source_record(seed, options),
      initial_state: initial_record(initial, actual),
      offers: actual.offers, actual_offers: actual.offers, candidate_offers: result.candidate_offers,
      actual_sequence: actual.moves, actual_score: actual.score,

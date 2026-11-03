@@ -15,7 +15,7 @@ class GameLogTest < Minitest::Test
       log.finish(reason: "stopped", score: 0)
 
       contents = File.read(log.path)
-      assert contents.start_with?("#{GameLog::VERSION_HEADER}\ns42\nmode=test\ni0|")
+      assert contents.start_with?("#{GameLog::VERSION_HEADER}\ns42\nmode=test\nr#{GameRules::VERSION}\ni0|")
       assert_includes contents, "d1\nmdot,0,9,0\nu\nzstopped|0\n"
       assert_equal ".moves", File.extname(log.path)
     end

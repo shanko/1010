@@ -3,44 +3,59 @@
 require_relative "board"
 require_relative "offer_replay"
 
-# Reads v2/v3 game traces without Gosu and replays them without random dealing.
+# Reads v2/v3/v4 game traces without Gosu and replays them without random dealing.
 class GameTrace
-  HEADER = "1010-moves-v3"
+  HEADER = "1010-moves-v4"
+  PREVIOUS_HEADER = "1010-moves-v3"
   LEGACY_HEADER = "1010-moves-v2"
   Trace = Struct.new(:seed, :mode, :starting_board, :deal_batches, :events,
-                     :final_reason, :final_score, keyword_init: true)
+                     :final_reason, :final_score, :format_version, :rule_version, keyword_init: true)
   ParseState = Struct.new(:seed, :mode, :board, :deals, :events, :final_reason, :final_score,
-                          keyword_init: true)
+                          :format_version, :rule_version, keyword_init: true)
 
   def self.versioned_file?(path)
-    File.open(path, "r") {|file| [HEADER, LEGACY_HEADER].include?(file.gets&.chomp) }
+    File.open(path, "r") {|file| [HEADER, PREVIOUS_HEADER, LEGACY_HEADER].include?(file.gets&.chomp) }
   end
 
   def self.read(path)
     lines = File.readlines(path, chomp: true)
-    compact = validate_version!(path, lines.shift)
-    state = read_headers(path, lines)
-    parse_records(path, lines, state, compact)
+    version = validate_version!(path, lines.shift)
+    state = read_headers(path, lines, version)
+    parse_records(path, lines, state, version >= 3)
     validate_complete!(path, state)
     Trace.new(seed: state.seed, mode: state.mode, starting_board: state.board,
               deal_batches: state.deals, events: state.events,
-              final_reason: state.final_reason, final_score: state.final_score)
+              final_reason: state.final_reason, final_score: state.final_score,
+              format_version: state.format_version, rule_version: state.rule_version)
   end
 
   def self.validate_version!(path, version)
-    raise ArgumentError, "#{path} is not a v2 or v3 1010 trace" unless [HEADER, LEGACY_HEADER].include?(version)
+    raise ArgumentError, "#{path} is not a v2, v3 or v4 1010 trace" unless [HEADER, PREVIOUS_HEADER,
+                                                                            LEGACY_HEADER].include?(version)
 
-    version == HEADER
+    Integer(version.delete_prefix("1010-moves-v"))
   end
   private_class_method :validate_version!
 
-  def self.read_headers(path, lines)
+  def self.read_headers(path, lines, version)
     seed = parse_seed_header(path, lines.shift)
     mode = parse_mode_header(path, lines.shift)
+    rule_version = parse_rule_header(path, lines.shift) if version == 4
     board = parse_board_header(path, lines.shift)
-    ParseState.new(seed: seed, mode: mode, board: board, deals: [], events: [])
+    ParseState.new(seed: seed, mode: mode, board: board, deals: [], events: [],
+                   format_version: version, rule_version: rule_version)
   end
   private_class_method :read_headers
+
+  def self.parse_rule_header(path, line)
+    match = /\Ar(\d+)\z/.match(line.to_s)
+    version = Integer(match[1]) if match
+    return version if version == GameRules::VERSION
+
+    raise ArgumentError,
+          "#{path} rule version #{version.inspect} is unsupported; use matching game rules or regenerate the trace"
+  end
+  private_class_method :parse_rule_header
 
   def self.parse_seed_header(path, line)
     raise ArgumentError, "#{path} has an invalid seed header" unless line&.match?(/\As(?:-|\d+)\z/)
@@ -65,7 +80,9 @@ class GameTrace
   private_class_method :parse_board_header
 
   def self.parse_records(path, lines, state, compact)
-    lines.each_with_index {|line, index| parse_record(path, line, index, state, compact) }
+    lines.each_with_index {|line, index|
+      parse_record(path, line, index + (state.format_version == 4 ? 1 : 0), state, compact)
+    }
   end
   private_class_method :parse_records
 

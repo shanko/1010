@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "game_rules"
+
 # board.rb: the rules of 1010!, with no drawing and no terminal input or output.
 #
 # The board is a grid of cells with row 0 at the top. An empty cell holds EMPTY;

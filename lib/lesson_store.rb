@@ -8,7 +8,7 @@ require_relative "offer_replay"
 # Versioned local storage for reproducible improvement-search lessons.
 class LessonStore
   DIRECTORY = "learning_data"
-  SCHEMA_VERSION = 1
+  SCHEMA_VERSION = 2
 
   def initialize(directory: DIRECTORY)
     @directory = directory
@@ -26,13 +26,51 @@ class LessonStore
     write_new(lesson, identity)
   end
 
-  def self.read(path)
+  def self.read(path, allow_legacy: true)
     lesson = JSON.parse(File.read(path))
-    raise ArgumentError, "unsupported lesson schema version" unless lesson["schema_version"] == SCHEMA_VERSION
-
+    validate_versions!(lesson, allow_legacy: allow_legacy)
     lesson
   rescue JSON::ParserError => e
     raise ArgumentError, "invalid lesson JSON: #{e.message}"
+  end
+
+  def self.versions(source_trace: nil)
+    require_relative "game_simulator" unless defined?(GameSimulator)
+    {rule: GameRules::VERSION, simulator: GameSimulator::VERSION, source_trace: source_trace}
+  end
+
+  def self.validate_versions!(lesson, allow_legacy: false)
+    if lesson["schema_version"] == 1
+      return if allow_legacy
+
+      raise ArgumentError,
+            "legacy lesson v1 has unrecorded versions; recollect or use --allow-legacy-lessons to reproduce history"
+    end
+    unless lesson["schema_version"] == SCHEMA_VERSION
+      raise ArgumentError, "unsupported lesson schema version; use matching tooling or regenerate lessons"
+    end
+
+    validate_current_versions!(lesson)
+  end
+
+  def self.validate_current_versions!(lesson)
+    recorded = lesson["versions"] || {}
+    versions.each do |key, current|
+      next if key == :source_trace || recorded[key.to_s] == current
+
+      raise ArgumentError, "lesson #{key} version differs from #{current}; use matching tooling or recollect lessons"
+    end
+    validate_source_version!(recorded)
+    require_relative "improvement_search" unless defined?(ImprovementSearch)
+    return if lesson.dig("search", "version") == ImprovementSearch::VERSION
+
+    raise ArgumentError, "lesson search version differs; use matching search tooling or recollect lessons"
+  end
+
+  def self.validate_source_version!(recorded)
+    return if recorded.key?("source_trace") && [nil, 2, 3, 4].include?(recorded["source_trace"])
+
+    raise ArgumentError, "unsupported lesson source_trace version; use matching trace tooling or recollect lessons"
   end
 
   # Reconstruct and validate a recorded sequence against the saved board and
@@ -100,12 +138,13 @@ class LessonStore
             "lesson schema version must be #{SCHEMA_VERSION}"
     end
 
+    self.class.validate_versions!(JSON.parse(JSON.generate(lesson)))
     %i[source_episode initial_state offers actual_sequence actual_score candidate_sequence candidate_score
        improvement_delta search provenance].each {|key| lesson.fetch(key) }
   end
 
   def identity_for(lesson)
-    state = {initial_state:    lesson.fetch(:initial_state),
+    state = {versions: lesson.fetch(:versions), initial_state:    lesson.fetch(:initial_state),
              actual_offers:    lesson.fetch(:actual_offers, lesson.fetch(:offers)),
              candidate_offers: lesson.fetch(:candidate_offers, lesson.fetch(:offers))}
     Digest::SHA256.hexdigest(JSON.generate(state))

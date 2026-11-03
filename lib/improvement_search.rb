@@ -15,7 +15,7 @@ class ImprovementSearch
   Result = Struct.new(:seed, :mode, :baseline_strategy, :baseline_score, :best_score,
                       :score_delta, :elapsed_seconds, :explored_states, :explored_rollouts,
                       :transpositions_pruned, :candidate_sequence, :baseline_sequence,
-                      :candidate_offers, :complete, :status, :cap_reason, keyword_init: true)
+                      :candidate_offers, :complete, :status, :cap_reason, :information_mode, keyword_init: true)
   AdvanceState = Struct.new(:board, :offer_history, :next_offer_index, :offer_exhausted,
                             :rng_position, keyword_init: true)
   SearchState = Struct.new(:seed, :strategy, :rollout_strategy, :rollout_model,
@@ -300,7 +300,7 @@ class ImprovementSearch
   end
 
   def result_identity(state)
-    {seed: state.seed, mode: state.mode, baseline_strategy: state.strategy,
+    {seed: state.seed, mode: state.mode, information_mode: :known_future, baseline_strategy: state.strategy,
      baseline_score: state.baseline_score, best_score: state.best_score,
      score_delta: state.best_score - state.baseline_score,
      elapsed_seconds: monotonic_time - state.started_at}

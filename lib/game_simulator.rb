@@ -150,6 +150,8 @@ class GameBenchmark
 
     {
       schema_version:        SCHEMA_VERSION,
+      information_mode:      :visible_batch,
+      strategy_settings:     strategies.include?(:visible_batch) ? {visible_batch: VisibleBatchPlanner.settings} : {},
       simulator_version:     GameSimulator::VERSION,
       generated_at_utc:      Time.now.utc.iso8601,
       baseline_strategy:     baseline,

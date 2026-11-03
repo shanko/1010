@@ -24,7 +24,8 @@ parser = OptionParser.new do |parser|
     options[:seed_set] = value.to_sym
     options[:seeds] = LearningSeedSets.fetch(value)
   end
-  parser.on("--strategies LIST", "Comma-separated strategy names; defaults to all current strategies") do |value|
+  parser.on("--strategies LIST",
+            "Comma-separated strategy names; experimental strategies are opt-in") do |value|
     options[:strategies] = value.split(",").map(&:to_sym)
   end
   parser.on("--output PATH", "Write the JSON report to PATH (required)") {|value| options[:output] = value }
@@ -84,8 +85,9 @@ begin
   report[:source_revision] = revision.strip
   report[:working_tree_dirty] = dirty
   report[:seed_set] = options[:seed_set] if options[:seed_set]
-  source_files = %w[lib/board.rb lib/auto_player.rb lib/learned_player.rb lib/game_simulator.rb
-                    lib/learning_seed_sets.rb scripts/benchmark.rb]
+  source_files = %w[lib/board.rb lib/game_rules.rb lib/tile.rb lib/auto_player.rb lib/learned_player.rb
+                    lib/game_simulator.rb
+                    lib/visible_position.rb lib/visible_batch_planner.rb lib/learning_seed_sets.rb scripts/benchmark.rb]
   source_digest_parts = source_files.map do |path|
     absolute_path = File.expand_path("../#{path}", __dir__)
     "#{path}\0#{File.binread(absolute_path)}"

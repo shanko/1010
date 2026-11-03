@@ -100,7 +100,8 @@ module LearnCLI
         divergence = [actual_length, candidate_length].min if actual_length != candidate_length
       end
       divergence += 1 if divergence
-      json(out, {outcome: lesson.fetch(:outcome), actual_score: lesson.fetch(:actual_score),
+      json(out, {information_mode: lesson.dig(:search, :information_mode),
+                 outcome: lesson.fetch(:outcome), actual_score: lesson.fetch(:actual_score),
                  candidate_score: lesson.fetch(:candidate_score), improvement_delta: lesson.fetch(:improvement_delta),
                  first_action_divergence: divergence, search_status: lesson.fetch(:search).fetch(:status),
                  lesson: File.expand_path(saved.fetch(:path)), deduplicated: saved.fetch(:deduplicated)})
@@ -181,7 +182,8 @@ module LearnCLI
                                            max_rollouts: options[:max_rollouts],
                                            rollouts_per_step: options.fetch(:rollouts_per_step, 2),
                                            store: LessonStore.new(directory: options[:output]))
-      json(out, {episodes: result.episodes, improvements_found: result.improvements_found,
+      json(out, {information_mode: :known_future, episodes: result.episodes,
+                 improvements_found: result.improvements_found,
                  complete_improvements: result.complete_improvements, lessons_saved: result.lessons_saved})
     end
 
@@ -243,7 +245,7 @@ module LearnCLI
                                            max_rollouts: options[:max_rollouts],
                                            rollouts_per_step: options.fetch(:rollouts_per_step, 2),
                                            decision_stride: options[:stride])
-      json(out, {episodes: result.episodes, states_searched: result.states_searched,
+      json(out, {information_mode: :known_future, episodes: result.episodes, states_searched: result.states_searched,
                  improvements_saved: result.improvements_saved, usable_lessons: result.usable_lessons})
     end
   end
@@ -390,6 +392,7 @@ module LearnCLI
                                         output_path: options[:output], report_path: options[:report],
                                         save_lesson: options.fetch(:save_lesson, false))
       report = result.report
+      puts_to(out, "Information mode: #{report.fetch(:information_mode)} (offline future-informed search)")
       puts_to(out, "Original:  #{report.dig(:original, :score)} points, #{report.dig(:original, :moves)} moves")
       delta = report.dig(:search, :score_delta)
       sign = delta.positive? ? "+" : ""

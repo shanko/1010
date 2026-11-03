@@ -163,6 +163,14 @@ $ ./1010 --delay 0.5 logs/<game>.improved.moves
 Add `--save-lesson` to store a lesson from the improved trace under
 `learning_data/`.
 
+An experimental player can plan the current visible tile batch without seeing
+future deals: `./1010 auto visible_batch --seed 42` (or use `--headless`). The
+normal learned player also sees only visible information at decision time.
+Offline improvement tools use known future deals and label their results
+`known_future`; their optimized trace scores are a different comparison.
+See [visible-batch planning](docs/visible_batch_planner.md) for the information
+boundary, fixed work budget, limitations and evaluation protocol.
+
 For a deeper improvement pass, `scripts/deep_improve.rb` replays a recorded
 prefix on the seeded dealer and re-searches the tail with a real rollout
 budget — `learn.rb improve` caps rollouts at 100, which stops its beam near

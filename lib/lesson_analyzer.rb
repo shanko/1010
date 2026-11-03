@@ -83,9 +83,10 @@ class LessonAnalyzer
   end
 
   def search_record(result, options)
-    search_limits(options).merge(search_result(result), version:  ImprovementSearch::VERSION,
-                                                        strategy: options.fetch(:strategy).to_sym)
-                          .merge(LearningModel.provenance(options[:rollout_model]))
+    metadata = {information_mode: result.information_mode, version: ImprovementSearch::VERSION,
+                strategy: options.fetch(:strategy).to_sym}
+    search_limits(options).merge(search_result(result),
+                                 metadata).merge(LearningModel.provenance(options[:rollout_model]))
   end
 
   def search_limits(options)

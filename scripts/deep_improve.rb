@@ -148,7 +148,8 @@ search = ImprovementSearch.search(
   time_budget_seconds: options[:time]
 )
 
-puts "search: best #{search.best_score} (delta #{search.score_delta}), status #{search.status}, " \
+puts "search (#{search.information_mode}): best #{search.best_score} (delta #{search.score_delta}), " \
+     "status #{search.status}, " \
      "states #{search.explored_states}, rollouts #{search.explored_rollouts}, " \
      "#{search.elapsed_seconds.round(1)}s"
 

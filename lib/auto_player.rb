@@ -7,10 +7,12 @@
 # (top-left first). Choose one with `./1010 auto <strategy>`.
 require_relative "board"
 require_relative "learned_player"
+require_relative "visible_batch_planner"
 
 class AutoPlayer
-  STRATEGIES       = %i[first_fit last_fit random_fit shanko jc sam codex_1 codex_sam].freeze
-  VALID_STRATEGIES = (STRATEGIES + [:learned]).freeze
+  STRATEGIES = %i[first_fit last_fit random_fit shanko jc sam codex_1 codex_sam].freeze
+  EXPERIMENTAL_STRATEGIES = [:visible_batch].freeze
+  VALID_STRATEGIES = (STRATEGIES + EXPERIMENTAL_STRATEGIES + [:learned]).freeze
   # Demonstration-guided calibration: learned - prior release = +43.62
   # (95% CI +31.53 to +55.70) on 2,000 new test seeds.
   DEFAULT_STRATEGY = :learned
@@ -31,6 +33,7 @@ class AutoPlayer
 
     @strategy = strategy
     @random   = random
+    @visible_player = VisibleBatchPlanner.new if strategy == :visible_batch
     return unless strategy == :learned
 
     model ||= DEFAULT_MODEL_PATH
@@ -47,7 +50,23 @@ class AutoPlayer
   # [option index, row, col] for the next move, or nil if no tile fits.
   # Picks a random tile among those that fit somewhere, then the best spot for it.
   def choose_move(board)
+    return @visible_player.choose_move(VisiblePosition.from_board(board)) if @visible_player
     return @learned_player.choose_move(board, random: @random) if @learned_player
+
+    choose_heuristic_move(board)
+  end
+
+  # The [row, col] this strategy would pick for the tile, or nil if it fits nowhere.
+  def best_position(board, tile)
+    return visible_hint_position(board, tile) if @visible_player
+    return @learned_player.best_position(board, tile, random: @random) if @learned_player
+
+    heuristic_position(board, tile)
+  end
+
+  private
+
+  def choose_heuristic_move(board)
     return choose_codex_1_move(board) if @strategy == :codex_1
     return choose_codex_sam_move(board) if @strategy == :codex_sam
 
@@ -59,10 +78,14 @@ class AutoPlayer
     [index, row, col]
   end
 
-  # The [row, col] this strategy would pick for the tile, or nil if it fits nowhere.
-  def best_position(board, tile)
-    return @learned_player.best_position(board, tile, random: @random) if @learned_player
+  def visible_hint_position(board, tile)
+    index = board.options.index(tile)
+    return nil unless index
 
+    @visible_player.choose_move(VisiblePosition.from_board(board), option_index: index)&.drop(1)
+  end
+
+  def heuristic_position(board, tile)
     positions = board.positions_for(tile)
     return nil if positions.empty?
 
@@ -76,8 +99,6 @@ class AutoPlayer
 
     send(@strategy, board, tile, positions)
   end
-
-  private
 
   # Compare every legal tile-placement pair, choosing the move that leaves the
   # other tiles in this offer playable with the most room for future moves.

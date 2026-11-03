@@ -132,7 +132,6 @@ module ActionFeatures
     [largest, regions, bit_count(empty & ~neighbors)]
   end
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
-  private_class_method :empty_space_features
 
   def self.bit_count(bits)
     bits.digits(256).sum {|byte| BYTE_COUNTS[byte] }

@@ -202,3 +202,10 @@ searches are separate experiments; see the improved traces in `samples/`.
 Manual check: run `./1010 auto learned --seed 42`. Expected: the released
 wall-calibrated policy plays legal moves through Game Over and auto restart.
 The graphical window was not opened for this study.
+
+## Follow-up calibration
+
+[The wall-calibration follow-up](wall_calibration_study.md) records issue #36's
+preregistered search between multipliers 0.60 and 0.85. It is a separate
+experiment from the original release and does not reuse that study's final
+test range for model selection.

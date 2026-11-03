@@ -183,8 +183,9 @@ evaluation. Keep those seeds out of future training and settings selection.
 
 Choose models and settings using tuning results before inspecting new test
 results. For future experiments, reserve a new test-only range in advance;
-for example `5000000..5001999` is outside all current training and tuning
-ranges. Record that reservation and keep it out of all learning decisions.
+`5000000..5001999` is reserved exclusively for issue #36, before its screening
+run. It is outside all training and tuning ranges and must not inform learning
+or selection. The next unreserved test range is `6000000..6001999`.
 Run the final comparison with `--seeds 5000000..5001999` instead of the tuning
 range in the preceding benchmark command. Use a new output filename and
 retain the report with its model/source fingerprints. That custom range is

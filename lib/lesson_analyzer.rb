@@ -5,17 +5,19 @@ require_relative "game_trace"
 require_relative "improvement_search"
 require_relative "lesson_store"
 require_relative "offer_replay"
+require_relative "learning_model"
 
 # Converts a replayable completed trace into a search lesson.
 class LessonAnalyzer
   def analyze(path, time_budget_seconds: 30.0, beam_width: 4, max_states: 10_000,
               max_rollouts: 8, rollouts_per_step: 2,
-              strategy: AutoPlayer::SEARCH_STRATEGY, clock: nil)
+              strategy: AutoPlayer::SEARCH_STRATEGY, model: nil, clock: nil)
+    model = LearningModel.resolve(strategy, model)
     source_digest, trace, baseline = read_source(path)
     options = {time_budget_seconds: time_budget_seconds, beam_width: beam_width,
                max_states: max_states, max_rollouts: max_rollouts,
                rollouts_per_step: rollouts_per_step, strategy: strategy,
-               rollout_strategy: strategy, clock: clock}
+               rollout_strategy: strategy, rollout_model: model, clock: clock}
     result = search(trace, baseline, options)
     record = build_record(path: path, source_digest: source_digest, trace: trace,
                           baseline: baseline, result: result, options: options)
@@ -60,7 +62,9 @@ class LessonAnalyzer
       trajectory_record(baseline, result),
       search:     search_record(result, options),
       outcome:    result.score_delta.positive? ? "improved" : "no_improvement",
-      provenance: [provenance_record(path, source_digest, trace, baseline, result)]
+      provenance: [provenance_record(path, source_digest, trace, baseline, result).merge(
+        LearningModel.provenance(options[:rollout_model])
+      )]
     )
   end
 
@@ -81,6 +85,7 @@ class LessonAnalyzer
   def search_record(result, options)
     search_limits(options).merge(search_result(result), version:  ImprovementSearch::VERSION,
                                                         strategy: options.fetch(:strategy).to_sym)
+                          .merge(LearningModel.provenance(options[:rollout_model]))
   end
 
   def search_limits(options)

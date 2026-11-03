@@ -133,7 +133,10 @@ raise "offer mismatch at prefix: #{current_batch.inspect} not in #{offers[offer_
 
 puts "prefix: #{prefix} moves, score #{board.score}, on offer set #{offer_index + 1}/#{offers.size}"
 
-model = options[:model] || (options[:rollout] == :learned ? AutoPlayer::DEFAULT_MODEL_PATH : nil)
+if options[:rollout] == :learned && !options[:model]
+  abort "--rollout learned requires --model FILE; bundled defaults are for gameplay"
+end
+model = options[:model]
 model &&= LearnedPlayer.load(model)
 search = ImprovementSearch.search(
   seed: trace.seed, starting_board: board,

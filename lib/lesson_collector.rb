@@ -2,6 +2,7 @@
 
 require_relative "improvement_search"
 require_relative "lesson_store"
+require_relative "learning_model"
 
 # Creates reproducible training-seed episodes and complete search corrections.
 class LessonCollector
@@ -9,14 +10,15 @@ class LessonCollector
                       :lessons_saved, keyword_init: true)
   Counts = Struct.new(:improvements_found, :complete_improvements, :lessons_saved, keyword_init: true)
 
-  def collect(seeds:, strategy: :sam, time_budget_seconds: 30.0, beam_width: 4,
+  def collect(seeds:, strategy: :sam, model: nil, time_budget_seconds: 30.0, beam_width: 4,
               max_states: 2_000, max_rollouts: 8, rollouts_per_step: 2,
               store: LessonStore.new, clock: nil)
+    model = LearningModel.resolve(strategy, model)
     seeds = LearningSeedSets.validate!(seeds, set: :training, purpose: "lesson collection")
     raise ArgumentError, "lesson collection seeds must be unique" unless seeds.uniq.size == seeds.size
 
     counts = Counts.new(improvements_found: 0, complete_improvements: 0, lessons_saved: 0)
-    options = {strategy: strategy, time_budget_seconds: time_budget_seconds,
+    options = {strategy: strategy, model: model, time_budget_seconds: time_budget_seconds,
                beam_width: beam_width, max_states: max_states, max_rollouts: max_rollouts,
                rollouts_per_step: rollouts_per_step, store: store, clock: clock}
     seeds.each {|seed| collect_seed(seed, options, counts) }
@@ -27,7 +29,7 @@ class LessonCollector
   private
 
   def collect_seed(seed, options, counts)
-    actual = GameSimulator.run(seed: seed, strategy: options[:strategy])
+    actual = GameSimulator.run(seed: seed, strategy: options[:strategy], model: options[:model])
     search = search_episode(seed, options)
     record_improvement(seed, actual, search, options, counts)
   end
@@ -38,7 +40,8 @@ class LessonCollector
                              beam_width: options[:beam_width], max_states: options[:max_states],
                              max_rollouts: options[:max_rollouts],
                              rollouts_per_step: options[:rollouts_per_step],
-                             rollout_strategy: options[:strategy], clock: options[:clock])
+                             rollout_strategy: options[:strategy], baseline_model: options[:model],
+                             clock: options[:clock])
   end
 
   def record_improvement(seed, actual, search, options, counts)
@@ -86,7 +89,7 @@ class LessonCollector
   def search_record(result, options)
     search_options(options).merge(search_metrics(result),
                                   version:  ImprovementSearch::VERSION,
-                                  strategy: options[:strategy].to_sym)
+                                  strategy: options[:strategy].to_sym).merge(LearningModel.provenance(options[:model]))
   end
 
   def search_options(options)
@@ -106,7 +109,7 @@ class LessonCollector
     {path: "simulator:#{seed}:#{options[:strategy]}", seed: seed,
      actual_score: actual.score, candidate_score: result.best_score,
      improvement_delta: result.score_delta, search_status: result.status,
-     candidate_complete: result.complete}
+     candidate_complete: result.complete}.merge(LearningModel.provenance(options[:model]))
   end
 
   def validate_lesson!(lesson, actual, result, seed)

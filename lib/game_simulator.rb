@@ -54,6 +54,11 @@ class GameSimulator
           capture_states: false)
     seed = Integer(seed)
     strategy = strategy.to_sym
+    if strategy == :learned && model.nil?
+      raise ArgumentError,
+            "learned simulation requires an explicit model: hash, player or path; bundled defaults are for gameplay"
+    end
+
     state, player = new_run(seed, strategy, model)
     play_until_over(state, player, seed: seed, strategy: strategy,
                     max_moves: max_moves, capture_states: capture_states)

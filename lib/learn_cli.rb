@@ -89,7 +89,7 @@ module LearnCLI
                                           beam_width: options[:beam_width], max_states: options[:max_states],
                                           max_rollouts: options[:max_rollouts],
                                           rollouts_per_step: options.fetch(:rollouts_per_step, 2),
-                                          strategy: options[:strategy])
+                                          strategy: options[:strategy], model: options[:model])
       saved = LessonStore.new(directory: options[:output]).save(lesson)
       divergence = lesson.fetch(:actual_sequence).zip(lesson.fetch(:candidate_sequence)).index do |actual, candidate|
         actual != candidate
@@ -115,6 +115,7 @@ module LearnCLI
       opts.on("--max-rollouts N", Integer) {|value| options[:max_rollouts] = value }
       opts.on("--rollouts-per-step N", Integer) {|value| options[:rollouts_per_step] = value }
       opts.on("--strategy NAME") {|value| options[:strategy] = value.to_sym }
+      opts.on("--model FILE") {|value| options[:model] = value }
       opts.on("--output DIR") {|value| options[:output] = value }
     end
   end
@@ -170,7 +171,7 @@ module LearnCLI
 
     def execute(options, out:, **)
       seeds = LearningSeedSets.validate!(options[:seeds], set: :training, purpose: "lesson collection")
-      result = LessonCollector.new.collect(seeds: seeds, strategy: options[:strategy],
+      result = LessonCollector.new.collect(seeds: seeds, strategy: options[:strategy], model: options[:model],
                                            time_budget_seconds: options[:budget],
                                            beam_width: options[:beam_width], max_states: options[:max_states],
                                            max_rollouts: options[:max_rollouts],
@@ -189,6 +190,7 @@ module LearnCLI
           options[:seeds] = LearningSeedSets.parse_list(value)
         end
         opts.on("--strategy NAME") {|value| options[:strategy] = value.to_sym }
+        opts.on("--model FILE") {|value| options[:model] = value }
         opts.on("--budget SECONDS", Float) {|value| options[:budget] = value }
         opts.on("--beam-width N", Integer) {|value| options[:beam_width] = value }
         opts.on("--max-states N", Integer) {|value| options[:max_states] = value }

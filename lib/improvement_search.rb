@@ -37,6 +37,7 @@ class ImprovementSearch
              max_rollouts: 100, rollouts_per_step: 2,
              rollout_strategy: strategy, baseline_model: nil, rollout_model: baseline_model,
              clock: nil)
+    require_search_models!(strategy, rollout_strategy, starting_board, baseline_model, rollout_model)
     state = initialize_search(seed: seed, strategy: strategy, starting_board: starting_board,
                               baseline_score: baseline_score, baseline_sequence: baseline_sequence,
                               fixed_offers: fixed_offers, continue_after_fixed_offers: continue_after_fixed_offers,
@@ -49,6 +50,15 @@ class ImprovementSearch
   end
 
   private
+
+  def require_search_models!(strategy, rollout_strategy, starting_board, baseline_model, rollout_model)
+    missing_baseline = !starting_board && strategy.to_sym == :learned && baseline_model.nil?
+    missing_rollout = rollout_strategy.to_sym == :learned && rollout_model.nil?
+    return unless missing_baseline || missing_rollout
+
+    raise ArgumentError,
+          "learned search requires explicit baseline_model:/rollout_model:; bundled defaults are for gameplay"
+  end
 
   def initialize_search(seed:, strategy:, starting_board:, baseline_score:, baseline_sequence:,
                         fixed_offers:, continue_after_fixed_offers:, budget:, beam_width:,

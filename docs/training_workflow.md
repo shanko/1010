@@ -204,3 +204,20 @@ the same held-out report.
 Changing `--model` reverts to any retained learned checkpoint. Selecting a
 heuristic strategy needs no local model. Training continues offline, and the
 graphical game loads its chosen policy once at startup.
+
+## Explicit learned models outside gameplay
+
+Gameplay (`./1010`, `./1010 auto`, and `./1010 auto learned`) intentionally
+uses the bundled release when no model is supplied. Training and search must
+not silently choose that release. `GameSimulator.run` requires an explicit
+`model:` for learned simulation; `ImprovementSearch` requires explicit learned
+baseline and rollout models. Deep trace search requires both `--rollout learned`
+and `--model FILE`.
+
+`collect-training` and `analyze` require `--model FILE` with `--strategy learned`.
+They resolve the model once and record its SHA-256 in search metadata and lesson
+provenance; the fingerprint hashes the resolved model JSON, not a path or pointer.
+Use `correct --model FILE` for learned policy correction. `improve` uses Sam; `benchmark.rb` already requires an
+explicit learned model. The heuristic lesson format and gameplay default are
+unchanged. These optional provenance fields avoid an extra lesson schema change before
+the versioning work in #40.

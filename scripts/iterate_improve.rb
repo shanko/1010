@@ -63,7 +63,7 @@ deep_improve = File.expand_path("deep_improve.rb", __dir__)
 stale = 0
 options[:rounds].times do |round|
   trace = GameTrace.read(current)
-  moves = trace.events.count {|e| e.first == :move }
+  moves = LessonAnalyzer.new.final_trajectory(trace).fetch(:sequence).size
   fraction = (options[:fraction] - (options[:step] * stale)).clamp(0.5, 0.97)
   prefix = (moves * fraction).to_i
   output = File.join(options[:outdir], "round#{round + 1}-p#{prefix}.moves")
@@ -74,10 +74,8 @@ options[:rounds].times do |round|
   puts "== round #{round + 1}: #{File.basename(current)} " \
        "(#{trace.final_score} pts, #{moves} moves), splice at #{prefix}"
   system(*cmd, exception: true)
-  next unless File.exist?(output)
-
-  improved = GameTrace.read(output).final_score
-  if improved > trace.final_score
+  improved = File.exist?(output) && GameTrace.read(output).final_score
+  if improved && improved > trace.final_score
     puts "   -> new best: #{improved} (+#{improved - trace.final_score})"
     current = output
     stale = 0

@@ -6,6 +6,8 @@ require "stringio"
 require "open3"
 require "rbconfig"
 require_relative "../lib/game_session"
+require_relative "../lib/game_trace"
+require_relative "../lib/game_simulator"
 
 class GameSessionTest < Minitest::Test
   def with_session(**options)
@@ -18,6 +20,31 @@ class GameSessionTest < Minitest::Test
     ensure
       session&.finish
     end
+  end
+
+  def test_default_learned_session_replays_and_repeats_a_complete_game
+    runs = Array.new(2) do
+      with_session(auto: true, seed: 42) do |session, _directory|
+        assert_equal :learned, session.strategy
+        session.auto_move until session.game_over
+        score = session.board.score
+        session.finish
+        trace = GameTrace.read(session.game_log.path)
+        assert_equal "game_over", trace.final_reason
+        assert_equal score, trace.final_score
+        assert_equal score, GameTrace.replay(trace).score
+        [trace.seed, trace.events]
+      end
+    end
+
+    assert_equal runs.first, runs.last
+    model = LearnedPlayer.load(AutoPlayer::DEFAULT_MODEL_PATH)
+    expected = GameSimulator.run(seed: 42, strategy: :learned, model: model)
+    actual = runs.first.last.select {|event| event.first == :move }.map do |event|
+      _type, tile, option, row, col = event
+      {tile: tile, option: option, row: row, col: col}
+    end
+    assert_equal expected.moves, actual
   end
 
   def test_game_session_loads_without_gosu

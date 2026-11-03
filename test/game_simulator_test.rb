@@ -14,6 +14,20 @@ class GameSimulatorTest < Minitest::Test
     assert first.final_board.game_over?
   end
 
+  def test_bundled_learned_model_produces_repeatable_complete_games
+    model = LearnedPlayer.load(AutoPlayer::DEFAULT_MODEL_PATH)
+    first = GameSimulator.run(seed: 42, strategy: :learned, model: model)
+    second = GameSimulator.run(seed: 42, strategy: :learned, model: model)
+
+    assert_equal first.summary, second.summary
+    assert_equal first.moves, second.moves
+    assert_equal first.offers, second.offers
+    assert first.final_board.game_over?
+    first.final_board.options.each do |tile|
+      assert_empty first.final_board.positions_for(tile)
+    end
+  end
+
   def test_episode_score_equals_sum_of_placed_tile_areas
     result = GameSimulator.run(seed: 17, strategy: :sam)
     area = result.moves.sum {|move| Tile.fetch(move[:tile]).area }

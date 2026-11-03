@@ -25,6 +25,29 @@ class ImprovementSearchTest < Minitest::Test
     assert_equal result.best_score, replay_fixed(board, result.candidate_sequence, [%i[dot sq2]])
   end
 
+  def test_equivalent_move_orders_are_pruned_without_changing_the_optimum
+    cells = Array.new(10) { Array.new(10, 9) }
+    10.times do |row|
+      cells[row][row] = Board1010::EMPTY
+      cells[row][(row + 1) % 10] = Board1010::EMPTY
+    end
+    board = Board1010.new(cells: cells, options: [Tile.fetch(:dot), Tile.fetch(:dot)])
+    forward = board.copy
+    reverse = board.copy
+    [[0, 0], [2, 2]].each {|row, col| forward.play(0, row, col, deal: false) }
+    [[2, 2], [0, 0]].each {|row, col| reverse.play(0, row, col, deal: false) }
+    assert_equal forward.occupied_bits, reverse.occupied_bits
+
+    result = ImprovementSearch.search(starting_board: board, baseline_score: 0,
+                                      fixed_offers: [%i[dot dot]], beam_width: 64,
+                                      max_states: 5_000, max_rollouts: 500,
+                                      time_budget_seconds: 10, rollout_strategy: :first_fit)
+
+    assert_operator result.transpositions_pruned, :>, 0
+    assert_equal brute_force_score(board), result.best_score
+    assert_equal result.best_score, replay_fixed(board, result.candidate_sequence, [%i[dot dot]])
+  end
+
   def test_zero_budget_returns_baseline_as_best_so_far
     board = handcrafted_board
     baseline = [{tile: :dot, option: 0, row: 4, col: 4}]

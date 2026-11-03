@@ -2,6 +2,12 @@
 # Milestones 6-7 (roadmap #27, Phase 6): lessons -> imitation -> RL -> tuning selection
 # -> 2,000-seed held-out benchmark of every heuristic and the learned models.
 #
+# Reproduces the recorded Phase 6 evaluation, rather than evaluating current master.
+# Run from a clean checkout whose guarded files match 8bfb58d, such as d25a570:
+#   git worktree add --detach /tmp/1010-phase6 d25a570
+#   cd /tmp/1010-phase6
+# The guard below intentionally rejects later gameplay/model-default changes.
+#
 # Usage, from the repository root:
 #   scripts/phase6_evaluation.sh [BUNDLE_DIR] [WORKERS]
 #
@@ -26,7 +32,7 @@ stamp "ruby: $(ruby -v)"
 stamp "revision: $(git rev-parse HEAD)"
 # The Gemfile itself may differ (gosu moved to the :gui group); the resolved gems may not.
 git diff --quiet 8bfb58d -- lib Gemfile.lock scripts/learn.rb scripts/benchmark.rb ||
-  { echo "lib/, learn.rb, benchmark.rb or Gemfile.lock differ from 8bfb58d; results would not be comparable"; exit 1; }
+  { echo "lib/, learn.rb, benchmark.rb or Gemfile.lock differ from 8bfb58d; results would not be comparable. This script reproduces the recorded Phase 6 evaluation. Use a clean checkout matching 8bfb58d, such as: git worktree add --detach /tmp/1010-phase6 d25a570"; exit 1; }
 [ -z "$(git status --porcelain -- lib scripts/learn.rb scripts/benchmark.rb)" ] ||
   { echo "uncommitted changes in lib/, learn.rb or benchmark.rb"; exit 1; }
 bundle install --quiet

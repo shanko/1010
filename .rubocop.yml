@@ -4,6 +4,13 @@ AllCops:
   TargetRubyVersion: 3.0
   NewCops: enable
   SuggestExtensions: false
+  # Keep RuboCop's default excludes: CI installs gems under vendor/bundle.
+  inherit_mode:
+    merge:
+      - Exclude
+  # Git-ignored run outputs and one-off scripts that only exist on some machines.
+  Exclude:
+    - "learning_data/**/*"
 
 # Commonly used screens these days easily fit more than 80 characters.
 Layout/LineLength:

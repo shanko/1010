@@ -11,7 +11,7 @@ The system must support two learning signals:
 
 Do not describe the optimizer's best result as a proven maximum unless it exhaustively searched the relevant decision space or otherwise proved an upper bound. The first optimizer is an anytime improvement finder: keep the best candidate found so far, stop at its compute budget, and report whether it found an improvement.
 
-## Status and verification (2026-11-02)
+## Status and verification (updated 2026-11-03)
 
 The current gameplay default is **`learned`**, using the approved wall-calibrated
 feature-v2 model at **`models/learned.json`** (wall multiplier 0.75). Its resolved
@@ -29,7 +29,7 @@ The O hint still uses Sam.
 | 4: lessons | Complete | Source immutability, replay, versioned persistence and deduplication/provenance tests. |
 | 5: imitation | Complete | Deterministic training, schema/seed guards, explicit teacher fingerprints and historical reproduction tests. |
 | 6: reinforcement | Complete | Preference updates, fixed-seed and resumed training reproducibility; full held-out comparison recorded. |
-| 7: integration/evaluation | Complete in automated checks | Bundled default completes and replays repeatably; frozen held-out gains documented. Separate graphical maintainer check remains open in #39. |
+| 7: integration/evaluation | Complete | Bundled default completes and replays repeatably; frozen held-out gains documented. Maintainer confirmed 76 graphical auto runs on 2026-11-03 (#39). |
 
 The recorded November 1 audit at `d0c879a` passed **161 tests and 915 assertions**
 from a fresh clone with `learning_data/` empty and green CI. It reported specific
@@ -40,8 +40,10 @@ Supported legacy v2/v3 traces remain readable; unsupported old formats fail clea
 
 The November 2 follow-ups passed **198 tests and 1,138 assertions**, lint and CI,
 with exact baseline-v4 parity. No private training data is required by the suite.
-These are dated audit results, not a claim that the pending graphical check was
-performed.
+These are dated automated audit results. On **2026-11-03**, the maintainer
+confirmed the graphical check: auto mode ran **76 times**, reached a
+maximum score of **995**, and was then exited with **ESC**. This confirms
+Game Over and automatic restart; the graphical verification is complete.
 
 ### Follow-up outcomes
 
@@ -51,8 +53,9 @@ performed.
   still requires ignored experiment artifacts; see [the study](best_score_study.md).
 - **#39:** default learned session/simulator end-to-end tests and a transposition
   oracle regression are shipped and CI is green. Maintainer confirmation of
-  Game Over plus automatic restart in `./1010 auto --seed 42` is still pending;
-  the issue remains open. This manual criterion has not been waived.
+  Game Over plus automatic restart in `./1010 auto --seed 42` was confirmed by
+  the maintainer on 2026-11-03: 76 auto runs, maximum score 995, then ESC to quit.
+  Both automated and manual acceptance criteria are complete.
 - **#35:** learned collection/analysis require `--model FILE` and record the
   resolved teacher fingerprint; simulation/search reject implicit learned models.
   The approved gameplay fallback and heuristic lesson behavior are preserved.

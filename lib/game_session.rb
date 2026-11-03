@@ -59,6 +59,7 @@ class GameSession
   end
 
   def initialize_policy(auto, strategy, seed, model)
+    @explicit_seed = !seed.nil?
     @seeds = Random.new(seed || Random.new_seed)
     @strategy = strategy.to_sym
     @auto_player = AutoPlayer.new(@strategy, random: Random.new(@seeds.rand(2**32)), model: model)
@@ -83,7 +84,7 @@ class GameSession
       @auto = false
       start_trace_playback(GameTrace.read(replay_file), mode: "replay")
     else
-      result = load_game
+      result = load_game unless @auto && @explicit_seed
       @initial_message = result if %i[loaded damaged].include?(result)
       new_game unless @board
     end

@@ -106,8 +106,10 @@ $ ./1010 --headless sam --games 10 --seed 42  # the same games every time
 
 It prints each game's score and log file, then the mean, minimum and maximum.
 Every game is logged to `logs/`, so you can replay it in the window. It never
-reads or changes your saved game, so its games match `./1010 auto sam --seed 42`
-only when no saved game exists; the window continues a saved game first. To
+reads or changes your saved game. Its seeded games match
+`./1010 auto sam --seed 42`, which starts fresh and ignores saved games when
+`--seed` is given. Human play and unseeded window auto mode still continue a
+saved game. To
 compare strategies across many seeds, use
 `scripts/benchmark.rb`, which reports paired results and writes no logs.
 

@@ -11,12 +11,70 @@ The system must support two learning signals:
 
 Do not describe the optimizer's best result as a proven maximum unless it exhaustively searched the relevant decision space or otherwise proved an upper bound. The first optimizer is an anytime improvement finder: keep the best candidate found so far, stop at its compute budget, and report whether it found an improvement.
 
+## Status and verification (2026-11-02)
+
+The current gameplay default is **`learned`**, using the approved wall-calibrated
+feature-v2 model at **`models/learned.json`** (wall multiplier 0.75). Its resolved
+SHA-256 is `4a06731303861400f195484161d1d974a077bc75e2f439aed19b23114f371203`.
+The eight heuristic strategies remain available. Training and simulation require
+explicit learned models; gameplay intentionally supplies the bundled default.
+The O hint still uses Sam.
+
+| Milestone | Status | Verification |
+| --- | --- | --- |
+| 0: objective | Complete | Tile-area score invariants and paired-seed/frozen-offer protocol documented and tested. |
+| 1: replayable episodes | Complete | Seeded replay, undo and branch isolation tests; v4 rule headers; committed v2/v3 samples replay. |
+| 2: simulator/benchmark | Complete | Repeatable full episodes, replay equality, all eight heuristic per-seed results match baseline v4. |
+| 3: anytime search | Complete | Brute-force oracle, positive transposition pruning, legal candidate replay, budget and isolation tests. |
+| 4: lessons | Complete | Source immutability, replay, versioned persistence and deduplication/provenance tests. |
+| 5: imitation | Complete | Deterministic training, schema/seed guards, explicit teacher fingerprints and historical reproduction tests. |
+| 6: reinforcement | Complete | Preference updates, fixed-seed and resumed training reproducibility; full held-out comparison recorded. |
+| 7: integration/evaluation | Complete in automated checks | Bundled default completes and replays repeatably; frozen held-out gains documented. Separate graphical maintainer check remains open in #39. |
+
+The recorded November 1 audit at `d0c879a` passed **161 tests and 915 assertions**
+from a fresh clone with `learning_data/` empty and green CI. It reported specific
+errors for malformed, unsupported old/unversioned, truncated and incomplete
+traces; identical bundled-model moves across separate processes; and identical
+RL weights across two fixed-setting runs and two checkpoint-resume runs.
+Supported legacy v2/v3 traces remain readable; unsupported old formats fail clearly.
+
+The November 2 follow-ups passed **198 tests and 1,138 assertions**, lint and CI,
+with exact baseline-v4 parity. No private training data is required by the suite.
+These are dated audit results, not a claim that the pending graphical check was
+performed.
+
+### Follow-up outcomes
+
+- **#34:** corrected the artifact inventory after searching ignored files on both
+  machines. Raw and cleaned source checksums match; audit/comparison helpers are
+  retained locally, and the parent model was recovered from Git. Reproduction
+  still requires ignored experiment artifacts; see [the study](best_score_study.md).
+- **#39:** default learned session/simulator end-to-end tests and a transposition
+  oracle regression are shipped and CI is green. Maintainer confirmation of
+  Game Over plus automatic restart in `./1010 auto --seed 42` is still pending;
+  the issue remains open. This manual criterion has not been waived.
+- **#35:** learned collection/analysis require `--model FILE` and record the
+  resolved teacher fingerprint; simulation/search reject implicit learned models.
+  The approved gameplay fallback and heuristic lesson behavior are preserved.
+- **#40:** v4 traces record rule version 1; schema-v2 lessons record rule,
+  simulator, source-trace and search versions. Legacy trace replay is preserved;
+  historical v1 lesson training requires an explicit compatibility opt-in.
+- **#36:** 0.70 won the reused tuning-mean screen, but confirmation gained
+  +15.027 points with CI −3.304 to +33.358, failing the positive-interval gate.
+  No final test was run and no bundled model was replaced. The reserved
+  `5000000..5001999` range is unconsumed; see [the follow-up](wall_calibration_study.md).
+- **#37, #38, #42 and #44:** hint timings reported without changing hint policy;
+  historical evaluation checkout instructions corrected; explicitly seeded auto
+  ignores saves; tail-search iteration now honors patience and retained moves.
+
 ## Current code map and constraints
 
 - `lib/board.rb` contains the rules, tile options, placement legality, score, line clearing, and deal generation. `Board1010#play` adds the tile's square count to the score.
-- `lib/auto_player.rb` contains current strategies (`first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam`). Most select a fitting option randomly before selecting a location; `codex_1` evaluates tile-placement pairs to preserve legal placements for the remaining current offer, and `codex_sam` combines that tile choice with Sam placement scoring.
+- `lib/auto_player.rb` contains current strategies (`first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam`, and `learned`). Most select a fitting option randomly before selecting a location; `codex_1` evaluates tile-placement pairs to preserve legal placements for the remaining current offer, and `codex_sam` combines that tile choice with Sam placement scoring.
+- `models/learned.json` is the approved bundled gameplay default; `lib/learning_model.rb` resolves explicit training teachers.
+- `lib/game_rules.rb` defines the shared rule version.
 - `scripts/game_1010.rb` runs the graphical loop and records a seed plus move/undo records.
-- `lib/game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `lib/game_trace.rb` validates and replays v2/v3 traces headlessly.
+- `lib/game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `lib/game_trace.rb` validates and replays v2/v3/v4 traces headlessly, rejecting unsupported recorded rule versions.
 - `lib/game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
 - `lib/improvement_search.rb` runs bounded beam search with strategy rollouts, seeded normal-deal search, and frozen-offer counterfactual search.
 - `lib/learned_player.rb` defines versioned action features, a Ruby-native linear scorer, and deterministic imitation training; `lib/policy_corrector.rb` searches continuations from states visited by a learned policy.
@@ -40,10 +98,10 @@ Important rules for the implementation:
 ### Work
 
 1. Define the primary metric as final score at Game Over. Define operational secondary metrics for retained placed tiles, total cleared row/column events, batches offered, and score distribution across seeds.
-3. Verify the invariant that the score for a run equals the sum of the areas of all successfully placed tiles. Do not add direct score for clearing lines unless the game rules are deliberately changed.
-4. Define a fair comparison protocol: run policies on the same list of seeds, but let each policy's board state drive the existing board-dependent offer fallback.
-5. Keep “same fixed observed offers” as a separate counterfactual analysis mode. In that mode, freeze the exact offers from the logged episode; label it clearly because it is not the same as playing the normal seeded environment after the board diverges.
-6. Store the definitions and comparison protocol in `docs/learning_objective.md` and keep that document aligned with the simulator and reports.
+2. Verify the invariant that the score for a run equals the sum of the areas of all successfully placed tiles. Do not add direct score for clearing lines unless the game rules are deliberately changed.
+3. Define a fair comparison protocol: run policies on the same list of seeds, but let each policy's board state drive the existing board-dependent offer fallback.
+4. Keep “same fixed observed offers” as a separate counterfactual analysis mode. In that mode, freeze the exact offers from the logged episode; label it clearly because it is not the same as playing the normal seeded environment after the board diverges.
+5. Store the definitions and comparison protocol in `docs/learning_objective.md` and keep that document aligned with the simulator and reports.
 
 ### Acceptance criteria
 
@@ -145,12 +203,12 @@ The command is `bundle exec ruby scripts/learn.rb analyze GAME.moves`. It accept
 
 1. Add a policy interface that scores all legal `(option, row, column)` actions and chooses the highest-scoring action, with seeded random tie-breaking where needed.
 2. Start with a small, interpretable feature set computed from the board before/after a candidate move. Include features such as tile area/type, rows and columns completed, remaining legal placements for current options, empty-region sizes, isolated empty cells, board-edge/neighbor structure, and resulting board occupancy. Document and unit-test every feature.
-3. Turn high-quality search trajectories into state/action examples. Weight examples by search confidence and score improvement; exclude “best found” claims if the search result failed validation.
+3. Turn high-quality search trajectories into state/action examples. Use search confidence/status as an eligibility filter and weight eligible examples by score improvement; exclude “best found” claims if the search result failed validation. This filter is the accepted design, not a separate confidence multiplier.
 4. Train a simple Ruby-native action ranker/classifier first (for example, a linear scorer trained with pairwise ranking or multiclass updates). Keep feature extraction and model serialization versioned. Avoid adding a large ML dependency until a benchmark demonstrates the need.
 5. Include states visited by the learned policy and ask the searcher for corrections where possible. This reduces the mismatch between states in the demonstrations and states encountered by the learned player.
-6. Add a `learned` strategy name and a model-loading option. If no model exists, fail clearly or fall back only when explicitly requested.
+6. Add a `learned` strategy name and a model-loading option. Gameplay intentionally falls back to the maintainer-approved bundled release. Simulation, training and search require an explicit learned model and fail clearly otherwise.
 
-Feature version 2 includes normalized tile area, one-hot tile type, cleared rows and columns, remaining legal placements in the current offer, largest four-neighbor empty component, empty-component count, isolated empty cells under eight-neighbor adjacency, footprint neighbors, footprint contact (including edges), and resulting occupancy. Version 1 models must be retrained because the contact features changed. The linear scorer uses a softmax imitation update on complete improved lessons, weighted by score delta. Training only accepts lessons from the training seed range and excludes non-improvements, incomplete candidates, invalid replays, and held-out episodes. `scripts/learn.rb correct` captures decision states visited by the learned policy and asks the bounded searcher for better continuations using training seeds. `scripts/benchmark.rb` can load a learned model and reports per-seed results and 95% mean confidence intervals.
+Feature version 2 includes normalized tile area, one-hot tile type, cleared rows and columns, remaining legal placements in the current offer, largest four-neighbor empty component, empty-component count, isolated empty cells under eight-neighbor adjacency, footprint neighbors, footprint contact (including edges), and resulting occupancy. Version 1 models must be retrained because the contact features changed. The linear scorer uses a softmax imitation update on complete improved lessons, weighted by `min(log(1 + score_delta), 2.0)`. Confidence is an eligibility filter rather than an additional numeric weight. Training only accepts lessons from the training seed range and excludes non-improvements, incomplete candidates, invalid replays, and held-out episodes. `scripts/learn.rb correct` captures decision states visited by the learned policy and asks the bounded searcher for better continuations using training seeds. `scripts/benchmark.rb` can load a learned model and reports per-seed results and 95% mean confidence intervals.
 
 ### Acceptance criteria
 
@@ -187,26 +245,38 @@ Run `bundle exec ruby scripts/learn.rb train-rl --model MODEL`. The trainer uses
 
 **Status: complete; full 2,000-seed evaluation documented**
 
-The November 1 audit completed the full comparison after retraining a compatible
-feature-version-2 imitation model and running 10 RL episodes. Selected imitation
-averaged 339.25 versus Codex Sam's 328.57, a paired +10.67 points (95% CI
-+1.01 to +20.34). On the 1,900 seeds beyond the old pilot, the gain was +8.60
-(95% CI -1.37 to +18.57), so learned mode remains opt-in and Codex Sam remains
-the default. RL did not improve on imitation. A larger run (343 lessons, 200 RL episodes, step-25 checkpoint selected on 100 tuning seeds) scored +7.30 over Codex Sam (95% CI −1.89 to +16.49), so the default is unchanged. See
-[`learning_evaluation.md`](learning_evaluation.md) for distributions, provenance
-and limitations, and [`training_workflow.md`](training_workflow.md) for repeated
-training sessions and tuning-based selection.
+On **2026-11-01**, the original 15-lesson audit (`d94c0af`) completed the
+full comparison after retraining a compatible feature-v2 imitation model and
+running 10 RL episodes. Selected imitation averaged 339.25 versus Codex Sam's
+328.57, paired +10.67 (95% CI +1.01 to +20.34). On the 1,900 seeds beyond the
+old pilot, the gain was +8.60 (CI −1.37 to +18.57). Learned therefore remained
+opt-in and Codex Sam remained the default **at that stage**. RL did not improve
+on imitation. The larger 343-lesson, 200-RL-episode run (step-25 checkpoint
+selected on 100 tuning seeds) gained +7.30 over Codex Sam (CI −1.89 to +16.49),
+so it also did not change the default at that time.
 
-Those figures describe the original 15-lesson audit. The #33 follow-up used
-Codex Sam as the lesson teacher and trained a new imitation model from 304
-complete improvements. It cleared the 500-seed tuning gate, then gained +46.93
-points over Codex Sam on all 2,000 held-out seeds (95% CI +36.87 to +56.99),
-and +44.76 on the 1,900 seeds after the pilot (95% CI +34.38 to +55.15).
-The candidate and settings were frozen before its single final evaluation.
-The maintainer subsequently approved promotion as `learned`; the evaluated
-model is bundled at `models/learned.json` and is now the default. A subsequent
-[best-score study](best_score_study.md) calibrated wall preference and improved
-the bundled release on newly reserved test seeds. See [`issue33_experiments.md`](issue33_experiments.md).
+Later on **2026-11-01**, #33 (`f4d453c`) used Codex Sam as teacher and trained
+from 304 complete improvements. The tuning-selected model gained +46.93 over
+Codex Sam on all 2,000 held-out seeds (CI +36.87 to +56.99), and +44.76 after
+the old pilot (CI +34.38 to +55.15). It was frozen before the one final run.
+Maintainer-approved promotion in `f5addb1` made **learned the gameplay default**
+and bundled the release at `models/learned.json`.
+
+Also on **2026-11-01**, the demonstration-guided wall calibration (`d0c879a`)
+replaced that release with multiplier 0.75 while preserving occupied-cell
+contact. On newly reserved test seeds it gained +43.615 over the previous
+release (CI +31.528 to +55.702) and +83.855 over Codex Sam (CI +72.745 to +94.965).
+That wall-calibrated release is still the current bundled default.
+
+On **2026-11-02**, #36 tested nearby multipliers on reused tuning seeds. The
+selected 0.70 candidate failed confirmation, so no final evaluation or promotion
+followed. Current behavior remains the approved 0.75 release; this decision is
+separate from the historical default decisions above.
+
+See [learning evaluation](learning_evaluation.md), [#33 experiments](issue33_experiments.md),
+[the best-score study](best_score_study.md), [the wall follow-up](wall_calibration_study.md),
+and [training workflow](training_workflow.md) for provenance, uncertainty,
+limitations and reproduction requirements.
 
 ### Work
 
@@ -215,7 +285,7 @@ the bundled release on newly reserved test seeds. See [`issue33_experiments.md`]
 3. Optionally display the current policy/model name and score in the window; do not add search or training latency to interactive frame updates.
 4. Add a comparison report that runs all policies on identical evaluation seeds and presents score distributions, game lengths, and paired score differences.
 5. Document how to reproduce a result, train from lessons, resume training, select a model, and revert to a heuristic.
-6. Keep logs, lessons, and trained models ignored by Git unless the user explicitly chooses to share a small model or fixture.
+6. Keep logs, lessons and experimental trained models ignored by Git. The maintainer-approved release at `models/learned.json` and small test fixtures are the explicit tracked exceptions. Replacing the bundled release requires maintainer approval; training never overwrites it automatically.
 
 Graphical auto mode defaults to `learned`, loading the approved frozen model from `models/learned.json` once before play. `./1010 auto learned` uses the same bundled model; `--model PATH` explicitly overrides it. Codex Sam remains available as `./1010 auto codex_sam`. Codex Sam replaced Sam as the default after a 1,000-seed tuning comparison (seeds 2000000..2000999): Codex Sam 326.40 versus Sam 287.46, paired +38.94 points, 95% CI +27.76 to +50.13, winning 562, tying 61 and losing 377 games. Search rollouts and lesson analysis keep Sam (`AutoPlayer::SEARCH_STRATEGY`) because they play many full games and Sam is about six times faster. Sam had earlier been selected after the 100-seed footprint benchmark scored 259.93 on average versus JC's 171.94 (paired Sam − JC: +87.99 points, 95% CI +66.74 to +109.24; Sam wins 78, ties 3, loses 19 of 100 seeds). `scripts/benchmark.rb` produces paired per-seed comparisons, score distributions, confidence intervals, the strongest heuristic by mean, and learned-vs-strongest deltas. `scripts/learn.rb select` evaluates a retained checkpoint on tuning seeds before writing a selected pointer.
 
@@ -255,7 +325,7 @@ bundle exec ruby scripts/benchmark.rb --seed-set held_out --workers 4 --strategi
 ./1010 auto learned --model learning_data/checkpoints/selected.json --seed 42
 ```
 
-Learning artifacts should be self-describing and versioned. A trace needs a header (schema version, seed or initial state, rule version), ordered offer/deal records, accepted actions and undos, and an ending score. A lesson needs a reference to its source trace, the actual score/path, the candidate score/path, search budget and status, and the source/training schema versions. Reject mismatched versions instead of silently training on misread data.
+Learning artifacts should be self-describing and versioned. New v4 traces record format and rule versions, seed/initial state, ordered offers, moves/undos and ending score. Schema-v2 lessons record source provenance, actual/candidate scores and paths, search budgets/status and rule/simulator/source-trace/search versions. Mismatches fail clearly before training. Legacy v2/v3 traces expose no recorded rule version; historical v1 lessons remain replayable and require `--allow-legacy-lessons` for training reproduction. See the training workflow for the compatibility contract.
 
 ## Suggested implementation order
 

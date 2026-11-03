@@ -18,7 +18,9 @@ feature-v2 model at **`models/learned.json`** (wall multiplier 0.75). Its resolv
 SHA-256 is `4a06731303861400f195484161d1d974a077bc75e2f439aed19b23114f371203`.
 The eight heuristic strategies remain available. Training and simulation require
 explicit learned models; gameplay intentionally supplies the bundled default.
-The O hint still uses Sam.
+The O hint still uses Sam. An opt-in experimental `visible_batch` player plans
+only the current visible tiles through an immutable observation; it does not
+replace the approved default. See [the experiment](visible_batch_planner.md).
 
 | Milestone | Status | Verification |
 | --- | --- | --- |
@@ -79,6 +81,7 @@ Game Over and automatic restart; the graphical verification is complete.
 - `scripts/game_1010.rb` runs the graphical loop and records a seed plus move/undo records.
 - `lib/game_log.rb` writes versioned `.moves` traces with the starting board, mode, exact offers, move identities, undos, and final score; `lib/game_trace.rb` validates and replays v2/v3/v4 traces headlessly, rejecting unsupported recorded rule versions.
 - `lib/game_simulator.rb` runs full headless episodes; `scripts/benchmark.rb` evaluates strategies on paired seeds and reports score and secondary-metric distributions.
+- `lib/visible_position.rb` and `lib/visible_batch_planner.rb` implement experimental current-batch planning without a dealer or future offers.
 - `lib/improvement_search.rb` runs bounded beam search with strategy rollouts, seeded normal-deal search, and frozen-offer counterfactual search.
 - `lib/learned_player.rb` defines versioned action features, a Ruby-native linear scorer, and deterministic imitation training; `lib/policy_corrector.rb` searches continuations from states visited by a learned policy.
 - `lib/reinforcement_trainer.rb` runs REINFORCE episodes with a rolling return baseline and writes versioned checkpoints plus a tuning-selected pointer.

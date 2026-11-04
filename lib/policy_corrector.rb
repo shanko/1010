@@ -84,7 +84,8 @@ class PolicyCorrector
   end
 
   def search_record(result, options)
-    search_limits(options).merge(search_stats(result), version: ImprovementSearch::VERSION, strategy: :learned)
+    search_limits(options).merge(search_stats(result), information_mode: result.information_mode,
+                                                      version: ImprovementSearch::VERSION, strategy: :learned)
   end
 
   def search_limits(options)

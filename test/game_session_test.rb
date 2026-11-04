@@ -136,11 +136,12 @@ class GameSessionTest < Minitest::Test
 
   def test_auto_run_timing_uses_the_injected_clock
     now = 1_000.0
-    with_session(auto: true, clock: -> { now }) do |session, _directory|
+    with_session(auto: true, strategy: :sam, seed: 42, clock: -> { now }) do |session, _directory|
+      3.times { session.auto_move }
       now += 12_400
       line = session.finish_auto_run(score: 78)
 
-      assert_equal "Run 1   score 78   time 12.4s  new max", line
+      assert_equal "Run 1   score 78   time 12.4s   moves 3  new max", line
       assert_match "Total time: 12.4s", session.auto_run_tracker.summary
     end
   end
@@ -164,6 +165,21 @@ class GameSessionTest < Minitest::Test
       assert_instance_of Board1010::Move, move
       refute_nil session.previous_board
       refute session.toggle_auto
+    end
+  end
+
+  def test_stopping_auto_reports_retained_moves_after_undo
+    with_session(auto: true, strategy: :sam, seed: 42) do |session, _directory|
+      3.times { assert_instance_of Board1010::Move, session.auto_move }
+      assert session.undo
+      assert_equal 2, session.move_count
+
+      refute session.toggle_auto
+
+      assert_equal "Run 1   score #{session.board.score}   time 0.0s   moves 2  stopped",
+                   session.take_auto_run_line
+      assert_equal 0, session.auto_run_tracker.completed_count
+      assert_equal 1, session.auto_run_tracker.unfinished_count
     end
   end
 

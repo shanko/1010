@@ -185,12 +185,15 @@ Choose models and settings using tuning results before inspecting new test
 results. For future experiments, reserve a new test-only range in advance;
 `5000000..5001999` is reserved exclusively for issue #36, before its screening
 run. It is outside all training and tuning ranges and must not inform learning
-or selection. The next unreserved test range is `6000000..6001999`.
-Run the final comparison with `--seeds 5000000..5001999` instead of the tuning
-range in the preceding benchmark command. Use a new output filename and
-retain the report with its model/source fingerprints. That custom range is
-supplied with `--seeds`; the predefined `--seed-set held_out` still denotes
-the original November 1 range.
+or selection. The `6000000..6001999` block is retired after the
+[visible-batch study](visible_batch_planner.md) consumed `6000000..6000499` in
+its single preregistered final run; the remainder stays unused and retired;
+the next unreserved range is `7000000..7001999`.
+For a new final comparison, reserve an unused range first and pass its approved
+`--seeds` explicitly instead of the tuning range in the preceding command.
+Use a new output filename and retain model/source fingerprints. Do not use a
+previously reserved block or the predefined `--seed-set held_out`, which still
+denotes the original November 1 range.
 
 Document the resulting score distributions and paired intervals even if
 training did not help. Use another untouched test range for a later final

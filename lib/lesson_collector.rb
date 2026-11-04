@@ -89,7 +89,7 @@ class LessonCollector
 
   def search_record(result, options)
     search_options(options).merge(search_metrics(result),
-                                  version:  ImprovementSearch::VERSION,
+                                  information_mode: result.information_mode, version: ImprovementSearch::VERSION,
                                   strategy: options[:strategy].to_sym).merge(LearningModel.provenance(options[:model]))
   end
 

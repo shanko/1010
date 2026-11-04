@@ -61,3 +61,18 @@ Generation used the frozen candidate with the same command as v5, before
 packaging (the source revision and source fingerprint record that checkout).
 See [the best-score study](../docs/best_score_study.md) for independent tuning
 confirmation and the one final evaluation on newly reserved test seeds.
+
+## Experimental visible-batch baseline (v7)
+
+`baseline-v7.json` adds opt-in `visible_batch` alongside the eight established
+heuristics and the unchanged bundled learned player on seeds 1–100. Existing
+heuristic per-seed results match v4 exactly, and learned matches v6 exactly.
+The default benchmark list and gameplay default are unchanged. Source revision,
+fingerprint, information mode and planner settings are recorded in the report;
+model paths were normalized to repository-relative paths for publication.
+See [the experiment](../docs/visible_batch_planner.md) for independent paired
+strength and latency measurements and the information boundary.
+
+The legacy `strongest_heuristic` field still ranges over the eight established
+heuristics. Consult `pairwise_score_deltas.visible_batch` for the experimental
+strategy's comparisons; it is deliberately outside the established default list.

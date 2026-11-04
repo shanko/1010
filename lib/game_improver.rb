@@ -186,6 +186,7 @@ class GameImprover
     costliest_moves.sort_by! {|item| [-item.fetch(:estimated_cost), item.fetch(:move)] }
     {
       schema_version:                 1,
+      information_mode:               search.information_mode,
       source:                         File.expand_path(source_path),
       improved_trace:                 File.expand_path(output_path),
       seed:                           source.seed,
@@ -203,7 +204,7 @@ class GameImprover
       per_move_estimates:             move_costs,
       search:                         {states_explored: search.explored_states, states_limit: Integer(states_limit),
                rollouts: search.explored_rollouts, move_cost_rollouts: move_cost_rollouts,
-               status: search.status,
+               information_mode: search.information_mode, status: search.status,
                score_delta: search.score_delta},
       seed_consistent:                output_seed[:consistent],
       seed_consistency_reason:        output_seed[:reason],

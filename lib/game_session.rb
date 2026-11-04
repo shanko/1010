@@ -218,7 +218,7 @@ class GameSession
   end
 
   def finish_auto_run(score:, status: :completed)
-    line = @auto_run_tracker.finish_run(score: score, status: status)
+    line = @auto_run_tracker.finish_run(score: score, moves: @move_count, status: status)
     @pending_run_line = line if line
     line
   end

@@ -115,12 +115,13 @@ compare strategies across many seeds, use
 
 Auto mode prints one line when each game ends, then a run summary when you
 quit. Run time excludes the half-second restart pause; total time includes it.
+Each line also reports the current game's retained move count after the time.
 
 ```text
-Run 1   score 78   time 12.4s  new max
-Run 2   score 66   time 9.8s
-Run 3   score 122   time 18.1s  new max
-Run 4   score 52   time 4.2s  unfinished
+Run 1   score 78   time 12.4s   moves 21  new max
+Run 2   score 66   time 9.8s   moves 18
+Run 3   score 122   time 18.1s   moves 31  new max
+Run 4   score 52   time 4.2s   moves 14  unfinished
 Runs: 3 completed, 1 unfinished   Max score: 122 (run 3)
 Total time: 46.0s
 ```
@@ -162,6 +163,14 @@ $ ./1010 --delay 0.5 logs/<game>.improved.moves
 
 Add `--save-lesson` to store a lesson from the improved trace under
 `learning_data/`.
+
+An experimental player can plan the current visible tile batch without seeing
+future deals: `./1010 auto visible_batch --seed 42` (or use `--headless`). The
+normal learned player also sees only visible information at decision time.
+Offline improvement tools use known future deals and label their results
+`known_future`; their optimized trace scores are a different comparison.
+See [visible-batch planning](docs/visible_batch_planner.md) for the information
+boundary, fixed work budget, limitations and evaluation protocol.
 
 For a deeper improvement pass, `scripts/deep_improve.rb` replays a recorded
 prefix on the seeded dealer and re-searches the tail with a real rollout
@@ -293,7 +302,7 @@ $ ./1010 --delay 2 logs/<game>.moves
 
 Try defeating the computer (it is very hard) by taking turns and comparing the score AND time required to play it.
 
-The strategies are in `lib/auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam` and `learned` (the default). Learned uses the stronger-teacher model from #33 with wall preference calibrated from a 1,184-point manual game. On 2,000 new test seeds it gains +43.62 over the previous learned release (95% CI +31.53 to +55.70), and +83.86 over Codex Sam (95% CI +72.75 to +94.96). See [the study](docs/best_score_study.md). Codex Sam is the strongest heuristic: on 1,000 tuning seeds it averaged 326.40 against Sam's 287.46 (paired +38.94, 95% CI +27.76 to +50.13). Search, lesson analysis and `improve` still use Sam for their many rollout games, because it is about six times faster. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Codex Sam uses Codex 1 to choose the tile, then Sam to choose its placement. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
+The strategies are in `lib/auto_player.rb`: `first_fit`, `last_fit`, `random_fit`, `shanko`, `jc`, `sam`, `codex_1`, `codex_sam` and `learned` (the default), plus experimental, opt-in `visible_batch` (see [the planner report](docs/visible_batch_planner.md)). Learned uses the stronger-teacher model from #33 with wall preference calibrated from a 1,184-point manual game. On 2,000 new test seeds it gains +43.62 over the previous learned release (95% CI +31.53 to +55.70), and +83.86 over Codex Sam (95% CI +72.75 to +94.96). See [the study](docs/best_score_study.md). Codex Sam is the strongest heuristic: on 1,000 tuning seeds it averaged 326.40 against Sam's 287.46 (paired +38.94, 95% CI +27.76 to +50.13). Search, lesson analysis and `improve` still use Sam for their many rollout games, because it is about six times faster. Codex 1 chooses a tile and placement that preserve the most legal placements for the remaining tiles in the current offer. Codex Sam uses Codex 1 to choose the tile, then Sam to choose its placement. Sam scores completed lines first, then footprint contact, falling back to JC's choice on a tie. With `--seed` the computer gets the same tiles and makes the same choices every run, so strategies can be compared fairly.
 
 ## Code:
 

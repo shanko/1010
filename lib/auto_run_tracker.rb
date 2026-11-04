@@ -31,7 +31,7 @@ class AutoRunTracker
     @active_run[:number]
   end
 
-  def finish_run(score:, status: :completed, at_ms: @clock.call)
+  def finish_run(score:, moves:, status: :completed, at_ms: @clock.call)
     return nil unless active?
 
     validate_status!(status)
@@ -39,11 +39,12 @@ class AutoRunTracker
     ended_at = Float(at_ms)
     number = @active_run.fetch(:number)
     score = Integer(score)
+    moves = Integer(moves)
     new_max = record_result(score, number, status.to_sym)
     @last_duration_seconds = duration_seconds(ended_at)
     @last_ended_at = ended_at
     @active_run = nil
-    format_run_line(number, score, status.to_sym, new_max)
+    format_run_line(number, score, moves, status.to_sym, new_max)
   end
 
   def summary(at_ms: nil)
@@ -84,9 +85,9 @@ class AutoRunTracker
     true
   end
 
-  def format_run_line(number, score, status, new_max)
+  def format_run_line(number, score, moves, status, new_max)
     suffix = new_max ? "  new max" : ""
     suffix += "  #{status}" unless status == :completed
-    "Run #{number}   score #{score}   time #{'%.1f' % @last_duration_seconds}s#{suffix}"
+    "Run #{number}   score #{score}   time #{'%.1f' % @last_duration_seconds}s   moves #{moves}#{suffix}"
   end
 end

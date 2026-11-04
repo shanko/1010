@@ -36,6 +36,9 @@ Version 1 uses beam width 8 and a maximum of 5,000 attempted transitions per
 choice, counting duplicate states toward that work budget. Exact ties use stable
 option/row/column order rather than the game or player RNG. Deduplication includes
 occupancy, remaining visible options and score. No optimality is claimed.
+With the default beam width and at most three tiles, at most
+`300 + 8 * 200 + 8 * 100 = 2700` transitions can be attempted, so the 5,000
+cap cannot trigger; budget-limited partial results apply to non-default settings.
 
 At each depth, rank first by the number of currently fitting remaining tiles,
 then by a board-space score plus `log(1 + remaining placement count)`. A tile that
@@ -92,8 +95,10 @@ heuristic must still match baseline v4, and learned must match baseline v6.
 Report strength and latency honestly, including negative results. No default or
 hint promotion is part of this branch.
 
-Manual check after review: run `./1010 auto visible_batch --seed 42` and observe
-legal placements, Game Over and automatic restart. The existing O hint remains Sam.
+The maintainer completed the window check on 2026-11-03 with
+`./1010 auto visible_batch --seed 42`: five completed runs and automatic
+restarts, followed by one unfinished run. The detailed outcome is recorded
+below. The existing O hint remains Sam.
 
 ## Development and latency results
 
@@ -121,7 +126,9 @@ The snapshot adapter is included, model/player construction is outside timing,
 and measurement order alternates. These are whole-offer choices, not selected-
 tile hints or cached frames. The policy is slower, particularly at the start
 of a batch; these observations are not a universal latency guarantee or grounds
-for silently replacing the default/hint policy.
+for silently replacing the default/hint policy. The 48.201 ms maximum is a
+sample maximum, not a bound; decisions run synchronously in the window update,
+so slower machines can show visible pauses at the start of a batch.
 
 `baseline-v7.json` preserves every old heuristic and learned per-seed result.
 Its committed copy normalizes model paths; the original report is retained with
@@ -169,16 +176,44 @@ unplayable tiles made playable by a clear, empty batches/dead ends, work caps,
 selected-tile placement and repeated complete-game replay. A headless CLI smoke
 run (`./1010 --headless visible_batch --games 1 --seed 42`) scored 2,086 over
 542 moves, exactly matching baseline v7 for that illustrative baseline seed.
-Graphical verification for this experimental strategy remains a maintainer step;
-the earlier 76-run window confirmation covered learned. Existing heuristic
-per-seed results match baseline v4 and learned matches v6 exactly.
+The maintainer's 2026-11-03 window run used
+`./1010 auto visible_batch --seed 42` and reported:
 
-`learning_data/issue45/` on both machines retains `evaluate.rb`, `develop.sh`,
+| Run | Score | Time | Status |
+| --- | ---: | ---: | --- |
+| 1 | 2086 | 56.6 s | completed, new max |
+| 2 | 607 | 16.5 s | completed |
+| 3 | 248 | 6.6 s | completed |
+| 4 | 293 | 8.2 s | completed |
+| 5 | 326 | 9.4 s | completed |
+| 6 | 1 | 0.2 s | unfinished |
+
+The summary was five completed runs, one unfinished, maximum 2086, and total
+session time 100.0 s. This confirms graphical Game Over and automatic restart;
+the first score matches the baseline. See the
+[maintainer check](https://github.com/shanko/1010/pull/46#issuecomment-6617551263).
+This check predates the move-count reporting change in `068de40`: `moves N`
+has automated formatter/session coverage, including stopping after undo, but
+has not yet been observed in a real window run. The earlier 76-run window
+confirmation covered learned. Existing heuristic per-seed results match
+baseline v4 and learned matches v6 exactly.
+
+Artifact locations were verified on 2026-11-03: `learning_data/issue45/`
+is retained in the original development checkout and in the isolated compute
+worktree. These are ignored files, so a fresh clone or another development
+checkout will not contain them. Both locations retain `evaluate.rb`, `develop.sh`,
 the raw `baseline-v7.json`, `development.json`, `latency.json`,
 `freeze-posted.json`, `final.json`, logs and started markers (including the
 aborted development-launch records). The runner records its own checksum
 alongside source/model fingerprints. Published baseline model paths are relative;
-ignored raw reports retain their original provenance.
+ignored raw reports retain their original provenance. Read-only checks confirmed
+matching SHA-256 values in both locations: `final.json` is
+`a62bec0efe40b78c25755a0d7ad885e85fa4c1965a83c97e40d08225e57ceec1`,
+and `evaluate.rb` is
+`b7a7760872fb2e3a75c602a0415b981f454b779fee98664517f357509584a5e2`.
+Review follow-up passed 210 tests / 1,193 assertions with no failures, errors
+or skips, and lint inspected 70 files with no offenses. The frozen policy source
+fingerprint is unchanged. No experiment was rerun for this verification.
 
 Recorded phase commands on the compute worktree:
 

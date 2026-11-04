@@ -48,6 +48,15 @@ A `.started` marker prevents silently repeating a phase. Model promotion
 requires explicit maintainer approval; the experiment never overwrites the
 bundled model.
 
+## Seed-range update (2026-11-03)
+
+The two references in this study to `6000000..6001999` as the next
+unreserved range describe the state at the time of #36. Experiment #45 later
+consumed `6000000..6000499` and retired the entire `6000000..6001999` block.
+Do not reuse it. The next unreserved range is now `7000000..7001999`;
+consult [the current seed ledger](training_workflow.md) before reserving seeds.
+The earlier `5000000..5001999` reservation remains unconsumed and reserved.
+
 ## Screening results
 
 800 reused tuning seeds, `2000200..2000999`.

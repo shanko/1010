@@ -38,7 +38,7 @@ class AutoRunTrackerTest < Minitest::Test
   def test_stopping_and_restarting_auto_mode_keeps_run_number_and_total_span
     @tracker.start_run
     @now = 3_000
-    @tracker.finish_run(score: 10, moves: 3, status: :stopped)
+    assert_match "time 3.0s   moves 3  stopped", @tracker.finish_run(score: 10, moves: 3, status: :stopped)
     @now = 8_000
     assert_equal 2, @tracker.start_run
     @now = 10_000

@@ -168,6 +168,21 @@ class GameSessionTest < Minitest::Test
     end
   end
 
+  def test_stopping_auto_reports_retained_moves_after_undo
+    with_session(auto: true, strategy: :sam, seed: 42) do |session, _directory|
+      3.times { assert_instance_of Board1010::Move, session.auto_move }
+      assert session.undo
+      assert_equal 2, session.move_count
+
+      refute session.toggle_auto
+
+      assert_equal "Run 1   score #{session.board.score}   time 0.0s   moves 2  stopped",
+                   session.take_auto_run_line
+      assert_equal 0, session.auto_run_tracker.completed_count
+      assert_equal 1, session.auto_run_tracker.unfinished_count
+    end
+  end
+
   def test_auto_stops_after_the_requested_games_and_leaves_the_last_board
     with_session(auto: true, strategy: :sam, seed: 42, games: 2) do |session, directory|
       now = play_until_finished(session)

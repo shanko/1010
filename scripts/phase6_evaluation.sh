@@ -2,7 +2,7 @@
 # Milestones 6-7 (roadmap #27, Phase 6): lessons -> imitation -> RL -> tuning selection
 # -> 2,000-seed held-out benchmark of every heuristic and the learned models.
 #
-# Reproduces the recorded Phase 6 evaluation, rather than evaluating current master.
+# Reproduces the recorded Phase 6 evaluation, rather than evaluating current main.
 # Run from a clean checkout whose guarded files match 8bfb58d, such as d25a570:
 #   git worktree add --detach /tmp/1010-phase6 d25a570
 #   cd /tmp/1010-phase6

@@ -15,7 +15,7 @@ The order of work is set by the pinned roadmap issue, **#27**
 ## 2. Before changing code
 
 1. Read the whole issue, **including its comments**. Later comments can change the scope.
-2. Reproduce the problem on the current `master` using the issue's own steps.
+2. Reproduce the problem on the current `main` using the issue's own steps.
 3. If it is **already fixed or no longer relevant**, don't change code. Close the
    issue with a comment showing the evidence (the commands you ran and their
    output), then tick its box in #27 yourself. GitHub does not tick it.
@@ -70,7 +70,7 @@ machine with the same command, and put those numbers in the issue comment.
 
 - **One issue per commit.** Start the commit message with a short summary and
   include `Fixes #N` in the body. GitHub then closes the issue when the commit
-  reaches `master`. Tick the issue's box in #27 yourself; GitHub does not.
+  reaches `main`. Tick the issue's box in #27 yourself; GitHub does not.
 - If only part of an issue is done, use `Refs #N` instead, and comment on the
   issue saying what is done and what remains.
 - After pushing, comment on the issue: what changed, the commands you ran to

@@ -624,9 +624,17 @@ class GameWindow < Gosu::Window
   def draw_option(tile, index)
     rect = option_rect(index)
     draw_option_line(rect)
-    color = COLORS[:selected] if index == @selected # the original turned the selected tile yellow
     draw_tile(tile, rect[:x], rect[:y], size: OPTION_CELL_SIZE, gap: OPTION_CELL_GAP,
-                                        corner: OPTION_CORNER, color: color)
+                                        corner: OPTION_CORNER, color: option_tile_color(index))
+  end
+
+  # The selected tile is yellow, like the original — except while it is being
+  # dragged, when its slot shows the empty-cell color: the tile itself is out
+  # on the board under the pointer.
+  def option_tile_color(index)
+    return unless index == @selected
+
+    @dragging ? @empty_color : COLORS[:selected]
   end
 
   def draw_option_line(rect)
@@ -707,7 +715,11 @@ class GameWindow < Gosu::Window
   end
 
   def hint_position
+    # @selected can outlive the option it named (an auto move can consume it),
+    # so it is not always a valid index into the current options.
     tile = @session.board.options[@selected]
+    return unless tile
+
     key = [@session.board.object_id, @session.board.score, @selected, tile]
     if @hint_cache_key != key
       @hint_cache_key = key

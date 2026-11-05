@@ -715,7 +715,11 @@ class GameWindow < Gosu::Window
   end
 
   def hint_position
+    # @selected can outlive the option it named (an auto move can consume it),
+    # so it is not always a valid index into the current options.
     tile = @session.board.options[@selected]
+    return unless tile
+
     key = [@session.board.object_id, @session.board.score, @selected, tile]
     if @hint_cache_key != key
       @hint_cache_key = key

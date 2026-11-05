@@ -115,11 +115,11 @@ class GameWindow < Gosu::Window
     Gosu::Color.argb(0xff_b5_17_9e), # sq3: fuchsia
     Gosu::Color.argb(0xff_fb_56_07), # bl2: vermilion
     Gosu::Color.argb(0xff_57_75_90), # bl3: slate blue
-    Gosu::Color.argb(0xff_a7_c9_57), # tl2: yellow green
+    Gosu::Color.argb(0xff_38_66_41), # tl2: forest green
     Gosu::Color.argb(0xff_2e_c4_b6), # tl3: turquoise
     Gosu::Color.argb(0xff_d8_11_59), # br2: crimson
     Gosu::Color.argb(0xff_4c_c9_f0), # br3: sky blue
-    Gosu::Color.argb(0xff_8a_c9_26), # tr2: leaf green
+    Gosu::Color.argb(0xff_ff_70_a6), # tr2: pink
     Gosu::Color.argb(0xff_c7_7d_ff)  # tr3: lilac
   ].freeze
   tile_colors = Board1010::TILE_NAMES.each_with_index.to_h do |name, index|

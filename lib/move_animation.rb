@@ -11,7 +11,7 @@ require_relative "board"
 class MoveAnimation
   PLACE_STEP_MS  = 16  # the tile's squares appear one per frame, like the original
   CLEAR_STEP_MS  = 250 # then one row and one column start fading every quarter second
-  CLEAR_FADE_MS  = 400 # each emptied line takes this long to fade out
+  CLEAR_FADE_MS  = 700 # each emptied line takes this long to fade out
 
   # `move` is a Board1010::Move. `now` is the time in milliseconds (Gosu.milliseconds).
   def initialize(move, now, clear_step_ms: CLEAR_STEP_MS, fade_ms: CLEAR_FADE_MS)

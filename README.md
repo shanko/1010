@@ -52,7 +52,8 @@ is bundled at `models/learned.json`; no training is required. Use
 `./1010 auto codex_sam --seed 42` for the strongest heuristic, or
 `./1010 auto learned --model PATH` to load another learned model. Run it from the repository
 directory, or put the repository directory on your `PATH` to use `1010` as a
-command name.
+command name. Unfilled squares are light mint by default;
+`./1010 --empty-color cream` or `./1010 --empty-color grey` changes that.
 
 Click on one of the tiles presented on the right side of the 10x10 grid (or press 1, 2 or 3). The tile will turn yellow indicating selection. Then click on one of the empty cells in the grid where you want to place the tile, or drag the tile there. Keep on adding tiles to the grid till one or more rows or columns fill up. Filled up rows and columns get emptied again making space for more tiles to be placed. The idea is to try and keep as many tiles as possible to increase the score. 
 

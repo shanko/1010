@@ -88,10 +88,16 @@ class GameWindow < Gosu::Window
   # --- Colors -----------------------------------------------------------------
 
   # Gosu::Color.argb takes 0xAARRGGBB: alpha (opacity) first, then red, green, blue.
+  # The color of an unfilled square; --empty-color picks one, mint is default.
+  EMPTY_COLORS = {
+    mint:  Gosu::Color.argb(0x3e_79_da_6d), # pale green
+    cream: Gosu::Color.argb(0x3e_f5_e6_c8), # light cream
+    grey:  Gosu::Color.argb(0x3e_d3_d3_d3)  # light grey
+  }.freeze
+
   COLORS = {
     background:    Gosu::Color::WHITE,
     border:        Gosu::Color::GRAY,
-    empty:         Gosu::Color.argb(0x3e_79_da_6d), # pale green
     selected:      Gosu::Color::YELLOW,
     hint:          Gosu::Color.argb(0xde_d9_11_98), # magenta
     text:          Gosu::Color::RED,
@@ -163,10 +169,11 @@ class GameWindow < Gosu::Window
 
   # A recorded game: the seed that deals its tiles, and the moves and undos made.
   def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, replay_file: nil,
-                 replay_delay: REPLAY_DELAY_SECONDS, model: nil, games: nil)
+                 replay_delay: REPLAY_DELAY_SECONDS, model: nil, games: nil, empty_color: :mint)
     super(WIDTH, HEIGHT, fullscreen: false)
     self.caption = "1010!"
     initialize_fonts
+    initialize_empty_color(empty_color)
 
     @strategy = strategy.to_sym
     @session = GameSession.new(auto: auto, strategy: strategy, seed: seed, replay_file: replay_file,
@@ -188,6 +195,11 @@ class GameWindow < Gosu::Window
     @small_font = Gosu::Font.new(20)
   end
   private :initialize_fonts
+
+  def initialize_empty_color(name)
+    @empty_color = EMPTY_COLORS.fetch(name)
+  end
+  private :initialize_empty_color
 
   def needs_cursor?
     true
@@ -594,7 +606,7 @@ class GameWindow < Gosu::Window
     end
     tile_id = board_tile_id(row, col, now)
     # A clearing square fades into the empty square already underneath it.
-    draw_square(cell_x(col), cell_y(row), CELL_SIZE, COLORS[:empty]) if alpha < 1.0
+    draw_square(cell_x(col), cell_y(row), CELL_SIZE, @empty_color) if alpha < 1.0
     draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value, tile_id), alpha: alpha)
   end
 
@@ -748,7 +760,7 @@ class GameWindow < Gosu::Window
   # ---------------------------------------------------------------------------
 
   def cell_color(value, tile_id=nil)
-    return COLORS[:empty] if value == Board1010::EMPTY
+    return @empty_color if value == Board1010::EMPTY
 
     TILE_COLORS.fetch(tile_id&.positive? ? tile_id : value)
   end

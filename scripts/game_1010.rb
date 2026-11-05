@@ -110,14 +110,14 @@ class GameWindow < Gosu::Window
     Gosu::Color.argb(0xff_00_b4_d8), # vl2: cyan
     Gosu::Color.argb(0xff_9c_66_44), # vl3: brown
     Gosu::Color.argb(0xff_70_e0_00), # vl4: lime
-    Gosu::Color.argb(0xff_ff_be_0b), # vl5: amber
+    Gosu::Color.argb(0xff_ff_ea_00), # vl5: yellow
     Gosu::Color.argb(0xff_43_61_ee), # sq2: indigo
     Gosu::Color.argb(0xff_b5_17_9e), # sq3: fuchsia
-    Gosu::Color.argb(0xff_fb_56_07), # bl2: vermilion
+    Gosu::Color.argb(0xff_1d_35_57), # bl2: navy
     Gosu::Color.argb(0xff_57_75_90), # bl3: slate blue
     Gosu::Color.argb(0xff_38_66_41), # tl2: forest green
     Gosu::Color.argb(0xff_2e_c4_b6), # tl3: turquoise
-    Gosu::Color.argb(0xff_d8_11_59), # br2: crimson
+    Gosu::Color.argb(0xff_5f_0f_40), # br2: dark plum
     Gosu::Color.argb(0xff_4c_c9_f0), # br3: sky blue
     Gosu::Color.argb(0xff_ff_70_a6), # tr2: pink
     Gosu::Color.argb(0xff_c7_7d_ff)  # tr3: lilac

@@ -91,8 +91,8 @@ class GameWindow < Gosu::Window
   # The color of an unfilled square; --empty-color picks one, mint is default.
   EMPTY_COLORS = {
     mint:  Gosu::Color.argb(0x3e_79_da_6d), # pale green
-    cream: Gosu::Color.argb(0x3e_f5_e6_c8), # light cream
-    grey:  Gosu::Color.argb(0x3e_d3_d3_d3)  # light grey
+    cream: Gosu::Color.argb(0x50_ee_c0_70), # light cream
+    grey:  Gosu::Color.argb(0x50_90_90_90)  # light grey
   }.freeze
 
   COLORS = {

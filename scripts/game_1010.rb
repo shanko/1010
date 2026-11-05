@@ -79,18 +79,29 @@ class GameWindow < Gosu::Window
   MESSAGE_MS      = 2000 # how long messages like "Game saved" stay up
   AUTO_RESTART_MS = GameSession::AUTO_RESTART_MS # auto mode pause before starting another game
   BLINK_MS        = 250 # how fast the recording mark blinks
+  ILLEGAL_MARK_MS = 800 # how long the red crosses on an illegal drop stay up
   REPLAY_DELAY_SECONDS = GameSession::DEFAULT_REPLAY_DELAY_SECONDS
+
+  CROSS_INSET = 7 # how far in from a square's corners the red cross arms start
+  CROSS_WIDTH = 4 # thickness of the red cross arms
 
   # --- Colors -----------------------------------------------------------------
 
   # Gosu::Color.argb takes 0xAARRGGBB: alpha (opacity) first, then red, green, blue.
+  # The color of an unfilled square; --empty-color picks one, mint is default.
+  EMPTY_COLORS = {
+    mint:  Gosu::Color.argb(0x3e_79_da_6d), # pale green
+    cream: Gosu::Color.argb(0x50_ee_c0_70), # light cream
+    grey:  Gosu::Color.argb(0x50_90_90_90)  # light grey
+  }.freeze
+
   COLORS = {
     background:    Gosu::Color::WHITE,
     border:        Gosu::Color::GRAY,
-    empty:         Gosu::Color.argb(0x3e_79_da_6d), # pale green
     selected:      Gosu::Color::YELLOW,
     hint:          Gosu::Color.argb(0xde_d9_11_98), # magenta
     text:          Gosu::Color::RED,
+    illegal:       Gosu::Color::RED,
     option_line:   Gosu::Color::BLUE,
     help_backdrop: Gosu::Color.argb(0xf0_ff_ff_ff)  # almost opaque white
   }.freeze
@@ -105,16 +116,16 @@ class GameWindow < Gosu::Window
     Gosu::Color.argb(0xff_00_b4_d8), # vl2: cyan
     Gosu::Color.argb(0xff_9c_66_44), # vl3: brown
     Gosu::Color.argb(0xff_70_e0_00), # vl4: lime
-    Gosu::Color.argb(0xff_ff_be_0b), # vl5: amber
+    Gosu::Color.argb(0xff_ff_ea_00), # vl5: yellow
     Gosu::Color.argb(0xff_43_61_ee), # sq2: indigo
     Gosu::Color.argb(0xff_b5_17_9e), # sq3: fuchsia
-    Gosu::Color.argb(0xff_fb_56_07), # bl2: vermilion
+    Gosu::Color.argb(0xff_1d_35_57), # bl2: navy
     Gosu::Color.argb(0xff_57_75_90), # bl3: slate blue
-    Gosu::Color.argb(0xff_a7_c9_57), # tl2: yellow green
+    Gosu::Color.argb(0xff_38_66_41), # tl2: forest green
     Gosu::Color.argb(0xff_2e_c4_b6), # tl3: turquoise
-    Gosu::Color.argb(0xff_d8_11_59), # br2: crimson
+    Gosu::Color.argb(0xff_5f_0f_40), # br2: dark plum
     Gosu::Color.argb(0xff_4c_c9_f0), # br3: sky blue
-    Gosu::Color.argb(0xff_8a_c9_26), # tr2: leaf green
+    Gosu::Color.argb(0xff_ff_70_a6), # tr2: pink
     Gosu::Color.argb(0xff_c7_7d_ff)  # tr3: lilac
   ].freeze
   tile_colors = Board1010::TILE_NAMES.each_with_index.to_h do |name, index|
@@ -158,10 +169,11 @@ class GameWindow < Gosu::Window
 
   # A recorded game: the seed that deals its tiles, and the moves and undos made.
   def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, replay_file: nil,
-                 replay_delay: REPLAY_DELAY_SECONDS, model: nil, games: nil)
+                 replay_delay: REPLAY_DELAY_SECONDS, model: nil, games: nil, empty_color: :mint)
     super(WIDTH, HEIGHT, fullscreen: false)
     self.caption = "1010!"
     initialize_fonts
+    initialize_empty_color(empty_color)
 
     @strategy = strategy.to_sym
     @session = GameSession.new(auto: auto, strategy: strategy, seed: seed, replay_file: replay_file,
@@ -184,6 +196,11 @@ class GameWindow < Gosu::Window
   end
   private :initialize_fonts
 
+  def initialize_empty_color(name)
+    @empty_color = EMPTY_COLORS.fetch(name)
+  end
+  private :initialize_empty_color
+
   def needs_cursor?
     true
   end
@@ -196,6 +213,7 @@ class GameWindow < Gosu::Window
     seed ? @session.new_game(seed: seed) : @session.new_game
     @selected = nil
     @animation = nil
+    @illegal_drop = nil
     flush_auto_run_line
   end
 
@@ -205,6 +223,7 @@ class GameWindow < Gosu::Window
     @selected = nil
     @dragging = false
     @animation = nil
+    @illegal_drop = nil
     flush_auto_run_line
   end
 
@@ -227,6 +246,7 @@ class GameWindow < Gosu::Window
     move = @session.place(index, row, col)
     flush_auto_run_line
     unless move
+      mark_illegal_drop(index, row, col)
       @selected = nil
       return
     end
@@ -281,10 +301,24 @@ class GameWindow < Gosu::Window
     @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
   end
 
-  # Drops the move animation and the message once their time is up.
+  # A drop on squares the tile cannot fill: mark them with red crosses for a
+  # moment so the rejection is visible before the tile snaps back home.
+  def mark_illegal_drop(index, row, col)
+    tile = @session.board.options[index]
+    return unless tile
+
+    cells = @session.board.cells_for(tile, row, col).filter_map do |r, c, _value|
+      [r, c] if @session.board.inside?(r, c)
+    end
+    @illegal_drop = {cells: cells, until: Gosu.milliseconds + ILLEGAL_MARK_MS}
+  end
+
+  # Drops the move animation, the illegal-drop marks and the message once their
+  # time is up.
   def expire_finished(now)
-    @animation = nil if @animation&.done?(now)
-    @message   = nil if @message && now >= @message[:until]
+    @animation    = nil if @animation&.done?(now)
+    @message      = nil if @message && now >= @message[:until]
+    @illegal_drop = nil if @illegal_drop && now >= @illegal_drop[:until]
   end
 
   def auto_step(now)
@@ -542,6 +576,7 @@ class GameWindow < Gosu::Window
     draw_board
     draw_options
     draw_dragged_tile
+    draw_illegal_drop
     draw_hint
     draw_status
     draw_recording_mark
@@ -564,9 +599,15 @@ class GameWindow < Gosu::Window
   end
 
   def draw_board_cell(row, col, value, now)
-    value = @animation.value_at(row, col, value, now) if @animation
+    alpha = 1.0
+    if @animation
+      value = @animation.value_at(row, col, value, now)
+      alpha = @animation.alpha_at(row, col, now)
+    end
     tile_id = board_tile_id(row, col, now)
-    draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value, tile_id))
+    # A clearing square fades into the empty square already underneath it.
+    draw_square(cell_x(col), cell_y(row), CELL_SIZE, @empty_color) if alpha < 1.0
+    draw_square(cell_x(col), cell_y(row), CELL_SIZE, cell_color(value, tile_id), alpha: alpha)
   end
 
   def board_tile_id(row, col, now)
@@ -594,13 +635,67 @@ class GameWindow < Gosu::Window
                    rect[:x] + OPTION_LINE_LENGTH, line_y, COLORS[:option_line], Z_CELLS)
   end
 
-  # While dragging, the tile follows the mouse with its anchor square at the pointer.
+  # While dragging over a square the tile can fill, it snaps there so its first
+  # cell sits on the square no matter where in it the pointer is — the drop
+  # lands exactly as previewed. Over a square it cannot fill, the squares it
+  # would cover get a red cross. Off the board the tile follows the pointer
+  # with its anchor square at the mouse.
   def draw_dragged_tile
     return unless @dragging && @selected
 
     tile = @session.board.options[@selected]
+    row, col = cell_under_mouse
+    if row && @session.board.fits?(tile, row, col)
+      draw_snapped_tile(tile, row, col)
+    else
+      draw_free_tile(tile)
+      draw_crosses(tile, row, col) if row
+    end
+  end
+
+  # The tile aligned with the board, its anchor cell on (row, col): a preview
+  # of exactly where it lands, no matter where in the square the pointer is.
+  def draw_snapped_tile(tile, row, col)
+    left = cell_x(col) - (tile.anchor * CELL_PITCH)
+    draw_tile(tile, left, cell_y(row), size: CELL_SIZE, gap: CELL_GAP,
+                                       corner: CELL_CORNER, z: Z_DRAGGED)
+  end
+
+  # The tile following the pointer, its anchor square's corner at the mouse.
+  def draw_free_tile(tile)
     x = mouse_x - (tile.anchor * CELL_PITCH)
     draw_tile(tile, x, mouse_y, size: CELL_SIZE, gap: CELL_GAP, corner: CELL_CORNER, z: Z_DRAGGED)
+  end
+
+  # The red crosses left by an illegal drop, while they last.
+  def draw_illegal_drop
+    return unless @illegal_drop
+
+    @illegal_drop[:cells].each {|row, col| draw_cross(cell_x(col), cell_y(row), CELL_SIZE) }
+  end
+
+  # A red cross on every square the tile would cover with its anchor on (row, col).
+  def draw_crosses(tile, row, col)
+    @session.board.cells_for(tile, row, col).each do |r, c, _value|
+      draw_cross(cell_x(c), cell_y(r), CELL_SIZE) if @session.board.inside?(r, c)
+    end
+  end
+
+  # A thick X across one square: two quads, since Gosu only draws 1-pixel lines.
+  def draw_cross(x, y, size)
+    left   = x + CROSS_INSET
+    top    = y + CROSS_INSET
+    right  = x + size - CROSS_INSET
+    bottom = y + size - CROSS_INSET
+    draw_cross_arm(left, top, right, bottom)
+    draw_cross_arm(right, top, left, bottom)
+  end
+
+  def draw_cross_arm(from_x, from_y, to_x, to_y)
+    half  = CROSS_WIDTH / 2.0
+    color = COLORS[:illegal]
+    Gosu.draw_quad(from_x - half, from_y, color, from_x + half, from_y, color,
+                   to_x + half, to_y, color, to_x - half, to_y, color, Z_TEXT)
   end
 
   # While O is held: the square where the computer would put the selected tile's anchor.
@@ -665,7 +760,7 @@ class GameWindow < Gosu::Window
   # ---------------------------------------------------------------------------
 
   def cell_color(value, tile_id=nil)
-    return COLORS[:empty] if value == Board1010::EMPTY
+    return @empty_color if value == Board1010::EMPTY
 
     TILE_COLORS.fetch(tile_id&.positive? ? tile_id : value)
   end
@@ -686,14 +781,20 @@ class GameWindow < Gosu::Window
   end
 
   # A square with clipped corners: a filled square, then a triangle in the
-  # background color over each corner.
-  def draw_square(x, y, size, color, corner: CELL_CORNER, z: Z_CELLS)
-    Gosu.draw_rect(x, y, size, size, color, z)
+  # background color over each corner. At `alpha` < 1 the square fades away;
+  # the corner triangles would stay opaque, so they fade with the square.
+  def draw_square(x, y, size, color, corner: CELL_CORNER, z: Z_CELLS, alpha: 1.0)
+    Gosu.draw_rect(x, y, size, size, alpha < 1.0 ? translucent(color, alpha) : color, z)
+    return if alpha < 1.0
 
     background = COLORS[:background]
     [[x, y, 1, 1], [x + size, y, -1, 1], [x, y + size, 1, -1], [x + size, y + size, -1, -1]].each do |cx, cy, dx, dy|
       Gosu.draw_triangle(cx, cy, background, cx + (dx * corner), cy, background, cx, cy + (dy * corner), background, z)
     end
+  end
+
+  def translucent(color, alpha)
+    Gosu::Color.rgba(color.red, color.green, color.blue, (color.alpha * alpha).round)
   end
 
   # Reads `[auto] [strategy] [--seed N] [--model PATH]` from the command line.

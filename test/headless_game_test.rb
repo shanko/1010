@@ -83,6 +83,7 @@ class HeadlessGameTest < Minitest::Test
     {%w[--games 2 sam] => "requires auto", %w[--games 2] => "requires auto", %w[auto --games] => "--games",
      %w[auto --games 0] => "--games", %w[auto --games x] => "--games", %w[auto --games 2 a.moves] => "replaying",
      %w[--headless --games] => "--games", %w[--headless --delay 1] => "--delay",
+     %w[--headless --empty-color cream] => "--empty-color",
      %w[--headless a.moves] => ".moves"}.each do |args, message|
       error = assert_raises(ArgumentError, args.join(" ")) { GameOptions.parse(args) }
       assert_includes error.message, message

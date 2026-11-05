@@ -4,8 +4,12 @@ require_relative "auto_player"
 
 # Command-line options for the graphical front end, kept independent of Gosu.
 class GameOptions
+  # The window draws unfilled squares in one of these colors; mint is default.
+  EMPTY_COLORS = %w[mint cream grey].freeze
+
   USAGE = <<~TEXT.chomp.freeze
-    Usage: ./1010 [auto [strategy] [--games N]] [--seed N] [--model PATH] [--delay SECONDS] [GAME.moves]
+    Usage: ./1010 [auto [strategy] [--games N]] [--seed N] [--model PATH] [--delay SECONDS]
+                  [--empty-color #{EMPTY_COLORS.join('|')}] [GAME.moves]
            ./1010 --headless [strategy] [--games N] [--seed N] [--model PATH]
   TEXT
 
@@ -14,6 +18,7 @@ class GameOptions
     options = {}
     parse_seed(args, options)
     parse_delay(args, options)
+    parse_empty_color(args, options)
     parse_model(args, options)
     parse_games(args, options)
     options[:headless] = true if args.delete("--headless")
@@ -56,6 +61,22 @@ class GameOptions
     args.slice!(delay_at, 2)
   end
 
+  def self.parse_empty_color(args, options)
+    color_at = args.index("--empty-color")
+    return unless color_at
+
+    value = args[color_at + 1]
+    raise ArgumentError, "--empty-color requires one of: #{EMPTY_COLORS.join(', ')}" unless value
+
+    name = value == "gray" ? "grey" : value
+    unless EMPTY_COLORS.include?(name)
+      raise ArgumentError, "unknown --empty-color #{value.inspect}; choose from #{EMPTY_COLORS.join(', ')}"
+    end
+
+    options[:empty_color] = name.to_sym
+    args.slice!(color_at, 2)
+  end
+
   def self.parse_model(args, options)
     model_at = args.index("--model")
     return unless model_at
@@ -91,6 +112,7 @@ class GameOptions
 
     raise ArgumentError, "--headless cannot replay a .moves file" if options[:replay_file]
     raise ArgumentError, "--headless has no animation, so --delay does not apply" if options[:replay_delay]
+    raise ArgumentError, "--headless has no window, so --empty-color does not apply" if options[:empty_color]
 
     options[:auto] = true
   end
@@ -111,6 +133,6 @@ class GameOptions
 
     raise ArgumentError, "learned model does not exist: #{options[:model]}"
   end
-  private_class_method :parse_seed, :parse_delay, :parse_model, :parse_games, :parse_positionals,
-                       :validate_headless, :validate_games, :validate_strategy
+  private_class_method :parse_seed, :parse_delay, :parse_empty_color, :parse_model, :parse_games,
+                       :parse_positionals, :validate_headless, :validate_games, :validate_strategy
 end

@@ -21,10 +21,21 @@ class MoveAnimationTest < Minitest::Test
     assert_equal 2, value(0, 9, 1000 + step)
   end
 
-  def test_a_cleared_row_shows_its_old_squares_until_it_empties
+  def test_a_cleared_row_shows_its_old_squares_while_it_fades
     cleared_at = 1000 + (2 * MoveAnimation::PLACE_STEP_MS)
-    assert_equal 1, value(0, 0, cleared_at - 1)
-    assert_equal EMPTY, value(0, 0, cleared_at)
+    fade = MoveAnimation::CLEAR_FADE_MS
+    assert_equal 1, value(0, 0, cleared_at + fade - 1)
+    assert_equal EMPTY, value(0, 0, cleared_at + fade)
+  end
+
+  def test_cleared_squares_fade_out_over_the_fade_time
+    cleared_at = 1000 + (2 * MoveAnimation::PLACE_STEP_MS)
+    fade = MoveAnimation::CLEAR_FADE_MS
+    assert_equal 1.0, @animation.alpha_at(0, 0, cleared_at)
+    mid_fade = @animation.alpha_at(0, 0, cleared_at + (fade / 2))
+    assert mid_fade.positive? && mid_fade < 1, "mid-fade should be translucent, got #{mid_fade}"
+    assert_equal 1.0, @animation.alpha_at(0, 0, cleared_at + fade)
+    assert_equal 1.0, @animation.alpha_at(5, 5, cleared_at + 1), "uncleared squares never fade"
   end
 
   def test_squares_away_from_the_move_show_the_board
@@ -39,8 +50,8 @@ class MoveAnimationTest < Minitest::Test
     assert_equal tile_id, @animation.tile_id_at(0, 9, @board.tile_ids[0][9], 1000 + MoveAnimation::PLACE_STEP_MS)
   end
 
-  def test_done_after_the_last_line_empties
-    ends_at = 1000 + (2 * MoveAnimation::PLACE_STEP_MS) + MoveAnimation::CLEAR_STEP_MS
+  def test_done_after_the_last_line_fades_out
+    ends_at = 1000 + (2 * MoveAnimation::PLACE_STEP_MS) + MoveAnimation::CLEAR_FADE_MS
     refute @animation.done?(ends_at - 1)
     assert @animation.done?(ends_at)
   end

@@ -203,6 +203,18 @@ class GameReplayTest < Minitest::Test
     assert_match "requires seconds", error.message
   end
 
+  def test_empty_color_accepts_mint_cream_and_grey_and_rejects_others
+    assert_equal :mint, GameOptions.parse(["--empty-color", "mint"]).fetch(:empty_color)
+    assert_equal :cream, GameOptions.parse(["--empty-color", "cream"]).fetch(:empty_color)
+    assert_equal :grey, GameOptions.parse(["--empty-color", "gray"]).fetch(:empty_color)
+    refute GameOptions.parse([]).key?(:empty_color)
+
+    ["rose", nil].each do |value|
+      error = assert_raises(ArgumentError) { GameOptions.parse(["--empty-color", value].compact) }
+      assert_match "empty-color", error.message
+    end
+  end
+
   def test_invalid_game_command_line_has_plain_error_without_backtrace
     skip GuiSupport::SKIP_MESSAGE if GuiSupport.excluded?
 

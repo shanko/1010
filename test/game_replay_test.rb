@@ -104,6 +104,55 @@ class GameReplayTest < Minitest::Test
     end
   end
 
+  # Follow the transition through both immutable replay and live continuation logs.
+  def test_live_moves_and_undo_after_playback_create_a_replayable_continuation
+    Dir.mktmpdir do |directory|
+      session = GameSession.new(strategy: :first_fit, replay_delay: 0, log_directory: directory,
+                                save_store: save_store(directory), clock: -> { 0 })
+      session.start_trace_playback(replay_trace, mode: "replay")
+      replay_path = session.game_log.path
+      session.playback_tick(0) while session.playback
+      recorded = File.binread(replay_path)
+      snapshot = session.board.to_save
+
+      assert session.auto_move
+      assert session.undo
+      assert_equal snapshot, session.board.to_save
+      assert session.auto_move
+      session.finish
+
+      continuation = GameTrace.read(session.game_log.path)
+      assert_nil continuation.seed
+      assert_equal "continuation", continuation.mode
+      assert_equal snapshot, continuation.starting_board.to_save
+      assert_equal session.board.to_save, GameTrace.replay(continuation).to_save
+      assert_equal recorded, File.binread(replay_path)
+    end
+  end
+
+  def test_undo_immediately_after_playback_starts_from_the_restored_snapshot
+    Dir.mktmpdir do |directory|
+      session = GameSession.new(strategy: :first_fit, replay_delay: 0, log_directory: directory,
+                                save_store: save_store(directory), clock: -> { 0 })
+      session.start_trace_playback(replay_trace, mode: "replay")
+      session.playback_tick(0) while session.playback
+      replay_path = session.game_log.path
+      recorded = File.binread(replay_path)
+
+      assert session.undo
+      assert_equal 0, session.board.score
+      refute session.undo
+      assert session.auto_move
+      session.finish
+
+      trace = GameTrace.read(session.game_log.path)
+      assert_equal 0, trace.starting_board.score
+      assert_nil trace.seed
+      assert_equal session.board.to_save, GameTrace.replay(trace).to_save
+      assert_equal recorded, File.binread(replay_path)
+    end
+  end
+
   def test_v3_trace_rejects_incomplete_files
     with_moves("1010-moves-v3\ns1\nmode=test\ni0|#{'0' * 100}|#{'0' * 100}\nd1\n") do |path|
       error = assert_raises(ArgumentError) { GameTrace.read(path) }

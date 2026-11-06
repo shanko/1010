@@ -140,6 +140,19 @@ class LearnedPlayerTest < Minitest::Test
     end
   end
 
+  def test_disk_cached_training_matches_in_memory_epoch_order_and_weights
+    trainer = ImitationTrainer.new
+    lesson = JSON.parse(JSON.generate(improved_lesson))
+    examples = trainer.validated_examples(lesson, Hash.new(0))
+    expected = trainer.train_weights(examples, 29, 4, 0.1)
+    ImitationExamples.open do |cache|
+      examples.each {|example| cache << example }
+      assert_equal 1, cache.episode_count
+      assert_equal expected, trainer.train_weights(cache, 29, 4, 0.1)
+      assert_equal expected, trainer.train_weights(cache, 29, 4, 0.1)
+    end
+  end
+
   def test_training_excludes_held_out_seed_lessons
     Dir.mktmpdir do |directory|
       lesson = improved_lesson
@@ -161,6 +174,16 @@ class LearnedPlayerTest < Minitest::Test
 
       assert_match "no eligible improved lessons", error.message
     end
+  end
+
+  def test_training_does_not_treat_a_dealer_seed_as_a_training_root_seed
+    trainer = ImitationTrainer.new
+    lesson = improved_lesson
+    lesson["source_episode"]["seed_kind"] = "dealer"
+    excluded = Hash.new(0)
+
+    refute trainer.eligible_seed?(lesson, :training, excluded)
+    assert_equal 1, excluded[:unverified_root_seed]
   end
 
   def test_benchmark_accepts_a_model_for_learned_policy_and_reports_uncertainty
@@ -291,7 +314,7 @@ class LearnedPlayerTest < Minitest::Test
     candidate = [{tile: "dot", option: 0, row: 4, col: 0},
                  {tile: "sq2", option: 0, row: 4, col: 4}]
     {"schema_version" => LessonStore::SCHEMA_VERSION, "versions" => LessonStore.versions,
-     "source_episode" => {"path" => "train.moves", "sha256" => "example", "seed" => 1_000_000},
+     "source_episode" => {"path" => "train.moves", "sha256" => "example", "seed" => 1_000_000, "seed_kind" => "root"},
      "initial_state" => initial, "offers" => offers,
      "actual_sequence" => actual, "actual_score" => 1,
      "candidate_sequence" => candidate, "candidate_score" => 5,

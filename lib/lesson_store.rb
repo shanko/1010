@@ -4,6 +4,7 @@ require "digest"
 require "fileutils"
 require "json"
 require_relative "offer_replay"
+require_relative "artifact_file"
 
 # Versioned local storage for reproducible improvement-search lessons.
 class LessonStore
@@ -14,8 +15,8 @@ class LessonStore
     @directory = directory
   end
 
-  # Dedupe by initial decision state and exact offer history. Repeated sources
-  # are retained in provenance instead of silently producing duplicate lessons.
+  # Keep the strongest analysis per state/offer history and completeness class.
+  # Incomplete high scores never replace complete examples usable for training.
   def save(lesson)
     validate!(lesson)
     FileUtils.mkdir_p(@directory)
@@ -104,12 +105,16 @@ class LessonStore
 
   def update_existing(path, lesson)
     existing = JSON.parse(File.read(path))
-    provenance = existing.fetch("provenance")
-    lesson.fetch(:provenance).each do |source|
-      provenance << source unless provenance.include?(source)
-    end
-    write_atomically(path, existing)
+    incoming = JSON.parse(JSON.generate(lesson))
+    preferred = (analysis_rank(incoming) <=> analysis_rank(existing)).positive? ? incoming : existing
+    preferred["state_fingerprint"] = existing.fetch("state_fingerprint")
+    preferred["provenance"] = (existing.fetch("provenance") + incoming.fetch("provenance")).uniq
+    write_atomically(path, preferred)
     {path: path, deduplicated: true}
+  end
+
+  def analysis_rank(lesson)
+    [lesson.fetch("candidate_score"), lesson.dig("search", "status") == "improved" ? 1 : 0]
   end
 
   def write_new(lesson, identity)
@@ -141,20 +146,30 @@ class LessonStore
     self.class.validate_versions!(JSON.parse(JSON.generate(lesson)))
     %i[source_episode initial_state offers actual_sequence actual_score candidate_sequence candidate_score
        improvement_delta search provenance].each {|key| lesson.fetch(key) }
+    validate_scores!(lesson)
+  end
+
+  def validate_scores!(lesson)
+    actual = self.class.replay(lesson, "actual_sequence")
+    candidate = self.class.replay(lesson, "candidate_sequence")
+    return if candidate.score - actual.score == lesson.fetch(:improvement_delta)
+
+    raise ArgumentError, "lesson improvement delta differs from replayed scores"
   end
 
   def identity_for(lesson)
-    state = {versions: lesson.fetch(:versions), initial_state:    lesson.fetch(:initial_state),
-             actual_offers:    lesson.fetch(:actual_offers, lesson.fetch(:offers)),
-             candidate_offers: lesson.fetch(:candidate_offers, lesson.fetch(:offers))}
+    lesson = JSON.parse(JSON.generate(lesson))
+    state = {versions: lesson.fetch("versions"), search_version: lesson.dig("search", "version"),
+             initial_state: lesson.fetch("initial_state"),
+             actual_offers: lesson.fetch("actual_offers", lesson.fetch("offers")),
+             candidate_offers: lesson.fetch("candidate_offers", lesson.fetch("offers")),
+             actual_sequence: lesson.fetch("actual_sequence"),
+             seed: lesson.dig("source_episode", "seed"), seed_kind: lesson.dig("source_episode", "seed_kind"),
+             candidate_complete: lesson.dig("search", "candidate_complete")}
     Digest::SHA256.hexdigest(JSON.generate(state))
   end
 
   def write_atomically(path, payload)
-    temporary = "#{path}.tmp-#{Process.pid}"
-    File.write(temporary, "#{JSON.pretty_generate(payload)}\n")
-    File.rename(temporary, path)
-  ensure
-    File.delete(temporary) if temporary && File.exist?(temporary)
+    ArtifactFile.write(path, "#{JSON.pretty_generate(payload)}\n")
   end
 end

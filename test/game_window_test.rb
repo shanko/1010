@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "tmpdir"
 require_relative "gui_support"
 require_relative "../scripts/game_1010" unless GuiSupport.excluded?
 
@@ -32,5 +33,40 @@ class GameWindowTest < Minitest::Test
     assert_equal :undo, GameWindow::PLAYER_ACTIONS.fetch(Gosu::KB_U)
     assert_equal :start_drag, GameWindow::PLAYER_ACTIONS.fetch(Gosu::MS_LEFT)
     assert_equal({Gosu::KB_1 => 0, Gosu::KB_2 => 1, Gosu::KB_3 => 2}, GameWindow::OPTION_KEYS)
+  end
+
+  # Exercise input and drawing without constructing a native window.
+  def test_auto_move_invalidates_drag_even_when_the_index_still_exists
+    Dir.mktmpdir do |directory|
+      session = GameSession.new(strategy: :first_fit, log_directory: directory,
+                                save_store: GameSession::SaveStore.new(path: File.join(directory, "save")))
+      window = GameWindow.allocate
+      window.instance_variable_set(:@session, session)
+      [0, 2].each do |selected|
+        session.start(Board1010.new(options: %i[dot dot dot]))
+        window.instance_variable_set(:@selected, selected)
+        window.instance_variable_set(:@dragging, true)
+        window.button_down(Gosu::KB_E)
+
+        assert_equal 2, session.board.options.size
+        assert_nil window.instance_variable_get(:@selected)
+        refute window.instance_variable_get(:@dragging)
+        assert_nil window.draw_dragged_tile
+      end
+    ensure
+      session&.finish
+    end
+  end
+
+  def test_drag_drawing_discards_a_missing_option
+    window = GameWindow.allocate
+    board = Board1010.new(options: [:dot])
+    window.instance_variable_set(:@session, Struct.new(:board).new(board))
+    window.instance_variable_set(:@selected, 2)
+    window.instance_variable_set(:@dragging, true)
+    window.draw_dragged_tile
+
+    assert_nil window.instance_variable_get(:@selected)
+    refute window.instance_variable_get(:@dragging)
   end
 end

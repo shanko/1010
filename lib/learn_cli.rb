@@ -274,21 +274,21 @@ module LearnCLI
 
     def execute(options, out:, **)
       tuning = LearningSeedSets.validate!(options[:tuning_seeds], set: :tuning, purpose: "checkpoint selection")
-      checkpoint = File.expand_path(options[:checkpoint])
-      model = LearnedPlayer.load(checkpoint).model
+      checkpoint, model = LearnedPlayer.resolve(options[:checkpoint])
       report = GameBenchmark.run(seeds: tuning, strategies: [:learned], models: {learned: model})
       metrics = report.fetch(:strategies).fetch(:learned).fetch(:metrics).fetch(:score)
       evaluation = {"seeds" => tuning, "mean_score" => metrics.fetch(:mean),
                     "score_summary" => metrics,
                     "per_seed" => report.fetch(:strategies).fetch(:learned).fetch(:per_seed)}
       pointer = File.expand_path(options[:output] || File.join(File.dirname(checkpoint), "selected.json"))
-      unless File.dirname(pointer) == File.dirname(checkpoint)
+      unless File.dirname(ArtifactFile.canonical_path(pointer)) == File.dirname(checkpoint)
         raise ArgumentError,
               "selected pointer must be beside the checkpoint"
       end
 
       result = RLCheckpointStore.new(directory: File.dirname(pointer)).select(checkpoint,
-                                                                              tuning_evaluation: evaluation)
+                                                                              tuning_evaluation: evaluation,
+                                                                              output_path:       pointer)
       json(out, {checkpoint: checkpoint, selected_pointer: File.expand_path(result),
                  tuning_evaluation: evaluation})
     end

@@ -7,7 +7,7 @@
 require "json"
 require "fileutils"
 require_relative "game_trace"
-require_relative "game_log"
+require_relative "game_trace_writer"
 require_relative "lesson_analyzer"
 require_relative "lesson_store"
 require_relative "improvement_search"
@@ -20,6 +20,11 @@ class GameImprover
   def improve(path, states: DEFAULT_STATES, time_budget_seconds: 86_400,
               beam_width: 4, output_path: nil, report_path: nil, save_lesson: false,
               lesson_directory: LessonStore::DIRECTORY)
+    output_path ||= improved_path(path)
+    report_path ||= output_path.sub(/\.moves\z/, ".report.json")
+    ArtifactFile.distinct!(path, output_path, report_path)
+    raise ArgumentError, "output must end in .moves" unless output_path.end_with?(".moves")
+
     trace = GameTrace.read(path)
     unless trace.final_reason == "game_over"
       raise ArgumentError, "#{path} ended with #{trace.final_reason.inspect}; only Game Over traces can be improved"
@@ -36,17 +41,9 @@ class GameImprover
       rollouts_per_step: 2, time_budget_seconds: time_budget_seconds
     )
     keep_complete_baseline(search, baseline) unless search.complete
-    output_path ||= improved_path(path)
-    if File.expand_path(output_path) == File.expand_path(path)
-      raise ArgumentError,
-            "improved trace path must differ from the source"
-    end
-
-    report_path ||= output_path.sub(/\.moves\z/, ".report.json")
-    write_improved_trace(output_path, trace, search.candidate_offers, search.candidate_sequence)
+    GameTraceWriter.write(output_path, source: trace, offers: search.candidate_offers,
+                          sequence: search.candidate_sequence, expected_score: search.best_score)
     output_trace = GameTrace.read(output_path)
-    replayed = GameTrace.replay(output_trace)
-    raise ArgumentError, "improved trace score does not match search result" unless replayed.score == search.best_score
 
     output_seed_check = validate_seed(output_trace)
     report = build_report(path, output_path, trace, output_trace, baseline, search,
@@ -57,9 +54,11 @@ class GameImprover
                       raise ArgumentError, "cannot save a lesson when recorded offers run out before Game Over"
                     end
 
-                    lesson = LessonAnalyzer.new.analyze(output_path, time_budget_seconds: 0,
-                                                         beam_width: beam_width, max_states: 1,
-                                                         max_rollouts: 1)
+                    lesson = LessonAnalyzer.new.from_search(
+                      path, result: search, strategy: :sam, time_budget_seconds: time_budget_seconds,
+                      beam_width: beam_width, max_states: states,
+                      max_rollouts: [Integer(states), 100].min, rollouts_per_step: 2
+                    )
                     LessonStore.new(directory: lesson_directory).save(lesson).fetch(:path)
                   end
     Result.new(trace_path: output_path, report_path: report_path, lesson_path: lesson_path, report: report)
@@ -139,40 +138,6 @@ class GameImprover
     return path.sub(/\.moves\z/, ".improved.moves") if path.end_with?(".moves")
 
     "#{path}.improved.moves"
-  end
-
-  def write_improved_trace(path, source, offers, sequence)
-    raise ArgumentError, "output must end in .moves" unless path.end_with?(".moves")
-
-    FileUtils.mkdir_p(File.dirname(path))
-    board = source.starting_board.copy
-    board.replace_options(offers.first.map {|name| Tile.fetch(name) })
-    lines = [GameLog::VERSION_HEADER, "s#{source.seed || '-'}", "mode=improved",
-             "r#{GameRules::VERSION}", *BoardSnapshot.records(board)]
-    offer_index = 0
-    ending_reason = "game_over"
-    sequence.each do |move|
-      batch_exhausted = board.options.size == 1
-      lines << "m#{move.fetch(:tile)},#{move.fetch(:option)},#{move.fetch(:row)},#{move.fetch(:col)}"
-      played = board.play(move.fetch(:option), move.fetch(:row), move.fetch(:col), deal: false)
-      raise ArgumentError, "search returned an illegal improved move" unless played
-      next unless batch_exhausted
-
-      offer_index += 1
-      batch = offers[offer_index]
-      unless batch
-        ending_reason = "offers_exhausted"
-        break
-      end
-      board.replace_options(batch.map {|name| Tile.fetch(name) })
-      lines << BoardSnapshot.offer_record(batch.map {|name| Tile.fetch(name) })
-    end
-    unless board.game_over? || ending_reason == "offers_exhausted"
-      raise ArgumentError, "search result does not end at Game Over"
-    end
-
-    lines << "z#{ending_reason}|#{board.score}"
-    File.write(path, "#{lines.join("\n")}\n")
   end
 
   def build_report(source_path, output_path, source, output, baseline, search,
@@ -306,8 +271,7 @@ class GameImprover
   end
 
   def write_report(path, report)
-    FileUtils.mkdir_p(File.dirname(path))
-    File.write(path, "#{JSON.pretty_generate(report)}\n")
+    ArtifactFile.write(path, "#{JSON.pretty_generate(report)}\n")
   end
 end
 # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/BlockLength, Metrics/CyclomaticComplexity

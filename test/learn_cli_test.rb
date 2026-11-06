@@ -118,6 +118,15 @@ class LearnCLITest < Minitest::Test
       assert_operator costs.size, :>, 0
       assert_equal costs.sort.reverse, costs, "costliest moves are listed most expensive first"
 
+      lesson = LessonStore.read(Dir[File.join(lesson_directory, "*.json")].fetch(0))
+      assert_equal source.final_score, lesson.fetch("actual_score")
+      assert_equal improved.final_score, lesson.fetch("candidate_score")
+      assert_equal improved.final_score - source.final_score, lesson.fetch("improvement_delta")
+      assert ImitationTrainer.new.complete_improvement?(lesson)
+      assert ImitationTrainer.new.valid_complete_replay?(lesson)
+      assert_equal "dealer", lesson.dig("source_episode", "seed_kind")
+      assert_operator lesson.fetch("candidate_offers").size, :>, lesson.fetch("actual_offers").size
+
       trace_before = File.binread(output_path)
       report_before = File.binread(report_path)
       status = Dir.chdir(directory) { LearnCLI.run(arguments, out: StringIO.new, err: error) }

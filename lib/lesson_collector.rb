@@ -79,7 +79,7 @@ class LessonCollector
 
   def source_record(seed, options)
     {path: "simulator:#{seed}:#{options[:strategy]}", sha256: nil,
-     seed: seed, mode: "auto", final_reason: "game_over"}
+     seed: seed, seed_kind: "root", mode: "auto", final_reason: "game_over"}
   end
 
   def initial_record(initial, actual)

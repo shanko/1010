@@ -74,7 +74,7 @@ class PolicyCorrector
     board = state.fetch(:board)
     path = "seed:#{seed}:decision:#{index}"
     {schema_version: LessonStore::SCHEMA_VERSION, versions: LessonStore.versions,
-     source_episode: {path: path, sha256: nil, seed: seed,
+     source_episode: {path: path, sha256: nil, seed: seed, seed_kind: "root",
                       mode: "learned", decision_index: index, final_reason: "game_over"},
      initial_state: {cells: board.cells, tile_ids: board.tile_ids, score: board.score, options: offers.first},
      offers: offers, actual_sequence: continuation, actual_score: episode.score,

@@ -56,8 +56,13 @@ bundle exec ruby scripts/learn.rb correct --model learning_data/models/imitation
 
 Run that command after creating the model in the next section, then train a
 new imitation version from the expanded lesson store. `analyze GAME.moves`
-also produces lessons from completed replayable games, but imitation training
-only accepts lessons whose source seeds belong to the training split.
+also produces lessons from completed replayable games. Trace headers carry
+dealer seeds, so those lessons are labeled `source_episode.seed_kind=dealer`
+(or `unknown` for seedless traces). They are not training root seeds, even when
+the integer falls inside the training range. Imitation training requires
+`seed_kind=root` and a root seed in the training split; `collect-training` and
+`correct` supply that provenance. Excluded trace lessons are counted as
+`unverified_root_seed`.
 
 ## 2. Retrain imitation into a new file
 
@@ -72,6 +77,13 @@ settings produces the same model. New lessons, search corrections, or
 settings selected on tuning seeds are needed to explore a different result.
 Use a new filename for each round. Current code requires action feature
 version 2; version 1 models must be retrained.
+
+Imitation training caches extracted features in a private temporary file and
+keeps only example offsets and episode identities for the full corpus in memory.
+Feature extraction holds one lesson at a time; each shuffled update loads one
+example. The cache is removed when training exits, including on exceptions.
+This trades temporary disk space and I/O for lower memory use while preserving
+the seeded example order and weight updates.
 
 ## 3. Start an RL experiment
 
@@ -256,3 +268,23 @@ training metadata and does not change the weighting or learned weights. It does
 not bypass mismatches in schema-v2 lessons. Prefer recollecting lessons for new
 experiments. The committed v1 fixture is retained unchanged alongside a new v2
 fixture. Bundled model bytes, game rules and existing baselines are unchanged.
+
+Search version 3 fixes premature rollout-budget exhaustion: searches now spend
+their remaining rollouts, including a final partial batch, unless another limit
+or the search frontier stops them. Old search-version-2 lessons must be
+recollected or used with matching historical code; changing their version field
+does not reproduce a new search. The historical v1/v2 fixtures remain unchanged;
+`test/fixtures/lesson-search-v3.json` exercises the current search version.
+
+Reanalysis retains the highest candidate score for the same source trajectory,
+state, offers, seed provenance, search version, and completeness class. Complete
+and incomplete analyses have separate records so partial high scores cannot
+remove training examples. Equal scores favor an `improved` search status, and
+repeated provenance is deduplicated after JSON key normalization.
+
+`select` resolves existing selection pointers to their concrete checkpoints,
+rejects pointer cycles, and honors `--output FILE` for a sibling pointer. It
+refuses to overwrite the concrete model. Saved boards, models, checkpoints,
+lessons, pointers, and improved traces/reports use temporary-file replacement;
+the searched trace is validated before publication. Live game logs retain their
+exclusive append-only writer.

@@ -44,7 +44,7 @@ require_relative "../lib/game_improver"
 require_relative "../lib/improvement_search"
 require_relative "../lib/learned_player"
 
-# Replays a merged sequence the way GameImprover#write_improved_trace does and
+# Replays a merged sequence the way GameTraceWriter.write does and
 # reports the first move that fails to play. Used only with DEBUG=1.
 DEBUG_REPLAY = lambda do |trace, offers, sequence, prefix, candidate|
   board = trace.starting_board.copy
@@ -93,6 +93,8 @@ end
 trace_path = ARGV.shift or abort "Usage: scripts/deep_improve.rb TRACE.moves [options]"
 abort "unexpected arguments: #{ARGV.join(' ')}" unless ARGV.empty?
 
+output = options[:output] || trace_path.sub(/\.moves\z/, ".improved.moves")
+ArtifactFile.distinct!(trace_path, output)
 trace = GameTrace.read(trace_path)
 raise ArgumentError, "trace has no dealer seed" unless trace.seed
 
@@ -159,8 +161,8 @@ if search.best_score > baseline_score && search.complete
   # recorded batch must be written so prefix moves can still draw from it.
   merged_offers = offers.first(offer_index + 1) + search.candidate_offers[1..]
   DEBUG_REPLAY.call(trace, merged_offers, merged_sequence, prefix, search.candidate_sequence) if ENV["DEBUG"]
-  output = options[:output] || trace_path.sub(/\.moves\z/, ".improved.moves")
-  GameImprover.new.send(:write_improved_trace, output, trace, merged_offers, merged_sequence)
+  GameTraceWriter.write(output, source: trace, offers: merged_offers,
+                        sequence: merged_sequence, expected_score: search.best_score)
   replayed = GameTrace.replay(GameTrace.read(output))
   raise "replay #{replayed.score} != search #{search.best_score}" unless replayed.score == search.best_score
 

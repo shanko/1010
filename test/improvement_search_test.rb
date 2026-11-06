@@ -97,6 +97,18 @@ class ImprovementSearchTest < Minitest::Test
     assert_equal "time", result.cap_reason
   end
 
+  def test_rollout_budget_is_spent_including_a_final_partial_batch
+    [1, 2, 3, 4, 8].each do |limit|
+      result = ImprovementSearch.search(seed: 11, strategy: :first_fit, max_states: 10_000,
+                                        max_rollouts: limit, rollouts_per_step: 2,
+                                        time_budget_seconds: 60, clock: -> { 0 })
+      assert_equal limit, result.explored_rollouts, "rollout limit #{limit}"
+      assert_equal "rollouts", result.cap_reason
+      assert_equal result.best_score,
+                   replay_seeded(11, result.candidate_sequence, result.candidate_offers).score
+    end
+  end
+
   def test_validates_bounds_and_start_state_requirements
     assert_raises(ArgumentError) { ImprovementSearch.search(seed: 1, time_budget_seconds: -1) }
     assert_raises(ArgumentError) { ImprovementSearch.search(starting_board: handcrafted_board) }

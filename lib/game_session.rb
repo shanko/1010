@@ -5,6 +5,7 @@ require_relative "auto_player"
 require_relative "game_log"
 require_relative "game_trace"
 require_relative "auto_run_tracker"
+require_relative "artifact_file"
 
 # The rules and durable state for one or more games. This class has no Gosu
 # dependency; a window or terminal front end supplies time and presentation.
@@ -26,7 +27,7 @@ class GameSession
     end
 
     def write(value)
-      File.write(@path, value)
+      ArtifactFile.write(@path, value)
     end
 
     def delete
@@ -124,6 +125,7 @@ class GameSession
     @offer_replay = nil
     @ended_at = nil
     @game_over = false
+    @continuation_pending = false
   end
 
   def refresh_game_over(now: @clock.call)
@@ -139,6 +141,7 @@ class GameSession
     tile = @board.options[index]
     return nil unless tile && @board.fits?(tile, row, col)
 
+    start(@board, mode: "continuation") if @continuation_pending
     previous = @board.copy
     move = apply_placement(tile, index, row, col)
     return nil unless move
@@ -166,6 +169,11 @@ class GameSession
 
   def undo
     return false unless @previous_board
+
+    if @continuation_pending
+      start(@previous_board, mode: "continuation")
+      return true
+    end
 
     @board = @offer_replay ? @offer_replay.undo : @previous_board
     @previous_board = nil
@@ -304,6 +312,10 @@ class GameSession
     @offer_replay.finish!(expected_score: score, require_all_offers: false)
     @game_log.finish(reason: reason, score: score)
     clear_playback
+    # Replay consumed recorded offers, not the seeded dealer. The first live
+    # action starts a seedless snapshot trace, leaving the replay immutable.
+    @continuation_pending = true
+    :finished
   end
 
   def clear_playback

@@ -7,7 +7,7 @@ require_relative "recorded_offer_source"
 # Bounded, anytime beam search. State and rollout counts are the reproducible
 # work budgets; elapsed time is only a safety cap.
 class ImprovementSearch
-  VERSION = 2
+  VERSION = 3
   PathNode = Struct.new(:parent, :action, keyword_init: true)
   OfferNode = Struct.new(:parent, :batch, :batch_count, keyword_init: true)
   Node = Struct.new(:board, :path, :offer_history, :next_offer_index, :depth,
@@ -256,7 +256,6 @@ class ImprovementSearch
     remaining = state.max_rollouts - state.explored_rollouts
     rollout_count = [state.rollouts_per_step, remaining].min
     ranked.first(rollout_count).each {|child| run_candidate_rollout(child, state) }
-    state.rollout_capped = true if remaining <= rollout_count && ranked.size > rollout_count
   end
 
   def run_candidate_rollout(child, state)
@@ -286,9 +285,7 @@ class ImprovementSearch
   end
 
   def rollout_limit_reached?(state, ranked)
-    remaining = state.max_rollouts - state.explored_rollouts
-    rollout_count = [state.rollouts_per_step, remaining].min
-    remaining <= rollout_count && ranked.size > rollout_count
+    state.explored_rollouts >= state.max_rollouts && !ranked.empty?
   end
 
   def result_for(state)

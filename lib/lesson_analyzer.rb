@@ -30,6 +30,16 @@ class LessonAnalyzer
     extract_final_trajectory(trace)
   end
 
+  # Reuse a completed search instead of searching its output as a new baseline.
+  def from_search(path, result:, **options)
+    source_digest, trace, baseline = read_source(path)
+    record = build_record(path: path, source_digest: source_digest, trace: trace,
+                          baseline: baseline, result: result, options: options)
+    validate_record!(path, record, trace, result)
+    verify_source_unchanged!(path, source_digest)
+    record
+  end
+
   private
 
   def read_source(path)
@@ -71,13 +81,15 @@ class LessonAnalyzer
   def record_header(path, source_digest, trace, baseline)
     {schema_version: LessonStore::SCHEMA_VERSION, versions: LessonStore.versions(source_trace: trace.format_version),
      source_episode: {path: File.expand_path(path), sha256: source_digest,
-                      seed: trace.seed, mode: trace.mode, final_reason: trace.final_reason},
+                      seed: trace.seed, seed_kind: trace.seed ? "dealer" : "unknown",
+                      mode: trace.mode, final_reason: trace.final_reason},
      initial_state:  {cells: trace.starting_board.cells, tile_ids: trace.starting_board.tile_ids,
                      score: trace.starting_board.score, options: baseline[:offers].first}}
   end
 
   def trajectory_record(baseline, result)
-    {offers: baseline[:offers], actual_sequence: baseline[:sequence], actual_score: baseline[:board].score,
+    {offers: baseline[:offers], actual_offers: baseline[:offers], candidate_offers: result.candidate_offers,
+     actual_sequence: baseline[:sequence], actual_score: baseline[:board].score,
      candidate_sequence: result.candidate_sequence, candidate_score: result.best_score,
      improvement_delta: result.score_delta}
   end
@@ -104,6 +116,7 @@ class LessonAnalyzer
 
   def provenance_record(path, source_digest, trace, baseline, result)
     {path: File.expand_path(path), sha256: source_digest, seed: trace.seed,
+     seed_kind: trace.seed ? "dealer" : "unknown",
      actual_score: baseline[:board].score, candidate_score: result.best_score,
      improvement_delta: result.score_delta, search_status: result.status,
      candidate_complete: result.complete}

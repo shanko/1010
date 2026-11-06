@@ -5,6 +5,8 @@ require_relative "board"
 require_relative "learning_seed_sets"
 require_relative "lesson_store"
 require_relative "offer_replay"
+require_relative "artifact_file"
+require_relative "imitation_examples"
 
 # Versioned, documented state/action features for legal placements.
 module ActionFeatures
@@ -147,14 +149,23 @@ class LearnedPlayer
   attr_reader :model, :weights
 
   def self.load(path)
-    model = JSON.parse(File.read(path))
-    if model["selected_checkpoint"]
-      selected_path = File.join(File.dirname(path), model.fetch("selected_checkpoint"))
-      raise ArgumentError, "selected checkpoint does not exist: #{selected_path}" unless File.file?(selected_path)
-
-      model = JSON.parse(File.read(selected_path))
-    end
+    _path, model = resolve(path)
     new(model)
+  end
+
+  # Return the concrete model and path together so selection never writes a
+  # pointer to another pointer. Real paths also detect cycles through symlinks.
+  def self.resolve(path, visited: [])
+    path = File.realpath(path)
+    raise ArgumentError, "selected checkpoint pointer cycle: #{path}" if visited.include?(path)
+
+    model = JSON.parse(File.read(path))
+    return [path, model] unless model["selected_checkpoint"]
+
+    selected_path = File.expand_path(model.fetch("selected_checkpoint"), File.dirname(path))
+    raise ArgumentError, "selected checkpoint does not exist: #{selected_path}" unless File.file?(selected_path)
+
+    resolve(selected_path, visited: visited + [path])
   rescue JSON::ParserError => e
     raise ArgumentError, "invalid learned policy JSON: #{e.message}"
   end
@@ -330,9 +341,18 @@ class ImitationTrainer
     epochs, rate = validate_training_options(epochs, learning_rate)
     LearningSeedSets.validate_set!(seed_set, allowed: :training, purpose: "imitation training")
     excluded = Hash.new(0)
-    examples = collect_examples(directory, seed_set, excluded, allow_legacy_lessons)
-    raise ArgumentError, "no eligible improved lessons found in #{directory} (seed set #{seed_set})" if examples.empty?
+    ImitationExamples.open do |examples|
+      collect_examples(directory, seed_set, excluded, allow_legacy_lessons, examples)
+      if examples.empty?
+        raise ArgumentError, "no eligible improved lessons found in #{directory} (seed set #{seed_set})"
+      end
 
+      train_examples(examples, random_seed: random_seed, epochs: epochs, rate: rate,
+                      seed_set: seed_set, excluded: excluded, allow_legacy_lessons: allow_legacy_lessons)
+    end
+  end
+
+  def train_examples(examples, random_seed:, epochs:, rate:, seed_set:, excluded:, allow_legacy_lessons:)
     random_seed = Integer(random_seed)
     weights, examples_seen = train_weights(examples, random_seed, epochs, rate)
     model = training_model(weights: weights, examples: examples, seed_set: seed_set,
@@ -355,9 +375,9 @@ class ImitationTrainer
     [epochs, rate]
   end
 
-  def collect_examples(directory, seed_set, excluded, allow_legacy_lessons)
-    Dir.glob(File.join(directory, "*.json")).flat_map do |path|
-      examples_from_path(path, seed_set, excluded, allow_legacy_lessons)
+  def collect_examples(directory, seed_set, excluded, allow_legacy_lessons, examples)
+    Dir.glob(File.join(directory, "*.json")).each do |path|
+      examples_from_path(path, seed_set, excluded, allow_legacy_lessons).each {|example| examples << example }
     end
   end
 
@@ -370,11 +390,21 @@ class ImitationTrainer
   end
 
   def eligible_seed?(lesson, seed_set, excluded)
+    unless root_seed?(lesson)
+      excluded[:unverified_root_seed] += 1
+      return false
+    end
+
     seed = lesson.dig("source_episode", "seed")
     return true if seed && LearningSeedSets.member?(seed, set: seed_set)
 
     excluded[seed && LearningSeedSets.member?(seed, set: :held_out) ? :held_out : :outside_seed_set] += 1
     false
+  end
+
+  def root_seed?(lesson)
+    kind = lesson.dig("source_episode", "seed_kind")
+    kind == "root" || (kind.nil? && lesson["schema_version"] == 1)
   end
 
   def reject_lesson(excluded, reason)
@@ -433,11 +463,11 @@ class ImitationTrainer
   end
 
   def episode_count(examples)
-    examples.map {|example| example[:episode] }.uniq.size
+    examples.episode_count
   end
 
   def save(model, path)
-    File.write(path, "#{JSON.pretty_generate(model)}\n")
+    ArtifactFile.write(path, "#{JSON.pretty_generate(model)}\n")
     path
   end
 

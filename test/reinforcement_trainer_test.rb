@@ -224,6 +224,45 @@ class ReinforcementTrainerTest < Minitest::Test
     end
   end
 
+  def test_selection_resolves_a_pointer_and_honors_a_custom_output_filename
+    Dir.mktmpdir do |directory|
+      store = RLCheckpointStore.new(directory: directory)
+      checkpoint = store.save(empty_model, step: 0)
+      pointer = store.select(checkpoint, tuning_evaluation: {})
+      output = File.join(directory, "chosen.json")
+      stdout, stderr, status = Open3.capture3(RbConfig.ruby, "scripts/learn.rb", "select",
+                                              "--checkpoint", pointer, "--output", output,
+                                              "--tuning-seeds", "2000000")
+      assert status.success?, stderr
+      assert_equal output, JSON.parse(stdout).fetch("selected_pointer")
+      assert_equal File.basename(checkpoint), JSON.parse(File.read(output)).fetch("selected_checkpoint")
+      assert_equal empty_model, LearnedPlayer.load(output).model
+      store.select(pointer, tuning_evaluation: {})
+      assert_equal empty_model, LearnedPlayer.load(pointer).model
+    end
+  end
+
+  def test_selection_cannot_overwrite_the_concrete_checkpoint
+    Dir.mktmpdir do |directory|
+      store = RLCheckpointStore.new(directory: directory)
+      checkpoint = store.save(empty_model, step: 0)
+      before = File.binread(checkpoint)
+      assert_raises(ArgumentError) { store.select(checkpoint, tuning_evaluation: {}, output_path: checkpoint) }
+      assert_equal before, File.binread(checkpoint)
+    end
+  end
+
+  def test_pointer_cycles_raise_a_clear_error
+    Dir.mktmpdir do |directory|
+      first = File.join(directory, "first.json")
+      second = File.join(directory, "second.json")
+      File.write(first, JSON.generate(selected_checkpoint: "second.json"))
+      File.write(second, JSON.generate(selected_checkpoint: "first.json"))
+      error = assert_raises(ArgumentError) { LearnedPlayer.load(first) }
+      assert_match "pointer cycle", error.message
+    end
+  end
+
   private
 
   def empty_model

@@ -21,22 +21,20 @@ class RLCheckpointStore
       suffix += 1
       path = File.join(@directory, "reinforce-step-#{Integer(step)}-#{timestamp}-#{suffix}.json")
     end
-    File.write(path, "#{JSON.pretty_generate(model)}\n")
+    ArtifactFile.write(path, "#{JSON.pretty_generate(model)}\n")
     path
   end
 
-  def select(path, tuning_evaluation:)
+  def select(path, tuning_evaluation:, output_path: File.join(@directory, "selected.json"))
+    path, model = LearnedPlayer.resolve(path)
+    LearnedPlayer.new(model)
+    ArtifactFile.distinct!(path, output_path)
     FileUtils.mkdir_p(@directory)
-    directory = Pathname.new(File.expand_path(@directory))
-    relative_path = Pathname.new(File.expand_path(path)).relative_path_from(directory).to_s
+    directory = Pathname.new(File.dirname(ArtifactFile.canonical_path(output_path)))
+    relative_path = Pathname.new(path).relative_path_from(directory).to_s
     pointer = {"schema_version" => 1, "selected_checkpoint" => relative_path,
                "tuning_evaluation" => tuning_evaluation}
-    temporary = File.join(@directory, "selected.json.tmp-#{Process.pid}")
-    File.write(temporary, "#{JSON.pretty_generate(pointer)}\n")
-    File.rename(temporary, File.join(@directory, "selected.json"))
-    File.join(@directory, "selected.json")
-  ensure
-    File.delete(temporary) if temporary && File.exist?(temporary)
+    ArtifactFile.write(output_path, "#{JSON.pretty_generate(pointer)}\n")
   end
 
   # Training may promote a candidate only when its mean is strictly higher on
@@ -340,12 +338,7 @@ class ReinforcementTrainer
   end
 
   def resolved_checkpoint_path(path)
-    data = JSON.parse(File.read(path))
-    return path unless data["selected_checkpoint"]
-
-    File.expand_path(data.fetch("selected_checkpoint"), File.dirname(path))
-  rescue JSON::ParserError => e
-    raise ArgumentError, "invalid learned policy JSON: #{e.message}"
+    LearnedPlayer.resolve(path).first
   end
 
   def run_episode(player, seed, random_seed:, step:, temperature:)

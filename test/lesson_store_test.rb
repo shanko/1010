@@ -9,7 +9,7 @@ require_relative "../lib/game_log"
 require_relative "../lib/offer_replay"
 
 class LessonStoreTest < Minitest::Test
-  FIXTURE = File.expand_path("fixtures/lesson-v2.json", __dir__)
+  FIXTURE = File.expand_path("fixtures/lesson-search-v3.json", __dir__)
 
   def test_fixture_loads_and_both_sequences_replay
     lesson = LessonStore.read(FIXTURE)
@@ -86,6 +86,72 @@ class LessonStoreTest < Minitest::Test
     end
   end
 
+  # Both insertion orders must converge on the stronger, replayable lesson.
+  # rubocop:disable Metrics/MethodLength
+  def test_reanalysis_keeps_the_strongest_result_and_deduplicates_provenance
+    [false, true].each do |reverse|
+      Dir.mktmpdir do |directory|
+        store = LessonStore.new(directory: directory)
+        strong = improved_lesson
+        weak = Marshal.load(Marshal.dump(strong))
+        weak[:candidate_sequence] = weak[:actual_sequence]
+        weak[:candidate_score] = weak[:actual_score]
+        weak[:improvement_delta] = 0
+        weak[:outcome] = "no_improvement"
+        weak[:search][:status] = "no improvement found within budget"
+        lessons = reverse ? [strong, weak] : [weak, strong]
+        lessons.each {|lesson| store.save(lesson) }
+        result = store.save(strong)
+        saved = LessonStore.read(result.fetch(:path))
+
+        assert result.fetch(:deduplicated)
+        assert_equal 5, saved.fetch("candidate_score")
+        assert_equal 4, saved.fetch("improvement_delta")
+        assert_equal "improved", saved.dig("search", "status")
+        assert_equal 1, saved.fetch("provenance").size
+        assert_equal 5, LessonStore.replay(saved, "candidate_sequence").score
+        assert_equal 1, Dir[File.join(directory, "*.json")].size
+      end
+    end
+  end
+
+  def test_complete_and_partial_analyses_are_preserved_separately
+    Dir.mktmpdir do |directory|
+      store = LessonStore.new(directory: directory)
+      complete = improved_lesson
+      partial = Marshal.load(Marshal.dump(complete))
+      partial[:candidate_sequence] = [{tile: "sq2", option: 1, row: 4, col: 4}]
+      partial[:candidate_score] = 4
+      partial[:improvement_delta] = 3
+      partial[:search][:candidate_complete] = false
+      paths = [store.save(complete), store.save(partial)].map {|result| result.fetch(:path) }
+
+      assert_equal 2, paths.uniq.size
+      assert_equal([true, false], paths.map {|path| LessonStore.read(path).dig("search", "candidate_complete") })
+      assert_equal([5, 4], paths.map {|path| LessonStore.read(path).fetch("candidate_score") })
+    end
+  end
+
+  def test_old_search_version_cannot_absorb_a_current_analysis
+    Dir.mktmpdir do |directory|
+      store = LessonStore.new(directory: directory)
+      lesson = improved_lesson
+      old = Marshal.load(Marshal.dump(lesson))
+      old[:search][:version] = ImprovementSearch::VERSION - 1
+      payload = JSON.parse(JSON.generate(old))
+      payload["state_fingerprint"] = store.send(:identity_for, old)
+      old_path = File.join(directory, "old.json")
+      File.write(old_path, JSON.generate(payload))
+      before = File.binread(old_path)
+
+      result = store.save(lesson)
+      refute result.fetch(:deduplicated)
+      refute_equal old_path, result.fetch(:path)
+      assert_equal before, File.binread(old_path)
+    end
+  end
+  # rubocop:enable Metrics/MethodLength
+
   def test_analyzer_rejects_non_game_over_trace
     Dir.mktmpdir do |directory|
       board = Board1010.new(options: [Tile.fetch(:dot)])
@@ -98,6 +164,23 @@ class LessonStoreTest < Minitest::Test
   end
 
   private
+
+  # One stranded dot versus a dot outside the only available 2x2 pocket.
+  def improved_lesson
+    cells = Array.new(10) { Array.new(10, 1) }
+    holes = [[0, 0], [1, 2], [2, 6], [3, 8], [4, 0], [4, 4], [4, 5], [5, 4], [5, 5],
+             [6, 1], [7, 3], [8, 7], [9, 9]]
+    holes.each {|row, col| cells[row][col] = 0 }
+    offers = [%w[dot sq2 sq3]]
+    {schema_version: LessonStore::SCHEMA_VERSION, versions: LessonStore.versions,
+     source_episode: {seed: 1_000_000, seed_kind: "root"},
+     initial_state: {cells: cells, tile_ids: cells, score: 0, options: offers.first}, offers: offers,
+     actual_sequence: [{tile: "dot", option: 0, row: 4, col: 4}], actual_score: 1,
+     candidate_sequence: [{tile: "dot", option: 0, row: 4, col: 0}, {tile: "sq2", option: 0, row: 4, col: 4}],
+     candidate_score: 5, improvement_delta: 4, outcome: "improved",
+     search: {version: ImprovementSearch::VERSION, status: "improved", candidate_complete: true},
+     provenance: [{path: "example", seed: 1_000_000}]}
+  end
 
   def write_completed_trace(directory)
     episode = GameSimulator.run(seed: 11, strategy: :first_fit)

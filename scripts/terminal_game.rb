@@ -8,6 +8,7 @@
 # position, or "q" at either question, stops the game and offers to save it.
 require_relative "../lib/board"
 require_relative "../lib/game_log"
+require_relative "../lib/artifact_file"
 
 class TerminalGame
   def initialize(input: $stdin, output: $stdout, board: nil, game_log: nil)
@@ -119,7 +120,7 @@ class TerminalGame
     answer = ask("Do you want to save the game to play it later? [y/n] ")
     return unless answer&.casecmp("y")&.zero?
 
-    File.write(Board1010::SAVE_FILE, @board.to_save)
+    ArtifactFile.write(Board1010::SAVE_FILE, @board.to_save)
     say("Saved to #{Board1010::SAVE_FILE}")
   end
 

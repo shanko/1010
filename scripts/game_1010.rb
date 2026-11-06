@@ -211,7 +211,7 @@ class GameWindow < Gosu::Window
 
   def new_game(seed: nil)
     seed ? @session.new_game(seed: seed) : @session.new_game
-    @selected = nil
+    clear_selection
     @animation = nil
     @illegal_drop = nil
     flush_auto_run_line
@@ -220,8 +220,7 @@ class GameWindow < Gosu::Window
   # Everything that is reset when a game starts (new, loaded or played back).
   def start(board, seed: nil, mode: "window")
     @session.start(board, seed: seed, mode: mode)
-    @selected = nil
-    @dragging = false
+    clear_selection
     @animation = nil
     @illegal_drop = nil
     flush_auto_run_line
@@ -247,11 +246,11 @@ class GameWindow < Gosu::Window
     flush_auto_run_line
     unless move
       mark_illegal_drop(index, row, col)
-      @selected = nil
+      clear_selection
       return
     end
 
-    @selected  = nil
+    clear_selection
     clear_step = @session.auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
     @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
   end
@@ -259,8 +258,8 @@ class GameWindow < Gosu::Window
   def undo
     return show_message("Nothing to undo") unless @session.undo
 
-    @selected       = nil
-    @animation      = nil
+    clear_selection
+    @animation = nil
   end
 
   def auto_move
@@ -271,6 +270,11 @@ class GameWindow < Gosu::Window
 
   def select_option(index)
     @selected = index if index < @session.board.options.size
+  end
+
+  def clear_selection
+    @selected = nil
+    @dragging = false
   end
 
   # ---------------------------------------------------------------------------
@@ -290,13 +294,14 @@ class GameWindow < Gosu::Window
     when Board1010::Move then animate_move(result)
     when :finished then finish_playback
     when :undo
-      @selected = nil
+      clear_selection
       @animation = nil
     when :restarted then update_auto_caption
     end
   end
 
   def animate_move(move)
+    clear_selection
     clear_step = @session.auto ? MoveAnimation::PLACE_STEP_MS : MoveAnimation::CLEAR_STEP_MS
     @animation = MoveAnimation.new(move, Gosu.milliseconds, clear_step_ms: clear_step)
   end
@@ -330,8 +335,7 @@ class GameWindow < Gosu::Window
   def toggle_auto
     @session.toggle_auto
     flush_auto_run_line
-    @selected = nil
-    @dragging = false
+    clear_selection
     @session.auto ? update_auto_caption : self.caption = "1010!"
   end
 
@@ -376,7 +380,7 @@ class GameWindow < Gosu::Window
   # R starts recording a new game; pressing R again stops.
   def toggle_recording
     result = @session.toggle_recording
-    @selected = nil
+    clear_selection
     @animation = nil
     show_message(result == :started ? "Recording a new game (R to stop)" : "Recording stopped (P to play it back)")
   end
@@ -390,14 +394,14 @@ class GameWindow < Gosu::Window
     result = @session.start_playback
     return show_message("Nothing recorded yet (R to record)") if result == :nothing_recorded
 
-    @selected = nil
+    clear_selection
     @animation = nil
     self.caption = "1010! (playback)"
   end
 
   def start_trace_playback(trace, mode:)
     @session.start_trace_playback(trace, mode: mode)
-    @selected = nil
+    clear_selection
     @animation = nil
   end
 
@@ -652,6 +656,8 @@ class GameWindow < Gosu::Window
     return unless @dragging && @selected
 
     tile = @session.board.options[@selected]
+    return clear_selection unless tile
+
     row, col = cell_under_mouse
     if row && @session.board.fits?(tile, row, col)
       draw_snapped_tile(tile, row, col)

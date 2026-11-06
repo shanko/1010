@@ -41,7 +41,7 @@ class ArtifactVersionsTest < Minitest::Test
 
   def test_training_rejects_each_mismatched_new_lesson_version
     Dir.mktmpdir do |directory|
-      fixture = JSON.parse(File.read("test/fixtures/lesson-v2.json"))
+      fixture = JSON.parse(File.read("test/fixtures/lesson-search-v3.json"))
       %w[rule simulator source_trace search].each do |name|
         lesson = Marshal.load(Marshal.dump(fixture))
         if name == "search"

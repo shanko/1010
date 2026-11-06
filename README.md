@@ -165,6 +165,14 @@ $ ./1010 --delay 0.5 logs/<game>.improved.moves
 Add `--save-lesson` to store a lesson from the improved trace under
 `learning_data/`.
 
+The lesson retains the original game as its baseline and the improved game as
+its candidate, including each trajectory's exact offers. Trace seeds identify
+the dealer, not the simulator's training root: these lessons are retained for
+analysis and are excluded from imitation training without verified root-seed
+provenance. Use `collect-training` or `correct` to generate training lessons.
+The source trace, improved trace, and report must have distinct paths; aliases
+through symlinks or hard links are also rejected.
+
 An experimental player can plan the current visible tile batch without seeing
 future deals: `./1010 auto visible_batch --seed 42` (or use `--headless`). The
 normal learned player also sees only visible information at decision time.

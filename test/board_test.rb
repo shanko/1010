@@ -177,6 +177,97 @@ class BoardTest < Minitest::Test
     end
   end
 
+  # --- Biased dealing ---------------------------------------------------------
+
+  # Tile counts over `deals` batches from an empty board, where every tile fits.
+  def dealt_counts(bias, seed: 7, deals: 4_000)
+    board = Board1010.new(random: Random.new(seed), bias: bias)
+    counts = Hash.new(0)
+    deals.times { board.generate_options.each {|tile| counts[tile.name] += 1 } }
+    counts
+  end
+
+  def test_an_empty_bias_draws_the_same_random_numbers_as_plain_sampling
+    board = Board1010.new(random: Random.new(42))
+    reference = Random.new(42)
+
+    50.times do
+      expected = Array.new(Board1010::OPTIONS) { Tile::ALL.sample(random: reference) }
+      assert_equal expected, board.generate_options
+    end
+  end
+
+  def test_a_full_bias_deals_only_that_tile
+    assert_equal({dot: 30}, dealt_counts({dot: 100}, deals: 10))
+  end
+
+  def test_a_partial_bias_mixes_the_biased_tile_with_uniform_tiles
+    counts = dealt_counts({dot: 20})
+    total = counts.values.sum
+
+    assert_in_delta 0.20 + (0.80 / 19), counts[:dot].fdiv(total), 0.015
+    assert_in_delta 0.80 / 19, counts[:hl3].fdiv(total), 0.01
+    assert_equal Tile::NAMES.sort, counts.keys.sort
+  end
+
+  def test_several_tiles_can_be_biased_at_once
+    counts = dealt_counts({dot: 50, sq3: 50}, deals: 1_000)
+
+    assert_equal %i[dot sq3], counts.keys.sort
+    assert_in_delta 0.5, counts[:dot].fdiv(counts.values.sum), 0.04
+  end
+
+  def test_the_same_seed_and_bias_deal_the_same_tiles
+    assert_equal dealt_counts({sq3: 30}, deals: 50), dealt_counts({sq3: 30}, deals: 50)
+  end
+
+  def test_bias_names_are_normalized_and_zero_entries_dropped
+    bias = Board1010.normalize_bias({"SQ3" => 30, "dot" => 0, "hl2" => 12.5})
+
+    assert_equal({sq3: 30, hl2: 12.5}, bias)
+    assert bias.frozen?
+  end
+
+  def test_invalid_biases_are_rejected
+    [
+      {missing: 10}, {dot: -1}, {dot: 101}, {dot: "20"}, {dot: Float::NAN},
+      {dot: 60, sq3: 41}, {"dot" => 10, :dot => 10}, [[:dot, 10]]
+    ].each do |bias|
+      assert_raises(ArgumentError, bias.inspect) { Board1010.new(bias: bias) }
+    end
+  end
+
+  def test_generate_options_accepts_a_bias_for_one_deal
+    board = Board1010.new(random: Random.new(3), bias: {sq3: 100})
+
+    assert_equal [Tile.fetch(:dot)] * 3, board.generate_options({"DOT" => 100})
+    assert_equal [Tile.fetch(:sq3)] * 3, board.generate_options
+  end
+
+  def test_copies_keep_the_bias
+    board = Board1010.new(bias: {dot: 40})
+    assert_equal({dot: 40}, board.copy.bias)
+  end
+
+  def test_the_fallback_still_applies_to_biased_deals
+    board = Board1010.new(bias: {sq3: 100})
+    Board1010::ROWS.times {|row| fill_row(board, row) }
+    board.cells[0][0] = Board1010::EMPTY
+
+    assert_equal %i[dot sq3 sq3], board.generate_options.map(&:name)
+  end
+
+  def test_levels_map_to_dot_or_sq3_bias_with_50_as_plain_random
+    assert_equal({dot: 100}, Board1010.bias_for_level(0))
+    assert_equal({dot: 2}, Board1010.bias_for_level(49))
+    assert_equal({}, Board1010.bias_for_level(50))
+    assert_equal({sq3: 46}, Board1010.bias_for_level(73))
+    assert_equal({sq3: 100}, Board1010.bias_for_level(100))
+    [-1, 101, 50.0, "50", nil].each do |level|
+      assert_raises(ArgumentError, level.inspect) { Board1010.bias_for_level(level) }
+    end
+  end
+
   def test_game_over_when_no_option_fits
     board = Board1010.new(options: [Tile.fetch(:sq3)])
     Board1010::ROWS.times {|row| fill_row(board, row) }

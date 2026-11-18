@@ -47,22 +47,74 @@ class Board1010
 
   TILE_NAMES = Tile::NAMES
 
-  attr_reader :cells, :tile_ids, :options, :score, :random
+  # Difficulty levels run from 0 (dots) to 100 (3x3 squares); this one deals
+  # plain random tiles.
+  NEUTRAL_LEVEL = 50
+  MAX_LEVEL = 100
+  EASY_TILE = :dot
+  HARD_TILE = :sq3
+
+  attr_reader :cells, :tile_ids, :options, :score, :random, :bias
 
   # `random` deals the tiles. Pass Random.new(seed) to get the same tiles every time.
-  def initialize(cells: nil, tile_ids: nil, options: [], score: 0, random: Random.new)
+  # `bias` makes some tiles more likely; see #generate_options.
+  def initialize(cells: nil, tile_ids: nil, options: [], score: 0, random: Random.new, bias: {})
     @cells = cells || empty_grid
     @tile_ids = tile_ids || tile_id_grid(@cells)
     @options = normalize_options(options)
     @score   = score
     @random  = random
+    @bias    = self.class.normalize_bias(bias)
   end
 
   # A deep copy, used for undo and search branches. Copy the RNG state so
   # advancing one branch cannot change another branch's future offers.
   def copy
     Board1010.new(cells: @cells.map(&:dup), tile_ids: @tile_ids.map(&:dup), options: @options.dup, score: @score,
-                  random: @random.dup)
+                  random: @random.dup, bias: @bias)
+  end
+
+  # Checks a bias such as {"dot" => 20} or {SQ3: 30} and returns it frozen,
+  # keyed by lower-case tile name, without zero entries: {dot: 20, sq3: 30}.
+  # Raises ArgumentError for unknown tiles, percentages outside 0..100, or a
+  # total above 100.
+  def self.normalize_bias(bias)
+    raise ArgumentError, "bias must be a Hash, got #{bias.inspect}" unless bias.is_a?(Hash)
+
+    normalized = bias.each_with_object({}) {|(name, percent), result| add_bias_entry(result, name, percent) }
+    total = normalized.values.sum
+    raise ArgumentError, "bias percentages add up to #{total}, more than 100" if total > 100
+
+    normalized.reject {|_name, percent| percent.zero? }.freeze
+  end
+
+  def self.add_bias_entry(result, name, percent)
+    name = Tile.fetch(name.to_s.downcase).name
+    raise ArgumentError, "bias lists #{name} more than once" if result.key?(name)
+
+    result[name] = bias_percent(name, percent)
+  end
+
+  def self.bias_percent(name, percent)
+    valid = percent.is_a?(Numeric) && percent.real? && percent.finite? && percent.between?(0, 100)
+    raise ArgumentError, "bias for #{name} must be a percentage from 0 to 100, got #{percent.inspect}" unless valid
+
+    percent
+  end
+  private_class_method :add_bias_entry, :bias_percent
+
+  # The bias for a difficulty level from 0 to 100. Level 50 is plain random;
+  # each level below it adds 2% dots and each level above it adds 2% 3x3
+  # squares, so level 0 deals only dots and level 100 only 3x3 squares.
+  def self.bias_for_level(level)
+    unless level.is_a?(Integer) && level.between?(0, MAX_LEVEL)
+      raise ArgumentError, "level must be an integer from 0 to #{MAX_LEVEL}, got #{level.inspect}"
+    end
+
+    return {EASY_TILE => (NEUTRAL_LEVEL - level) * 2}.freeze if level < NEUTRAL_LEVEL
+    return {HARD_TILE => (level - NEUTRAL_LEVEL) * 2}.freeze if level > NEUTRAL_LEVEL
+
+    {}.freeze
   end
 
   # ---------------------------------------------------------------------------
@@ -103,10 +155,17 @@ class Board1010
     @options = tiles.dup
   end
 
-  # 3 random tiles. If none of them fit anywhere, the first one is swapped for
-  # a small tile that does fit.
-  def generate_options
-    tiles = Array.new(OPTIONS) { Tile::ALL.sample(random: @random) }
+  # 3 tiles, by default dealt with the board's bias. If none of them fit
+  # anywhere, the first one is swapped for a small tile that does fit.
+  #
+  # The bias maps tile names to percentages. Each tile is dealt as a mix: with
+  # {dot: 20}, 20% of tiles are dots and the other 80% are picked uniformly
+  # from all 19 tiles (dots included), so about 24% of tiles are dots. Several
+  # tiles may be biased as long as the total is at most 100. An empty bias
+  # means plain random, drawn exactly as before so seeded games are unchanged.
+  def generate_options(bias=@bias)
+    bias = self.class.normalize_bias(bias) unless bias.equal?(@bias)
+    tiles = Array.new(OPTIONS) { deal_tile(bias) }
     return tiles if tiles.any? {|tile| fits_anywhere?(tile) }
 
     small = SMALL_TILES.find {|tile| fits_anywhere?(tile) }
@@ -360,6 +419,26 @@ class Board1010
   end
 
   private
+
+  # One tile for #generate_options. An empty bias keeps the original single
+  # `sample` call; a biased deal uses exactly one `rand`, whose roll first
+  # lands in a biased tile's share and otherwise picks uniformly from the rest.
+  def deal_tile(bias)
+    return Tile::ALL.sample(random: @random) if bias.empty?
+
+    roll = @random.rand * 100
+    bias.each do |name, percent|
+      return Tile.fetch(name) if roll < percent
+
+      roll -= percent
+    end
+    uniform_tile(roll / (100 - bias.values.sum))
+  end
+
+  # The tile at `fraction` (0...1) of the way through all tiles.
+  def uniform_tile(fraction)
+    Tile::ALL[[(fraction * Tile::ALL.size).floor, Tile::ALL.size - 1].min]
+  end
 
   def empty_grid
     Array.new(ROWS) { Array.new(COLS, EMPTY) }

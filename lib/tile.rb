@@ -60,26 +60,32 @@ class Tile
     }.freeze
   end
 
+  # Tile formations. Each row array is one row of the shape, top to bottom;
+  # 0 is an empty square and any other value is the tile's colour.
+  # Suffix N is the line length / square side / L arm length.
+  # L shapes are named by the corner where their two arms meet, except tl and
+  # tr, whose names are swapped relative to their geometry (kept as-is because
+  # the names are model feature keys, e.g. "tile_tl2" in models/learned.json).
   SHAPES = {
-    dot: [[1]],
-    hl2: [[2, 2]],
-    hl3: [[3, 3, 3]],
-    hl4: [[4, 4, 4, 4]],
-    hl5: [[5, 5, 5, 5, 5]],
-    vl2: [[2], [2]],
-    vl3: [[3], [3], [3]],
-    vl4: [[4], [4], [4], [4]],
-    vl5: [[5], [5], [5], [5], [5]],
-    sq2: [[2, 2], [2, 2]],
-    sq3: [[3, 3, 3], [3, 3, 3], [3, 3, 3]],
-    bl2: [[2, 0], [2, 2]],
-    bl3: [[3, 0, 0], [3, 0, 0], [3, 3, 3]],
-    tl2: [[2, 2], [0, 2]],
-    tl3: [[3, 3, 3], [0, 0, 3], [0, 0, 3]],
-    br2: [[0, 2], [2, 2]],
-    br3: [[0, 0, 3], [0, 0, 3], [3, 3, 3]],
-    tr2: [[2, 2], [2, 0]],
-    tr3: [[3, 3, 3], [3, 0, 0], [3, 0, 0]]
+    dot: [[1]],                                         # single square
+    hl2: [[2, 2]],                                      # horizontal line of 2 squares
+    hl3: [[3, 3, 3]],                                   # horizontal line of 3 squares
+    hl4: [[4, 4, 4, 4]],                                # horizontal line of 4 squares
+    hl5: [[5, 5, 5, 5, 5]],                             # horizontal line of 5 squares
+    vl2: [[2], [2]],                                    # vertical line of 2 squares
+    vl3: [[3], [3], [3]],                               # vertical line of 3 squares
+    vl4: [[4], [4], [4], [4]],                          # vertical line of 4 squares
+    vl5: [[5], [5], [5], [5], [5]],                     # vertical line of 5 squares
+    sq2: [[2, 2], [2, 2]],                              # 2x2 square
+    sq3: [[3, 3, 3], [3, 3, 3], [3, 3, 3]],             # 3x3 square
+    bl2: [[2, 0], [2, 2]],                              # L, corner bottom-left, arms of 2 (3 squares)
+    bl3: [[3, 0, 0], [3, 0, 0], [3, 3, 3]],             # L, corner bottom-left, arms of 3 (5 squares)
+    tl2: [[2, 2], [0, 2]],                              # L, corner top-right, arms of 2 (3 squares)
+    tl3: [[3, 3, 3], [0, 0, 3], [0, 0, 3]],             # L, corner top-right, arms of 3 (5 squares)
+    br2: [[0, 2], [2, 2]],                              # L, corner bottom-right, arms of 2 (3 squares)
+    br3: [[0, 0, 3], [0, 0, 3], [3, 3, 3]],             # L, corner bottom-right, arms of 3 (5 squares)
+    tr2: [[2, 2], [2, 0]],                              # L, corner top-left, arms of 2 (3 squares)
+    tr3: [[3, 3, 3], [3, 0, 0], [3, 0, 0]]              # L, corner top-left, arms of 3 (5 squares)
   }.freeze
   BY_NAME = SHAPES.each_with_index.to_h {|(name, rows), index|
     [name, new(name: name, id: index + 1, rows: rows)]

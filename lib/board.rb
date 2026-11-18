@@ -105,6 +105,14 @@ class Board1010
 
   # 3 random tiles. If none of them fit anywhere, the first one is swapped for
   # a small tile that does fit.
+  # TODO: This method should take a hash parameter that generates biased options 
+  #.      instead of random options. The default is an empty hash which means random.
+  #.      A SIMPLE game generation can be biased by generating more DOTs than other tiles.
+  #.      It can be expressed as: { "dot": 20 } which implies 20% more DOTs than random.
+  #.      A HARD game generation can be biased by generating more SQ3s than other tiles.
+  #.      It can be expressed as: { "SQ3": 30 } which implies 30% more SQ3s than random.
+  #.      There can be range of hard-ness (0...100) based on these percentages, where level-0
+  #.      will be almost all DOTs and level-100 will be almost all SQ3s.
   def generate_options
     tiles = Array.new(OPTIONS) { Tile::ALL.sample(random: @random) }
     return tiles if tiles.any? {|tile| fits_anywhere?(tile) }

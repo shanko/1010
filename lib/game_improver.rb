@@ -67,7 +67,7 @@ class GameImprover
   def validate_seed(trace)
     return {consistent: false, reason: "trace has no seed; improvement is limited to recorded offers"} unless trace.seed
 
-    initial = seeded_dealer(trace.seed)
+    initial = seeded_dealer(trace.seed, trace.starting_board.bias)
     expected_first = initial.options.map(&:name)
     actual_first = trace.deal_batches.first.map(&:to_sym)
     unless expected_first == actual_first
@@ -77,7 +77,8 @@ class GameImprover
 
     replay_board = Board1010.new(cells: trace.starting_board.cells.map(&:dup),
                                  tile_ids: trace.starting_board.tile_ids.map(&:dup),
-                                 score: trace.starting_board.score, random: initial.random)
+                                 score: trace.starting_board.score, random: initial.random,
+                                 bias: trace.starting_board.bias)
     replay_board.replace_options(trace.deal_batches.first.map {|name| Tile.fetch(name) })
     replay = OfferReplay.new(board: replay_board, offers: trace.deal_batches)
     deal_index = 1
@@ -110,9 +111,10 @@ class GameImprover
   # and the terminal game build `Board1010.new(random: Random.new(seed))`.
   # This differs from GameSimulator.initial_board, whose seed is a session root
   # that first reserves a player stream. Return a fresh board whose dealer has
-  # produced the initial offer, ready to deal the second one.
-  def seeded_dealer(seed)
-    board = Board1010.new(random: Random.new(Integer(seed)))
+  # produced the initial offer, ready to deal the second one. A biased game's
+  # bias is part of its dealer, so it comes from the trace's starting board.
+  def seeded_dealer(seed, bias)
+    board = Board1010.new(random: Random.new(Integer(seed)), bias: bias)
     board.deal_if_needed
     board
   end
@@ -127,11 +129,12 @@ class GameImprover
   end
 
   def starting_board(trace, first_offer)
-    random = trace.seed ? seeded_dealer(trace.seed).random : Random.new(0)
+    random = trace.seed ? seeded_dealer(trace.seed, trace.starting_board.bias).random : Random.new(0)
     Board1010.new(cells: trace.starting_board.cells.map(&:dup),
                   tile_ids: trace.starting_board.tile_ids.map(&:dup),
                   score: trace.starting_board.score,
-                  options: first_offer.map {|name| Tile.fetch(name) }, random: random)
+                  options: first_offer.map {|name| Tile.fetch(name) }, random: random,
+                  bias: trace.starting_board.bias)
   end
 
   def improved_path(path)

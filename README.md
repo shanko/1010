@@ -55,6 +55,17 @@ directory, or put the repository directory on your `PATH` to use `1010` as a
 command name. Unfilled squares are light mint by default;
 `./1010 --empty-color cream` or `./1010 --empty-color grey` changes that.
 
+To change the difficulty, `./1010 --level N` takes a level from 0 to 100.
+Level 50 deals plain random tiles. Each level below 50 deals 2% more single
+dots, and each level above deals 2% more 3x3 squares, up to only dots at level
+0 and only 3x3 squares at level 100. Note that an all-dots game never ends. For
+finer control, `./1010 --bias dot=20,sq3=10` deals 20% dots and 10% 3x3
+squares, and picks the remaining 70% of tiles at random. Any tile name from
+`Tile::SHAPES` in `lib/tile.rb` can be used. Both options work with
+`--headless`. Saves and game logs record the bias, so a biased game replays
+and reloads with it. A saved game keeps its own bias; the requested one
+applies from the next new game.
+
 Click on one of the tiles presented on the right side of the 10x10 grid (or press 1, 2 or 3). The tile will turn yellow indicating selection. Then click on one of the empty cells in the grid where you want to place the tile, or drag the tile there. Keep on adding tiles to the grid till one or more rows or columns fill up. Filled up rows and columns get emptied again making space for more tiles to be placed. The idea is to try and keep as many tiles as possible to increase the score. 
 
 # Hints:

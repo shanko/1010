@@ -95,13 +95,38 @@ class Board1010
     result[name] = bias_percent(name, percent)
   end
 
+  # A bias written as text, "dot=20,sq3=12.5", as used on the command line
+  # and in saves and game logs. "" is no bias.
+  def self.bias_to_text(bias)
+    normalize_bias(bias).map {|name, percent| "#{name}=#{percent}" }.join(",")
+  end
+
+  # Reads text made by .bias_to_text (tile names in any case), or raises ArgumentError.
+  def self.bias_from_text(text)
+    pairs = text.to_s.split(",", -1).map {|pair| bias_pair_from_text(pair, text) }
+    names = pairs.map {|name, _percent| name.downcase }
+    raise ArgumentError, "bias lists a tile more than once" if names.uniq.size < names.size
+
+    normalize_bias(pairs.to_h)
+  end
+
+  # ["dot", 20] from "dot=20"; a percentage that is not a number is left as
+  # text for .normalize_bias to reject.
+  def self.bias_pair_from_text(pair, text)
+    name, percent, extra = pair.strip.split("=", -1)
+    valid = !name.to_s.empty? && percent && !extra
+    raise ArgumentError, "bias must look like dot=20,sq3=10, got #{text.inspect}" unless valid
+
+    [name, Integer(percent, exception: false) || Float(percent, exception: false) || percent]
+  end
+
   def self.bias_percent(name, percent)
-    valid = percent.is_a?(Numeric) && percent.real? && percent.finite? && percent.between?(0, 100)
+    valid = (percent.is_a?(Integer) || percent.is_a?(Float)) && percent.finite? && percent.between?(0, 100)
     raise ArgumentError, "bias for #{name} must be a percentage from 0 to 100, got #{percent.inspect}" unless valid
 
     percent
   end
-  private_class_method :add_bias_entry, :bias_percent
+  private_class_method :add_bias_entry, :bias_percent, :bias_pair_from_text
 
   # The bias for a difficulty level from 0 to 100. Level 50 is plain random;
   # each level below it adds 2% dots and each level above it adds 2% 3x3
@@ -522,8 +547,11 @@ module BoardSnapshot
     [state_record(board), offer_record(board.options)]
   end
 
+  # A biased board adds "|b" and its bias, e.g. "|bdot=20"; an unbiased one
+  # writes exactly what it did before biased dealing existed.
   def self.state_record(board)
-    "i#{board.score}|#{board.cells.flatten.join}|#{board.tile_ids.flatten.map {|id| id.to_s(36) }.join}"
+    record = "i#{board.score}|#{board.cells.flatten.join}|#{board.tile_ids.flatten.map {|id| id.to_s(36) }.join}"
+    board.bias.empty? ? record : "#{record}|b#{Board1010.bias_to_text(board.bias)}"
   end
 
   def self.offer_record(tiles)
@@ -531,13 +559,26 @@ module BoardSnapshot
   end
 
   def self.decode_state(record, random: Random.new)
-    match = record.match(/\Ai(\d+)\|([0-5]{100})\|([0-9a-j]{100})\z/)
+    match = record.match(/\Ai(\d+)\|([0-5]{100})\|([0-9a-j]{100})(?:\|b([^|]+))?\z/)
     return nil unless match
 
     tile_ids = decode_grid(match[3])
     return nil if tile_ids.flatten.any? {|id| id > Tile::ALL.size }
 
-    Board1010.new(score: Integer(match[1]), cells: decode_grid(match[2]), tile_ids: tile_ids, random: random)
+    bias = decode_bias(match[4])
+    return nil unless bias
+
+    Board1010.new(score: Integer(match[1]), cells: decode_grid(match[2]), tile_ids: tile_ids, random: random,
+                  bias: bias)
+  end
+
+  def self.decode_bias(text)
+    return {} unless text
+
+    bias = Board1010.bias_from_text(text)
+    bias.empty? ? nil : bias
+  rescue ArgumentError
+    nil
   end
 
   def self.decode_offer(record)
@@ -565,5 +606,5 @@ module BoardSnapshot
   def self.decode_grid(text)
     text.chars.each_slice(10).map {|row| row.map {|id| id.to_i(36) } }
   end
-  private_class_method :decode_grid
+  private_class_method :decode_grid, :decode_bias
 end

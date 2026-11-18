@@ -16,7 +16,7 @@ class HeadlessGame
 
   def self.main(argv, output: $stdout, errors: $stderr)
     options = GameOptions.parse(argv)
-    new(**options.slice(:games, :strategy, :seed, :model), output: output).run
+    new(**options.slice(:games, :strategy, :seed, :bias, :model), output: output).run
     0
   rescue ArgumentError, SystemCallError => e
     errors.puts "1010: #{e.message}"
@@ -26,9 +26,10 @@ class HeadlessGame
     130
   end
 
-  def initialize(games: 1, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, model: nil,
+  def initialize(games: 1, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, bias: {}, model: nil,
                  log_directory: GameLog::DIRECTORY, output: $stdout)
     @games = games
+    @bias = bias
     @strategy = strategy
     @seed = seed
     @model = model
@@ -39,7 +40,7 @@ class HeadlessGame
 
   def run
     started = monotonic_seconds
-    session = GameSession.new(auto: true, strategy: @strategy, seed: @seed, model: @model,
+    session = GameSession.new(auto: true, strategy: @strategy, seed: @seed, bias: @bias, model: @model,
                               save_store: NoSaveStore.new, log_directory: @log_directory)
     begin
       play_games(session)

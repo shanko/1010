@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "board"
 require_relative "auto_player"
 
 # Command-line options for the graphical front end, kept independent of Gosu.
@@ -8,24 +9,26 @@ class GameOptions
   EMPTY_COLORS = %w[mint cream grey].freeze
 
   USAGE = <<~TEXT.chomp.freeze
-    Usage: ./1010 [auto [strategy] [--games N]] [--seed N] [--model PATH] [--delay SECONDS]
-                  [--empty-color #{EMPTY_COLORS.join('|')}] [GAME.moves]
-           ./1010 --headless [strategy] [--games N] [--seed N] [--model PATH]
+    Usage: ./1010 [auto [strategy] [--games N]] [--seed N] [--level 0-100 | --bias TILE=PCT,...]
+                  [--model PATH] [--delay SECONDS] [--empty-color #{EMPTY_COLORS.join('|')}] [GAME.moves]
+           ./1010 --headless [strategy] [--games N] [--seed N] [--level 0-100 | --bias TILE=PCT,...]
+                  [--model PATH]
+      --level  difficulty: 0 deals only dots, 50 plain random tiles, 100 only 3x3 squares
+      --bias   e.g. dot=20,sq3=10: deal that percentage of each tile, the rest at random
   TEXT
 
   def self.parse(argv)
     args = argv.dup
     options = {}
     parse_seed(args, options)
+    parse_bias(args, options)
     parse_delay(args, options)
     parse_empty_color(args, options)
     parse_model(args, options)
     parse_games(args, options)
     options[:headless] = true if args.delete("--headless")
     parse_positionals(args, options)
-    validate_headless(options)
-    validate_games(options)
-    validate_strategy(options)
+    validate(options)
     raise ArgumentError, "unexpected command line arguments: #{args.join(' ')}" unless args.empty?
 
     options
@@ -39,6 +42,35 @@ class GameOptions
 
     options[:seed] = Integer(args[seed_at + 1])
     args.slice!(seed_at, 2)
+  end
+
+  # --level N or --bias TILE=PCT,... both become options[:bias].
+  def self.parse_bias(args, options)
+    raise ArgumentError, "use either --level or --bias, not both" if args.include?("--level") && args.include?("--bias")
+
+    parse_level(args, options)
+    parse_bias_text(args, options)
+  end
+
+  def self.parse_level(args, options)
+    level_at = args.index("--level")
+    return unless level_at
+
+    level = Integer(args[level_at + 1].to_s, exception: false)
+    raise ArgumentError, "--level requires an integer from 0 to #{Board1010::MAX_LEVEL}" unless level
+
+    options[:bias] = Board1010.bias_for_level(level)
+    args.slice!(level_at, 2)
+  end
+
+  def self.parse_bias_text(args, options)
+    bias_at = args.index("--bias")
+    return unless bias_at
+
+    raise ArgumentError, "--bias requires tile percentages, for example dot=20,sq3=10" unless args[bias_at + 1]
+
+    options[:bias] = Board1010.bias_from_text(args[bias_at + 1])
+    args.slice!(bias_at, 2)
   end
 
   def self.parse_delay(args, options)
@@ -106,6 +138,13 @@ class GameOptions
     options[:strategy] = args.shift unless args.empty?
   end
 
+  def self.validate(options)
+    validate_headless(options)
+    validate_games(options)
+    validate_bias(options)
+    validate_strategy(options)
+  end
+
   # Headless play has nobody to take a turn, so it is always auto mode.
   def self.validate_headless(options)
     return unless options[:headless]
@@ -124,6 +163,13 @@ class GameOptions
     raise ArgumentError, "--games cannot be used when replaying a .moves file" if options[:replay_file]
   end
 
+  # A replay deals the recorded tiles, so a requested bias would be ignored.
+  def self.validate_bias(options)
+    return unless options.key?(:bias) && options[:replay_file]
+
+    raise ArgumentError, "--level and --bias cannot be used when replaying a .moves file"
+  end
+
   def self.validate_strategy(options)
     strategy_name = (options[:strategy] || AutoPlayer::DEFAULT_STRATEGY).to_sym
     return unless strategy_name == :learned
@@ -133,6 +179,7 @@ class GameOptions
 
     raise ArgumentError, "learned model does not exist: #{options[:model]}"
   end
-  private_class_method :parse_seed, :parse_delay, :parse_empty_color, :parse_model, :parse_games,
-                       :parse_positionals, :validate_headless, :validate_games, :validate_strategy
+  private_class_method :parse_seed, :parse_bias, :parse_level, :parse_bias_text, :parse_delay, :parse_empty_color,
+                       :parse_model, :parse_games, :parse_positionals, :validate, :validate_headless,
+                       :validate_games, :validate_bias, :validate_strategy
 end

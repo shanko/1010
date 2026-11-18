@@ -38,14 +38,17 @@ class GameSession
   attr_reader :board, :previous_board, :auto, :game_over, :ended_at,
               :game_log, :recording, :last_recording_path, :offer_replay,
               :playback, :playback_next_at, :auto_player, :auto_run_tracker,
-              :seed, :strategy, :replay_delay_ms, :last_move, :initial_message, :move_count
+              :seed, :strategy, :replay_delay_ms, :last_move, :initial_message, :move_count, :bias
 
-  def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil,
+  # `bias` (see Board1010#generate_options) applies to every new game this
+  # session deals; a loaded save or a replayed trace keeps its own bias.
+  def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, bias: {},
                  replay_file: nil, replay_delay: DEFAULT_REPLAY_DELAY_SECONDS, model: nil, games: nil,
                  clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) * 1000.0 },
                  save_store: SaveStore.new, log_directory: GameLog::DIRECTORY,
                  logger_factory: ->(**options) { GameLog.new(**options) })
     @games = games
+    @bias = Board1010.normalize_bias(bias)
     initialize_dependencies(clock, save_store, log_directory, logger_factory)
     initialize_policy(auto, strategy, seed, model)
     initialize_state(replay_delay)
@@ -92,7 +95,7 @@ class GameSession
   end
 
   def new_game(seed: @seeds.rand(2**32))
-    board = Board1010.new(random: Random.new(seed))
+    board = Board1010.new(random: Random.new(seed), bias: @bias)
     board.deal_if_needed
     start(board, seed: seed, mode: @auto ? "auto" : "window")
   end

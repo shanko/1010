@@ -168,7 +168,7 @@ class GameWindow < Gosu::Window
   OPTION_KEYS = {Gosu::KB_1 => 0, Gosu::KB_2 => 1, Gosu::KB_3 => 2}.freeze
 
   # A recorded game: the seed that deals its tiles, and the moves and undos made.
-  def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, replay_file: nil,
+  def initialize(auto: false, strategy: AutoPlayer::DEFAULT_STRATEGY, seed: nil, bias: {}, replay_file: nil,
                  replay_delay: REPLAY_DELAY_SECONDS, model: nil, games: nil, empty_color: :mint)
     super(WIDTH, HEIGHT, fullscreen: false)
     self.caption = "1010!"
@@ -176,7 +176,7 @@ class GameWindow < Gosu::Window
     initialize_empty_color(empty_color)
 
     @strategy = strategy.to_sym
-    @session = GameSession.new(auto: auto, strategy: strategy, seed: seed, replay_file: replay_file,
+    @session = GameSession.new(auto: auto, strategy: strategy, seed: seed, bias: bias, replay_file: replay_file,
                                replay_delay: replay_delay, model: model, games: games,
                                clock: -> { Gosu.milliseconds })
     @hint_player = AutoPlayer.new(:sam)
